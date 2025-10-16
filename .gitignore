@@ -1,0 +1,52 @@
+# Flutter/Dart related
+.dart_tool/
+.packages
+.pub-cache/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub/
+build/
+generated_plugin_registrant.dart
+
+# iOS
+ios/Flutter/Flutter.podspec
+ios/Flutter/Generated.xcconfig
+ios/Flutter/ephemeral/
+ios/Pods/
+ios/Runner.xcworkspace
+ios/Runner/GeneratedPluginRegistrant.*
+
+# Android
+android/.gradle/
+android/app/build/
+android/local.properties
+android/.idea/
+
+# macOS
+macos/Flutter/Generated.xcconfig
+macos/Flutter/ephemeral/
+macos/Pods/
+macos/Runner.xcworkspace
+
+# Linux
+linux/flutter/ephemeral/
+linux/build/
+
+# Windows
+windows/flutter/ephemeral/
+windows/runner/
+
+# Web build (you can ignore these if you don't want to version build outputs)
+# build/web/
+
+# VS Code
+.vscode/
+
+# IntelliJ / Android Studio
+.idea/
+
+# Logs
+*.log
+
+# Misc
+*.iml

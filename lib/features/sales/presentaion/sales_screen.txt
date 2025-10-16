@@ -1,0 +1,442 @@
+import 'package:flutter/material.dart';
+import 'package:sales_app/constants/colors.dart';
+import 'package:sales_app/constants/sizes.dart';
+import 'package:sales_app/widgets/animated_card.dart';
+import 'package:sales_app/utils/responsive.dart';
+
+class SalesScreen extends StatefulWidget {
+  const SalesScreen({Key? key}) : super(key: key);
+
+  @override
+  State<SalesScreen> createState() => _SalesScreenState();
+}
+
+class _SalesScreenState extends State<SalesScreen> {
+  String _selectedPeriod = 'This Week';
+  final List<String> _periods = ['Today', 'This Week', 'This Month', 'Custom'];
+
+  @override
+  Widget build(BuildContext context) {
+    final isSmallScreen = !Responsive.isDesktop(context);
+    
+    return Scaffold(
+      body: SafeArea(
+        child: CustomScrollView(
+          slivers: [
+            _buildAppBar(),
+            SliverPadding(
+              padding: const EdgeInsets.all(AppSizes.padding),
+              sliver: SliverToBoxAdapter(
+                child: Column(
+                  children: [
+                    _buildSalesStats(isSmallScreen),
+                    const SizedBox(height: AppSizes.padding * 2),
+                    _buildSalesChart(),
+                    const SizedBox(height: AppSizes.padding * 2),
+                    _buildRecentSales(isSmallScreen),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          // TODO: Implement new sale
+        },
+        icon: const Icon(Icons.add_shopping_cart),
+        label: const Text('New Sale'),
+        backgroundColor: AppColors.kPrimary,
+      ),
+    );
+  }
+
+  Widget _buildAppBar() {
+    return SliverAppBar(
+      floating: true,
+      snap: true,
+      title: Text(
+        'Sales Overview',
+        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              color: AppColors.kTextPrimary,
+              fontWeight: FontWeight.bold,
+            ),
+      ),
+      actions: [
+        _buildPeriodSelector(),
+        const SizedBox(width: AppSizes.padding),
+        IconButton(
+          icon: const Icon(Icons.filter_list),
+          onPressed: () {
+            // TODO: Show filters
+          },
+        ),
+        IconButton(
+          icon: const Icon(Icons.more_vert),
+          onPressed: () {
+            // TODO: Show more options
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPeriodSelector() {
+    return DropdownButton<String>(
+      value: _selectedPeriod,
+      items: _periods.map((String period) {
+        return DropdownMenuItem<String>(
+          value: period,
+          child: Text(period),
+        );
+      }).toList(),
+      onChanged: (String? newValue) {
+        if (newValue != null) {
+          setState(() {
+            _selectedPeriod = newValue;
+          });
+        }
+      },
+      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            color: AppColors.kPrimary,
+          ),
+      underline: Container(),
+      icon: const Icon(Icons.keyboard_arrow_down),
+      iconEnabledColor: AppColors.kPrimary,
+    );
+  }
+
+  Widget _buildSalesStats(bool isSmallScreen) {
+    final stats = [
+      {
+        'title': 'Total Sales',
+        'value': '\$12,345',
+        'trend': '+15%',
+        'trendUp': true,
+        'icon': Icons.trending_up,
+      },
+      {
+        'title': 'Orders',
+        'value': '123',
+        'trend': '+5%',
+        'trendUp': true,
+        'icon': Icons.shopping_cart,
+      },
+      {
+        'title': 'Average Order',
+        'value': '\$100',
+        'trend': '-2%',
+        'trendUp': false,
+        'icon': Icons.analytics,
+      },
+    ];
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: isSmallScreen ? 2 : 3,
+        childAspectRatio: isSmallScreen ? 1.5 : 2,
+        crossAxisSpacing: AppSizes.padding,
+        mainAxisSpacing: AppSizes.padding,
+      ),
+      itemCount: stats.length,
+      itemBuilder: (context, index) {
+        final stat = stats[index];
+        return _buildStatCard(
+          title: stat['title'] as String,
+          value: stat['value'] as String,
+          trend: stat['trend'] as String,
+          trendUp: stat['trendUp'] as bool,
+          icon: stat['icon'] as IconData,
+        );
+      },
+    );
+  }
+
+  Widget _buildStatCard({
+    required String title,
+    required String value,
+    required String trend,
+    required bool trendUp,
+    required IconData icon,
+  }) {
+    return AnimatedCard(
+      child: Container(
+        padding: const EdgeInsets.all(AppSizes.padding),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppColors.kPrimary.withOpacity(0.1),
+              AppColors.kPrimary.withOpacity(0.05),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(AppSizes.borderRadius),
+          border: Border.all(
+            color: AppColors.kPrimary.withOpacity(0.1),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.kPrimary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icon, color: AppColors.kPrimary),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: (trendUp ? AppColors.kSuccess : AppColors.kError)
+                        .withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        trendUp ? Icons.arrow_upward : Icons.arrow_downward,
+                        color: trendUp ? AppColors.kSuccess : AppColors.kError,
+                        size: 14,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        trend,
+                        style: TextStyle(
+                          color: trendUp ? AppColors.kSuccess : AppColors.kError,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        color: AppColors.kTextPrimary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppColors.kTextSecondary,
+                      ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSalesChart() {
+    return AnimatedCard(
+      child: Container(
+        height: 300,
+        padding: const EdgeInsets.all(AppSizes.padding),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(AppSizes.borderRadius),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Sales Trend',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'daily', label: Text('Daily')),
+                    ButtonSegment(value: 'weekly', label: Text('Weekly')),
+                    ButtonSegment(value: 'monthly', label: Text('Monthly')),
+                  ],
+                  selected: {'weekly'},
+                  onSelectionChanged: (Set<String> newSelection) {
+                    // TODO: Handle chart period change
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSizes.padding),
+            const Expanded(
+              child: Center(
+                child: Text('Sales Chart Here'), // TODO: Implement actual chart
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecentSales(bool isSmallScreen) {
+    return AnimatedCard(
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(AppSizes.borderRadius),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(AppSizes.padding),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Recent Sales',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () {
+                      // TODO: Show all sales
+                    },
+                    icon: const Icon(Icons.visibility),
+                    label: const Text('View All'),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(
+              height: isSmallScreen ? 400 : 600,
+              child: ListView.builder(
+                itemCount: 10,
+                itemBuilder: (context, index) => _buildSaleItem(),
+                padding: EdgeInsets.zero,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSaleItem() {
+    final randomStatus = ['Completed', 'Pending', 'Processing'][DateTime.now().microsecond % 3];
+    final statusColor = {
+      'Completed': AppColors.kSuccess,
+      'Pending': AppColors.kWarning,
+      'Processing': AppColors.kSecondary,
+    }[randomStatus]!;
+
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: AppSizes.padding,
+        vertical: AppSizes.padding / 2,
+      ),
+      leading: Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color: AppColors.kPrimary.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(
+          Icons.receipt,
+          color: AppColors.kPrimary,
+        ),
+      ),
+      title: Row(
+        children: [
+          Text(
+            'Order #12345',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 4,
+            ),
+            decoration: BoxDecoration(
+              color: statusColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              randomStatus,
+              style: TextStyle(
+                color: statusColor,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+      subtitle: Text(
+        '2 items • Paid with Card',
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: AppColors.kTextSecondary,
+            ),
+      ),
+      trailing: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(
+            '\$99.99',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: AppColors.kPrimary,
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+          Text(
+            '2 mins ago',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppColors.kTextSecondary,
+                ),
+          ),
+        ],
+      ),
+      onTap: () {
+        // TODO: Show sale details
+      },
+    );
+  }
+}
