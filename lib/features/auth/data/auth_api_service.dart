@@ -6,29 +6,30 @@ class AuthApiService {
 
   AuthApiService({required this.baseUrl});
 
-  Future<Map<String, dynamic>> login(String email, String password) async {
+  /// Login using identifier (username or email) and password.
+  Future<Map<String, dynamic>> login(String identifier, String password) async {
     final response = await http.post(
       Uri.parse('$baseUrl/auth/login'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({"email": email, "password": password}),
+      body: jsonEncode({"identifier": identifier, "password": password}),
     );
 
     if (response.statusCode == 200) {
-      return jsonDecode(response.body);
+      return jsonDecode(response.body) as Map<String, dynamic>;
     } else {
-      throw Exception(jsonDecode(response.body)["message"] ?? "Login failed");
+      final body = response.body.isNotEmpty ? jsonDecode(response.body) : {};
+      throw Exception(body["message"] ?? "Login failed");
     }
   }
 
-
   Future<Map<String, dynamic>> register(
-    String username, 
-    String email, 
-    String firstName, 
-    String lastName, 
-    String password, 
-    String gender 
-    ) async{
+    String username,
+    String email,
+    String firstName,
+    String lastName,
+    String password,
+    String gender,
+  ) async {
     final response = await http.post(
       Uri.parse('$baseUrl/auth/register'),
       headers: {'Content-Type': 'application/json'},
@@ -39,13 +40,14 @@ class AuthApiService {
         "last_name": lastName,
         "gender": gender,
         "password": password
-        }),
+      }),
     );
 
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
+    if (response.statusCode == 201 || response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
     } else {
-      throw Exception(jsonDecode(response.body)["message"] ?? "Registration failed");
+      final body = response.body.isNotEmpty ? jsonDecode(response.body) : {};
+      throw Exception(body["message"] ?? "Registration failed");
     }
   }
 }

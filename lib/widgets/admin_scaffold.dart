@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 // Screens
 import 'package:sales_app/features/customers/presentation/customers_screen.dart';
+import 'package:sales_app/features/profile/presentation/pages/profile_screen.dart';
 import 'package:sales_app/features/suppliers/presentation/suppliers_screen.dart';
 import 'package:sales_app/features/products/presentation/products_screen.dart';
 import 'package:sales_app/features/purchases/presentation/purchases_screen.dart';
@@ -12,7 +13,7 @@ import 'package:sales_app/features/sales/presentaion/sales_screen.dart';
 import 'package:sales_app/features/screens/dashboard_screen.dart';
 import 'package:sales_app/features/profits/presentation/profit_tracker_screen.dart';
 import 'package:sales_app/features/purchases/presentation/new_purchase_screen.dart';
-import 'package:sales_app/features/screens/reports/reports_screen.dart';
+import 'package:sales_app/features/reports/reports_screen.dart';
 import 'package:sales_app/features/screens/settings/settings_screen.dart';
 import 'package:sales_app/features/stocks/presentation/stock_screen.dart';
 import 'package:sales_app/features/stocks/presentation/stock_overlay_screen.dart';
@@ -23,6 +24,7 @@ import 'package:sales_app/features/returns/presentation/returns_screen.dart';
 import 'package:sales_app/features/invoices/presentation/invoices_screen.dart';
 import 'package:sales_app/features/invoices/presentation/invoice_overlay_screen.dart';
 import 'package:sales_app/features/invoices/data/invoice_model.dart';
+import 'package:sales_app/features/users/presentation/pages/users_admin_screen.dart';
 
 // Models/Utils
 import 'package:sales_app/models/settings.dart';
@@ -51,7 +53,12 @@ import 'package:sales_app/features/suppliers/presentation/supplier_overlay_scree
 import 'package:sales_app/features/suppliers/bloc/supplier_bloc.dart';
 import 'package:sales_app/features/suppliers/bloc/supplier_event.dart';
 
+import 'package:sales_app/features/auth/logic/auth_bloc.dart';
+import 'package:sales_app/features/auth/logic/auth_event.dart';
+import 'package:sales_app/features/auth/logic/auth_state.dart';
+
 import 'package:sales_app/constants/colors.dart';
+import 'package:sales_app/constants/sizes.dart';
 
 class AdminScaffold extends StatefulWidget {
   final String initialPage;
@@ -73,22 +80,22 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
   bool _showProductOverlay = false;
   bool _showCustomerOverlay = false;
   bool _showSupplierOverlay = false;
-  bool _showInvoiceOverlay = false; // NEW
+  bool _showInvoiceOverlay = false;
 
   // Overlay payloads
   Product? _stockProduct;
   StockOverlayMode _stockMode = StockOverlayMode.view;
 
-  Product? _productOverlayProduct; // nullable to allow create
+  Product? _productOverlayProduct;
   ProductOverlayMode _productOverlayMode = ProductOverlayMode.view;
 
-  Customer? _customerOverlayCustomer; // nullable to allow create
+  Customer? _customerOverlayCustomer;
   CustomerOverlayMode _customerOverlayMode = CustomerOverlayMode.view;
 
-  Supplier? _supplierOverlaySupplier; // nullable to allow create
+  Supplier? _supplierOverlaySupplier;
   SupplierOverlayMode _supplierOverlayMode = SupplierOverlayMode.view;
 
-  int? _invoiceOverlayId; // NEW: invoice id payload
+  int? _invoiceOverlayId;
 
   // Shared ProductsBloc so screen and overlay use the same instance
   late final ProductsBloc _productsBloc;
@@ -147,8 +154,10 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
     switch (menu) {
       case "Dashboard":
         return const DashboardScreen();
+      case "Profile":
+        return const ProfileScreen();
       case "Users":
-        return const UsersScreen();
+        return const UsersAdminScreen();
       case "Sales":
         return SalesScreen(onAddNewSale: _openProductCart);
       case "Stock":
@@ -164,7 +173,7 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
         );
       case "Purchases":
         return PurchasesScreen(onAddNewPurchase: _openNewPurchase);
-      case "Invoices": // NEW
+      case "Invoices":
         return InvoicesScreen(onOpenOverlay: _openInvoiceOverlay);
       case "Profit Tracker":
         return const ProfitTrackerScreen();
@@ -211,7 +220,6 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
     _focusOverlay();
   }
 
-  // Product overlay opener (product can be null for create)
   Future<void> _openProductOverlay(Product? product, ProductOverlayMode mode) async {
     if (activeMenu != "Products") setState(() => activeMenu = "Products");
     setState(() {
@@ -224,7 +232,6 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
     _focusOverlay();
   }
 
-  // Customer overlay opener (customer can be null for create)
   Future<void> _openCustomerOverlay(Customer? customer, CustomerOverlayMode mode) async {
     if (activeMenu != "Customers") setState(() => activeMenu = "Customers");
     setState(() {
@@ -237,7 +244,6 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
     _focusOverlay();
   }
 
-  // Supplier overlay opener (supplier can be null for create)
   Future<void> _openSupplierOverlay(Supplier? supplier, SupplierOverlayMode mode) async {
     if (activeMenu != "Suppliers") setState(() => activeMenu = "Suppliers");
     setState(() {
@@ -250,7 +256,6 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
     _focusOverlay();
   }
 
-  // NEW: Invoice overlay opener
   Future<void> _openInvoiceOverlay(Invoice invoice) async {
     if (activeMenu != "Invoices") setState(() => activeMenu = "Invoices");
     setState(() {
@@ -269,7 +274,7 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
     _showProductOverlay = false;
     _showCustomerOverlay = false;
     _showSupplierOverlay = false;
-    _showInvoiceOverlay = false; // NEW
+    _showInvoiceOverlay = false;
   }
 
   void _focusOverlay() {
@@ -305,14 +310,23 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
       _showProductOverlay ||
       _showCustomerOverlay ||
       _showSupplierOverlay ||
-      _showInvoiceOverlay; // NEW
+      _showInvoiceOverlay;
+
+  bool _isEditingTextField() {
+    final focus = FocusManager.instance.primaryFocus;
+    if (focus == null) return false;
+    final ctx = focus.context;
+    if (ctx == null) return false;
+    // EditableText is the underlying widget for TextField
+    return ctx.widget is EditableText;
+  }
 
   @override
   Widget build(BuildContext context) {
     final isDesktop = Responsive.isDesktop(context);
 
     // Base shortcuts
-    final shortcuts = <LogicalKeySet, Intent>{
+    final Map<LogicalKeySet, Intent> shortcuts = <LogicalKeySet, Intent>{
       LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyK): const OpenSearchIntent(),
       LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyK): const OpenSearchIntent(),
       LogicalKeySet(LogicalKeyboardKey.escape): const DismissIntent(),
@@ -323,8 +337,8 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
     };
 
     // IMPORTANT: Prevent Backspace and BrowserBack from popping routes when an overlay is open.
-    // TextFields consume backspace before it reaches here, so typing still works.
-    if (_anyOverlayVisible()) {
+    // Preserve typing behavior: if the user currently focuses an EditableText (typing), allow backspace to work.
+    if (_anyOverlayVisible() && !_isEditingTextField()) {
       shortcuts[LogicalKeySet(LogicalKeyboardKey.backspace)] = const DoNothingAndStopPropagationIntent();
       shortcuts[LogicalKeySet(LogicalKeyboardKey.browserBack)] = const DoNothingAndStopPropagationIntent();
     }
@@ -422,12 +436,12 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
                             controller: _overlayCtrl,
                             backdropOpacity: _backdropOpacity,
                             sheetOffset: _sheetOffset,
-                            onBackdropTap: _closeOverlay, // close immediately
+                            onBackdropTap: _closeOverlay,
                             isDesktop: isDesktop,
                             focusScopeNode: _overlayFocusScope,
                             child: cart.ProductCartScreen(
                               onCheckout: _closeOverlay,
-                              onCancel: _closeOverlay, // close immediately
+                              onCancel: _closeOverlay,
                             ),
                           ),
 
@@ -499,7 +513,6 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
                                 mode: _customerOverlayMode,
                                 onSaved: () {
                                   _closeOverlay();
-                                  // Ensure list is fresh when returning
                                   context.read<CustomerBloc>().add(FetchCustomersPage(1, 20));
                                 },
                                 onCancel: _closeOverlay,
@@ -523,7 +536,6 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
                                 mode: _supplierOverlayMode,
                                 onSaved: () {
                                   _closeOverlay();
-                                  // Ensure list is fresh when returning
                                   context.read<SupplierBloc>().add(FetchSuppliersPage(1, 20));
                                 },
                                 onCancel: _closeOverlay,
@@ -531,7 +543,7 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
                             ),
                           ),
 
-                        // NEW: Invoice overlay
+                        // Invoice overlay
                         if (_showInvoiceOverlay && activeMenu == "Invoices" && _invoiceOverlayId != null)
                           _OverlaySheet(
                             controller: _overlayCtrl,
@@ -554,6 +566,50 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildFooter(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSizes.padding),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: Theme.of(context).brightness == Brightness.dark ? Colors.white10 : Colors.black12, width: 1)),
+      ),
+      child: BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
+        if (state is AuthAuthenticated) {
+          return Row(
+            children: [
+              GestureDetector(
+                onTap: () {
+                  // navigate to Profile screen inside main content
+                  _onMenuSelected("Profile");
+                },
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: AppSizes.avatarSize / 2,
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      child: Icon(Icons.person_outline, color: Theme.of(context).colorScheme.onPrimary, size: AppSizes.normalIcon),
+                    ),
+                    const SizedBox(width: AppSizes.padding),
+                    Expanded(
+                      child: Text("${state.firstName} ${state.lastName}", overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleMedium),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: 'Logout',
+                icon: Icon(Icons.logout_outlined, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7), size: AppSizes.normalIcon),
+                onPressed: () {
+                  context.read<AuthBloc>().add(LogoutRequested());
+                },
+              ),
+            ],
+          );
+        }
+        return const SizedBox.shrink();
+      }),
     );
   }
 }

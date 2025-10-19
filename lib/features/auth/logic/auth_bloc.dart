@@ -5,7 +5,7 @@ import '../data/auth_repository.dart';
 
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final AuthRepository repository;
-  
+
   AuthBloc({required this.repository}) : super(AuthInitial()) {
     on<AppStarted>((event, emit) async {
       final token = await repository.getToken();
@@ -18,13 +18,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
       if (token != null && userId != null) {
         emit(AuthAuthenticated(
-          token: token,
-          userId: userId,
-          email: email ?? '',
-          firstName: firstName ?? '',
-          lastName: lastName ?? '',
-          username: username ?? ''
-        ));
+            token: token,
+            userId: userId,
+            email: email ?? '',
+            firstName: firstName ?? '',
+            lastName: lastName ?? '',
+            username: username ?? ''));
       } else {
         emit(AuthUnauthenticated());
       }
@@ -33,27 +32,24 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<LoginRequested>((event, emit) async {
       emit(AuthLoading());
       try {
-        final userData = await repository.login(event.email, event.password);
+        final userData = await repository.login(event.identifier, event.password);
         final token = userData['token'] as String;
         final userId = userData['user']['id'] as int;
-        
-        // Safely extract and handle potential nulls
+
         final firstName = userData['user']['first_name'] as String? ?? '';
         final lastName = userData['user']['last_name'] as String? ?? '';
         final username = userData['user']['username'] as String? ?? '';
         final email = userData['user']['email'] as String? ?? '';
 
-        // Save the username to storage
         await repository.saveUsername(username);
 
         emit(AuthAuthenticated(
-          token: token,
-          userId: userId,
-          email: email,
-          firstName: firstName,
-          lastName: lastName,
-          username: username
-        ));
+            token: token,
+            userId: userId,
+            email: email,
+            firstName: firstName,
+            lastName: lastName,
+            username: username));
       } catch (e) {
         emit(AuthFailure(e.toString()));
       }
@@ -62,34 +58,29 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<RegisterRequested>((event, emit) async {
       emit(AuthLoading());
       try {
-        final userData = await repository.register(
-          event.username, event.email, event.firstName, event.lastName, event.password, event.gender
-        );
+        final userData = await repository.register(event.username, event.email, event.firstName, event.lastName, event.password, event.gender);
         final token = userData['token'] as String;
         final userId = userData['user']['id'] as int;
 
-        // Safely extract and handle potential nulls
         final firstName = userData['user']['first_name'] as String? ?? '';
         final lastName = userData['user']['last_name'] as String? ?? '';
         final username = userData['user']['username'] as String? ?? '';
         final email = userData['user']['email'] as String? ?? '';
-        
-        // Save the username to storage
+
         await repository.saveUsername(username);
-        
+
         emit(AuthAuthenticated(
-          token: token,
-          userId: userId,
-          email: email,
-          firstName: firstName,
-          lastName: lastName,
-          username: username
-        ));
+            token: token,
+            userId: userId,
+            email: email,
+            firstName: firstName,
+            lastName: lastName,
+            username: username));
       } catch (e) {
         emit(AuthFailure(e.toString()));
       }
     });
-    
+
     on<LogoutRequested>((event, emit) async {
       await repository.logout();
       emit(AuthUnauthenticated());

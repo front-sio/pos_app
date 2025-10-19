@@ -23,10 +23,16 @@ import 'package:sales_app/features/invoices/services/invoice_services.dart';
 import 'package:sales_app/features/products/bloc/products_bloc.dart';
 import 'package:sales_app/features/products/bloc/products_event.dart';
 import 'package:sales_app/features/products/services/product_service.dart';
+import 'package:sales_app/features/profile/presentation/bloc/profile_bloc.dart';
 
 // Purchases
 import 'package:sales_app/features/purchases/bloc/purchase_bloc.dart';
 import 'package:sales_app/features/purchases/services/purchase_service.dart';
+
+// Reports
+import 'package:sales_app/features/reports/bloc/reports_bloc.dart';
+import 'package:sales_app/features/reports/repository/reports_repository.dart';
+import 'package:sales_app/features/reports/services/reports_service.dart';
 
 // Sales
 import 'package:sales_app/features/sales/bloc/sales_bloc.dart';
@@ -47,6 +53,12 @@ import 'package:sales_app/features/profits/services/profit_services.dart';
 import 'package:sales_app/features/suppliers/bloc/supplier_bloc.dart';
 import 'package:sales_app/features/suppliers/bloc/supplier_event.dart';
 import 'package:sales_app/features/suppliers/services/supplier_service.dart';
+import 'package:sales_app/features/users/presentation/bloc/users_bloc.dart';
+
+// Users feature (API, repo, bloc, profile)
+import 'package:sales_app/features/users/services/users_api_service.dart';
+import 'package:sales_app/features/users/repository/users_repository.dart';
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -66,21 +78,40 @@ void main() async {
   final customerService = CustomerService(baseUrl: baseUrl);
   final supplierService = SupplierService(baseUrl: baseUrl);
 
-  final invoiceService = InvoiceService(baseUrl: baseUrl); // NEW
+  final invoiceService = InvoiceService(baseUrl: baseUrl);
+
+  final reportsService = ReportsService(baseUrl: baseUrl);
+  final reportsRepository = ReportsRepository(service: reportsService);
+
+  // Users feature: API + Repository
+  final usersApiService = UsersApiService(baseUrl: baseUrl);
+  final usersRepository = UsersRepository(api: usersApiService, auth: authRepository);
 
   runApp(
     MultiRepositoryProvider(
       providers: [
         RepositoryProvider<AuthRepository>(create: (_) => authRepository),
+
+        // Core services
         RepositoryProvider<ProductService>(create: (_) => productService),
         RepositoryProvider<StockService>(create: (_) => stockService),
         RepositoryProvider<SalesService>(create: (_) => salesService),
         RepositoryProvider<ProfitService>(create: (_) => profitService),
         RepositoryProvider<CustomerService>(create: (_) => customerService),
         RepositoryProvider<SupplierService>(create: (_) => supplierService),
-        RepositoryProvider<InvoiceService>(create: (_) => invoiceService), // NEW
 
-        // Provide SalesRepository so blocs can read it
+        // Reports
+        RepositoryProvider<ReportsService>(create: (_) => reportsService),
+        RepositoryProvider<ReportsRepository>(create: (_) => reportsRepository),
+
+        // Invoices
+        RepositoryProvider<InvoiceService>(create: (_) => invoiceService),
+
+        // Users
+        RepositoryProvider<UsersApiService>(create: (_) => usersApiService),
+        RepositoryProvider<UsersRepository>(create: (_) => usersRepository),
+
+        // SalesRepository (depends on SalesService)
         RepositoryProvider<SalesRepository>(
           create: (ctx) => SalesRepository(service: ctx.read<SalesService>()),
         ),
@@ -141,9 +172,24 @@ void main() async {
                   ..add(FetchSuppliersPage(1, 20)),
           ),
 
-          // Invoices (FIX: pass real service)
+          // Invoices (pass real service)
           BlocProvider<InvoiceBloc>(
             create: (context) => InvoiceBloc(service: context.read<InvoiceService>()),
+          ),
+
+          // Reports
+          BlocProvider<ReportsBloc>(
+            create: (context) => ReportsBloc(repository: context.read<ReportsRepository>()),
+          ),
+
+          // Users management Bloc (admin)
+          BlocProvider<UsersBloc>(
+            create: (context) => UsersBloc(repository: context.read<UsersRepository>()),
+          ),
+
+          // Profile Bloc (current user)
+          BlocProvider<ProfileBloc>(
+            create: (context) => ProfileBloc(repository: context.read<UsersRepository>()),
           ),
         ],
         child: const PosBusinessApp(),
