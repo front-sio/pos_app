@@ -84,7 +84,6 @@ class SalesService {
     throw Exception('Failed to fetch invoice for sale #$saleId (${res.statusCode})');
   }
 
-  // Returns APIs
   Future<List<SaleReturn>> getReturnsBySaleId(int saleId) async {
     final url = Uri.parse('$baseUrl/returns/by-sale/$saleId');
     final res = await http.get(url, headers: {'Accept': 'application/json'});

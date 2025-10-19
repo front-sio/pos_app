@@ -22,15 +22,16 @@ import 'package:sales_app/features/sales/presentaion/widgets/empty_cart_view.dar
 import 'package:sales_app/utils/platform_helper.dart';
 import 'package:sales_app/config/config.dart';
 import 'package:sales_app/widgets/scanner_overlay.dart';
+import 'package:sales_app/utils/interaction_lock.dart';
 
 class ProductCartScreen extends StatefulWidget {
   final VoidCallback? onCheckout;
   final VoidCallback? onCancel;
-  
+
   const ProductCartScreen({
-    super.key, 
-    this.onCheckout, 
-    this.onCancel
+    super.key,
+    this.onCheckout,
+    this.onCancel,
   });
 
   @override
@@ -61,6 +62,9 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
   @override
   void initState() {
     super.initState();
+    // Prevent background refreshes while the cart overlay is active
+    InteractionLock.instance.isInteracting.value = true;
+
     if (PlatformHelper.isDesktop) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _focusNode.requestFocus());
     }
@@ -71,6 +75,9 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
 
   @override
   void dispose() {
+    // Clear interacting flag
+    InteractionLock.instance.isInteracting.value = false;
+
     _barcodeController.dispose();
     _focusNode.dispose();
     _mobileScannerController.dispose();
@@ -84,7 +91,7 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
     super.dispose();
   }
 
-  // Methods for customer selection and data loading
+  // Data loading
   Future<void> _loadCustomers() async {
     setState(() => _loadingCustomers = true);
     try {
@@ -121,11 +128,11 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
     }
   }
 
-  // Cart and checkout methods
+  // Cart and checkout
   void _handleBarcode(String barcode) {
     final value = barcode.trim();
     if (value.isEmpty) return;
-    
+
     _scanDebouncer?.cancel();
     _scanDebouncer = Timer(const Duration(milliseconds: 250), () {
       setState(() => _barcodeError = null);
@@ -165,10 +172,7 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
       final le = _lineEdits[product.id];
       if (le == null) continue;
 
-      final unitPrice = le.unitPriceCtrl.text.trim().isEmpty
-          ? null
-          : _parseAmount(le.unitPriceCtrl.text);
-
+      final unitPrice = le.unitPriceCtrl.text.trim().isEmpty ? null : _parseAmount(le.unitPriceCtrl.text);
       overrides.add(LineOverride(productId: product.id, unitPrice: unitPrice));
     }
 
@@ -199,14 +203,9 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
         title: const Text('Cancel Sale'),
         content: const Text('Are you sure? This will clear the cart.'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context), 
-            child: const Text('No')
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('No')),
           FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.kError,
-            ),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.kError),
             onPressed: () {
               try {
                 Navigator.pop(context);
@@ -223,9 +222,9 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
     );
   }
 
-  // UI Build Methods
   @override
   Widget build(BuildContext context) {
+    // When scanning, present scanner screen
     if (_showScanner && PlatformHelper.isMobile) {
       return _buildScannerScreen();
     }
@@ -261,13 +260,14 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
     );
   }
 
+  // Scanner screen
   Widget _buildScannerScreen() {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Scan Barcode'),
         leading: IconButton(
-          icon: const Icon(Icons.close), 
-          onPressed: () => setState(() => _showScanner = false)
+          icon: const Icon(Icons.close),
+          onPressed: () => setState(() => _showScanner = false),
         ),
       ),
       body: Stack(
@@ -293,6 +293,7 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
     );
   }
 
+  // Body
   Widget _buildBody() {
     return BlocConsumer<SalesBloc, SalesState>(
       listener: (context, state) {
@@ -303,10 +304,7 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
           _closeAnyDialogSafely();
           ScaffoldMessenger.of(context).clearSnackBars();
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(state.message), 
-              backgroundColor: AppColors.kSuccess
-            ),
+            SnackBar(content: Text(state.message), backgroundColor: AppColors.kSuccess),
           );
           widget.onCheckout?.call();
         }
@@ -324,9 +322,7 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           physics: const BouncingScrollPhysics(),
           slivers: [
-            SliverToBoxAdapter(
-              child: _buildHeader(cart),
-            ),
+            SliverToBoxAdapter(child: _buildHeader(cart)),
             if (cart.isEmpty)
               const SliverFillRemaining(
                 hasScrollBody: false,
@@ -364,11 +360,7 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 5,
-            offset: const Offset(0, 2),
-          ),
+          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5, offset: const Offset(0, 2)),
         ],
       ),
       child: Column(
@@ -388,26 +380,15 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
               minimumSize: const Size.fromHeight(60),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
-                side: BorderSide(
-                  color: _customerError != null 
-                    ? AppColors.kError 
-                    : Colors.grey.shade300,
-                ),
+                side: BorderSide(color: _customerError != null ? AppColors.kError : Colors.grey.shade300),
               ),
             ),
           ),
           if (_customerError != null)
             Padding(
               padding: const EdgeInsets.only(top: 4, left: 12),
-              child: Text(
-                _customerError!,
-                style: TextStyle(
-                  color: AppColors.kError,
-                  fontSize: 12,
-                ),
-              ),
+              child: Text(_customerError!, style: TextStyle(color: AppColors.kError, fontSize: 12)),
             ),
-
           if (_selectedCustomer != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -430,8 +411,7 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
                 child: RawKeyboardListener(
                   focusNode: _focusNode,
                   onKey: (event) {
-                    if (event is RawKeyDownEvent && 
-                        event.logicalKey == LogicalKeyboardKey.enter) {
+                    if (event is RawKeyDownEvent && event.logicalKey == LogicalKeyboardKey.enter) {
                       _handleBarcode(_barcodeController.text);
                     }
                   },
@@ -477,11 +457,11 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
                     border: OutlineInputBorder(),
                   ),
                   items: state.products
-                    .map((p) => DropdownMenuItem<Product>(
-                      value: p,
-                      child: Text(p.name, overflow: TextOverflow.ellipsis),
-                    ))
-                    .toList(),
+                      .map((p) => DropdownMenuItem<Product>(
+                            value: p,
+                            child: Text(p.name, overflow: TextOverflow.ellipsis),
+                          ))
+                      .toList(),
                   onChanged: (product) {
                     if (product != null) {
                       context.read<SalesBloc>().add(AddItemToCart(product));
@@ -491,10 +471,7 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
                 );
               }
               if (state is ProductsError) {
-                return Text(
-                  state.message, 
-                  style: const TextStyle(color: AppColors.kError)
-                );
+                return Text(state.message, style: const TextStyle(color: AppColors.kError));
               }
               return const SizedBox();
             },
@@ -504,7 +481,7 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
     );
   }
 
-  // Helper Methods
+  // Helpers
   void _requestRebuild() {
     if (mounted) setState(() {});
   }
@@ -546,7 +523,6 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
         if (le.unitPriceCtrl.text.isEmpty) {
           le.unitPriceCtrl.text = defaultPrice;
         }
-
         final qtyStr = qty.toString();
         if (le.qtyCtrl.text != qtyStr) {
           le.qtyCtrl.text = qtyStr;
@@ -558,16 +534,13 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
   void _logAndToastError(String where, Object error, [StackTrace? st]) {
     debugPrint('[ProductCartScreen][$where] $error');
     if (st != null) debugPrint(st.toString());
-    
+
     if (mounted) {
       _closeAnyDialogSafely();
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(error.toString().isEmpty 
-            ? 'Unexpected error' 
-            : error.toString()
-          ),
+          content: Text(error.toString().isEmpty ? 'Unexpected error' : error.toString()),
           backgroundColor: AppColors.kError,
         ),
       );

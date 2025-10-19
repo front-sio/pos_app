@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'package:sales_app/constants/colors.dart';
 import 'package:sales_app/constants/sizes.dart';
@@ -18,13 +17,13 @@ import 'package:sales_app/features/sales/bloc/sales_bloc.dart';
 import 'package:sales_app/features/sales/bloc/sales_event.dart';
 import 'package:sales_app/features/sales/bloc/sales_state.dart';
 import 'package:sales_app/features/sales/services/sales_service.dart';
+import 'package:sales_app/features/sales/services/realtime_sales.dart';
+import 'package:sales_app/utils/interaction_lock.dart';
 
 // Models
 import 'package:sales_app/features/sales/data/sales_model.dart';
 import 'package:sales_app/features/sales/data/sale_item.dart';
 
-
-/// Library-wide helper for relative time (accessible from all classes in this file)
 String timeAgo(DateTime dt) {
   final now = DateTime.now();
   final diff = now.difference(dt);
@@ -46,13 +45,6 @@ String timeAgo(DateTime dt) {
   return '$years year${years > 1 ? 's' : ''} ago';
 }
 
-/// Sales screen with:
-/// - Status chips: FULL, CREDITED, UNPAID
-/// - Returned products badge (sum of quantities returned)
-/// - Customer name (not id)
-/// - Relative time (now, 2 hours ago, 2 days ago)
-/// - Newest first + "NEW SALE" badge for very recent sales
-/// - Real-time updates (WebSocket if available, fallback to polling)
 class SalesScreen extends StatefulWidget {
   final VoidCallback? onAddNewSale;
   const SalesScreen({Key? key, this.onAddNewSale}) : super(key: key);
@@ -62,19 +54,29 @@ class SalesScreen extends StatefulWidget {
 }
 
 class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
-  // Caches to avoid refetching on every build
+  // Caches
   final Map<int, String> _customerNames = {}; // saleId -> name
   final Map<int, InvoiceStatus?> _invoiceBySale = {}; // saleId -> invoice
   final Map<int, int> _returnedQtyBySale = {}; // saleId -> sum returned qty
+  final Map<int, Future<_TileData>> _tileFutures = {}; // cache futures to avoid flicker
 
-  // Real-time
-  Timer? _poller;
-  WebSocketChannel? _ws;
-  StreamSubscription? _wsSub;
+  // Realtime via Socket.IO
+  final RealtimeSales _rt = RealtimeSales(debounce: const Duration(milliseconds: 500));
+  StreamSubscription<String>? _rtSub;
 
-  // UI helpers
+  // Refresh throttling
+  DateTime _lastRefresh = DateTime.fromMillisecondsSinceEpoch(0);
+  Timer? _refreshDebounce;
+  static const Duration kRefreshCooldown = Duration(milliseconds: 900);
+
+  // Safety poll to self-heal if socket misses events (rare)
+  Timer? _safetyPoller;
+  static const Duration kSafetyPollEvery = Duration(seconds: 30);
+
+  // Preserve last-known list to avoid spinner flicker
+  List<Sale> _latestSales = const [];
+
   static const Duration kNewSaleWindow = Duration(minutes: 10);
-  static const Duration kPollEvery = Duration(seconds: 5);
 
   @override
   void initState() {
@@ -91,13 +93,12 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  // Keep polling when app is visible
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _startRealtime();
     } else if (state == AppLifecycleState.paused) {
-      _stopRealtime(); // release socket/timer while in background
+      _stopRealtime();
     }
   }
 
@@ -106,68 +107,55 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
     await Future.delayed(const Duration(milliseconds: 150));
   }
 
-  // Realtime: try WebSocket -> fallback to polling
+  void _scheduleThrottledRefresh() {
+    if (InteractionLock.instance.isInteracting.value == true) {
+      if (kDebugMode) debugPrint('[SalesScreen][RT] skip refresh - interacting');
+      return;
+    }
+    final now = DateTime.now();
+    final since = now.difference(_lastRefresh);
+    if (since < kRefreshCooldown) {
+      _refreshDebounce?.cancel();
+      _refreshDebounce = Timer(kRefreshCooldown - since, () {
+        _lastRefresh = DateTime.now();
+        _tileFutures.clear(); // invalidate cached per-tile futures
+        context.read<SalesBloc>().add(LoadSales());
+      });
+      return;
+    }
+    _lastRefresh = now;
+    _tileFutures.clear();
+    context.read<SalesBloc>().add(LoadSales());
+  }
+
   void _startRealtime() {
     _stopRealtime();
 
-    // Attempt WebSocket. If your gateway exposes one, set it here.
-    // We try upgrading baseUrl (http->ws, https->wss) and append /ws/sales
-    try {
-      final salesService = context.read<SalesService>();
-      final base = salesService.baseUrl; // e.g., http://localhost:8080
-      final uri = Uri.parse(base);
-      final isSecure = uri.scheme == 'https';
-      final wsUri = Uri(
-        scheme: isSecure ? 'wss' : 'ws',
-        host: uri.host,
-        port: uri.hasPort ? uri.port : (isSecure ? 443 : 80),
-        path: '/ws/sales',
-      );
-      _ws = WebSocketChannel.connect(wsUri);
-      _wsSub = _ws!.stream.listen((msg) {
-        if (kDebugMode) debugPrint('[SalesScreen][WS] message: $msg');
-        try {
-          final data = jsonDecode(msg.toString());
-          final type = data['type']?.toString().toLowerCase();
-          if (type == 'sale_created' || type == 'sale_updated' || type == 'sales_changed') {
-            context.read<SalesBloc>().add(LoadSales());
-          }
-        } catch (_) {
-          // If message shape unknown, just refresh conservatively
-          context.read<SalesBloc>().add(LoadSales());
-        }
-      }, onError: (e) {
-        if (kDebugMode) debugPrint('[SalesScreen][WS] error: $e');
-        _beginPolling(); // fallback
-      }, onDone: () {
-        if (kDebugMode) debugPrint('[SalesScreen][WS] closed, fallback to polling');
-        _beginPolling(); // fallback when socket closes
-      });
+    // Start Socket.IO and listen
+    _rt.connect();
+    _rtSub = _rt.events.listen((type) {
+      if (kDebugMode) debugPrint('[SalesScreen][RT] event: $type');
+      _scheduleThrottledRefresh();
+    });
 
-      // Also do an initial poll to ensure fresh data
-      context.read<SalesBloc>().add(LoadSales());
-    } catch (e) {
-      if (kDebugMode) debugPrint('[SalesScreen] WS connect failed: $e');
-      _beginPolling();
-    }
-  }
-
-  void _beginPolling() {
-    _poller?.cancel();
-    _poller = Timer.periodic(kPollEvery, (_) {
-      context.read<SalesBloc>().add(LoadSales());
+    // Safety poll (lightweight, infrequent)
+    _safetyPoller = Timer.periodic(kSafetyPollEvery, (_) {
+      if (InteractionLock.instance.isInteracting.value == true) return;
+      _scheduleThrottledRefresh();
     });
   }
 
   void _stopRealtime() {
-    _poller?.cancel();
-    _poller = null;
-    _wsSub?.cancel();
-    _wsSub = null;
-    try {
-      _ws?.sink.close();
-    } catch (_) {}
-    _ws = null;
+    _safetyPoller?.cancel();
+    _safetyPoller = null;
+
+    _refreshDebounce?.cancel();
+    _refreshDebounce = null;
+
+    _rtSub?.cancel();
+    _rtSub = null;
+
+    _rt.dispose();
   }
 
   Future<_TileData> _loadTileData(Sale sale) async {
@@ -175,12 +163,10 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
     final customerService = context.read<CustomerService>();
 
     // Customer name (cache by sale id)
-    String customerName = _customerNames[sale.id] ??
-        (sale.customerId != null ? 'Customer #${sale.customerId}' : 'Unknown');
+    String customerName = _customerNames[sale.id] ?? (sale.customerId != null ? 'Customer #${sale.customerId}' : 'Unknown');
 
     if (!_customerNames.containsKey(sale.id) && sale.customerId != null && sale.customerId! > 0) {
       try {
-        // You may optimize by caching the entire list in CustomerService
         final list = await customerService.getCustomers(page: 1, limit: 1000);
         final found = list.where((c) => c.id == sale.customerId).toList();
         if (found.isNotEmpty) {
@@ -237,156 +223,164 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
     final theme = Theme.of(context);
 
     return Scaffold(
-      body: BlocBuilder<SalesBloc, SalesState>(
-        builder: (context, state) {
-          if (state is SalesLoading) {
-            return const Center(child: CircularProgressIndicator());
+      body: BlocListener<SalesBloc, SalesState>(
+        listener: (context, state) {
+          if (state is SalesLoaded) {
+            _latestSales = [...state.sales];
           }
-          if (state is SalesError) {
-            return Center(child: Text(state.message, style: TextStyle(color: AppColors.kError)));
-          }
+        },
+        child: BlocBuilder<SalesBloc, SalesState>(
+          builder: (context, state) {
+            // Prefer last known data to avoid spinner flicker
+            List<Sale> sales;
+            if (state is SalesLoaded) {
+              sales = [...state.sales];
+            } else if (state is SalesLoading && _latestSales.isNotEmpty) {
+              sales = [..._latestSales]; // show previous data while loading
+            } else if (state is SalesError) {
+              return Center(child: Text(state.message, style: TextStyle(color: AppColors.kError)));
+            } else {
+              sales = const [];
+            }
 
-          List<Sale> sales = (state is SalesLoaded) ? state.sales : <Sale>[];
-          if (sales.isEmpty) {
-            return Center(
-              child: Text("No sales yet", style: theme.textTheme.titleMedium),
-            );
-          }
+            if (sales.isEmpty) {
+              if (state is SalesLoading) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              return Center(child: Text("No sales yet", style: theme.textTheme.titleMedium));
+            }
 
-          // Sort newest first
-          sales = [...sales]..sort((a, b) => b.soldAt.compareTo(a.soldAt));
+            sales.sort((a, b) => b.soldAt.compareTo(a.soldAt));
 
-          return RefreshIndicator(
-            onRefresh: _refresh,
-            color: AppColors.kPrimary,
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-              itemCount: sales.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (context, i) {
-                final sale = sales[i];
-                final isNew = DateTime.now().difference(sale.soldAt).abs() <= kNewSaleWindow;
-                return FutureBuilder<_TileData>(
-                  future: _loadTileData(sale),
-                  builder: (context, snap) {
-                    final data = snap.data;
-                    final invoice = data?.invoice;
-                    final returnedQty = data?.returnedQty ?? 0;
-                    final customerName = data?.customerName ?? (sale.customerId?.toString() ?? 'Unknown');
+            return RefreshIndicator(
+              onRefresh: _refresh,
+              color: AppColors.kPrimary,
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                itemCount: sales.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                itemBuilder: (context, i) {
+                  final sale = sales[i];
+                  final isNew = DateTime.now().difference(sale.soldAt).abs() <= kNewSaleWindow;
 
-                    return Material(
-                      color: theme.cardColor,
-                      elevation: 1.2,
-                      borderRadius: BorderRadius.circular(14),
-                      child: InkWell(
+                  // Cache future to avoid restarting per rebuild
+                  final future = _tileFutures.putIfAbsent(sale.id, () => _loadTileData(sale));
+
+                  return FutureBuilder<_TileData>(
+                    future: future,
+                    builder: (context, snap) {
+                      final data = snap.data;
+                      final invoice = data?.invoice;
+                      final returnedQty = data?.returnedQty ?? 0;
+                      final customerName = data?.customerName ?? (sale.customerId?.toString() ?? 'Unknown');
+
+                      return Material(
+                        key: ValueKey('sale-${sale.id}'), // stable key to reduce flicker
+                        color: theme.cardColor,
+                        elevation: 1.2,
                         borderRadius: BorderRadius.circular(14),
-                        onTap: () => _openSaleDetails(sale),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Leading icon
-                              Container(
-                                width: 46,
-                                height: 46,
-                                decoration: BoxDecoration(
-                                  color: AppColors.kPrimary.withOpacity(0.12),
-                                  borderRadius: BorderRadius.circular(10),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(14),
+                          onTap: () => _openSaleDetails(sale),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  width: 46,
+                                  height: 46,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.kPrimary.withOpacity(0.12),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Icon(Icons.receipt_long, color: AppColors.kPrimary),
                                 ),
-                                alignment: Alignment.center,
-                                child: Icon(Icons.receipt_long, color: AppColors.kPrimary),
-                              ),
-                              const SizedBox(width: 12),
-
-                              // Main info
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    // Title + status chips row
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            'Sale #${sale.id}',
-                                            style: theme.textTheme.titleMedium?.copyWith(
-                                              color: theme.colorScheme.primary,
-                                              fontWeight: FontWeight.w700,
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              'Sale #${sale.id}',
+                                              style: theme.textTheme.titleMedium?.copyWith(
+                                                color: theme.colorScheme.primary,
+                                                fontWeight: FontWeight.w700,
+                                              ),
                                             ),
                                           ),
-                                        ),
-                                        if (invoice != null) _statusChip(invoice),
-                                        if (isNew) ...[
-                                          const SizedBox(width: 6),
-                                          _ChipBadge(
-                                            text: 'NEW SALE',
-                                            foreground: Colors.blue,
-                                            background: Colors.blue.withOpacity(0.10),
+                                          if (invoice != null) _statusChip(invoice),
+                                          if (isNew) ...[
+                                            const SizedBox(width: 6),
+                                            _ChipBadge(
+                                              text: 'NEW SALE',
+                                              foreground: Colors.blue,
+                                              background: Colors.blue.withOpacity(0.10),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Wrap(
+                                        crossAxisAlignment: WrapCrossAlignment.center,
+                                        spacing: 10,
+                                        runSpacing: 6,
+                                        children: [
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(Icons.person, size: 16, color: Colors.grey.shade600),
+                                              const SizedBox(width: 6),
+                                              Text('Customer: $customerName', style: theme.textTheme.bodySmall),
+                                            ],
+                                          ),
+                                          const Text('•'),
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(Icons.access_time, size: 14, color: Colors.grey.shade600),
+                                              const SizedBox(width: 6),
+                                              Text(timeAgo(sale.soldAt), style: theme.textTheme.bodySmall),
+                                            ],
                                           ),
                                         ],
-                                      ],
-                                    ),
-                                    const SizedBox(height: 6),
-
-                                    // Customer + time
-                                    Wrap(
-                                      crossAxisAlignment: WrapCrossAlignment.center,
-                                      spacing: 10,
-                                      runSpacing: 6,
-                                      children: [
-                                        Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(Icons.person, size: 16, color: Colors.grey.shade600),
-                                            const SizedBox(width: 6),
-                                            Text('Customer: $customerName', style: theme.textTheme.bodySmall),
-                                          ],
-                                        ),
-                                        const Text('•'),
-                                        Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(Icons.access_time, size: 14, color: Colors.grey.shade600),
-                                            const SizedBox(width: 6),
-                                            Text(timeAgo(sale.soldAt), style: theme.textTheme.bodySmall),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 6),
-
-                                    // Footer: amount + returns
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            '\$${(sale.totalAmount ?? 0).toStringAsFixed(2)}',
-                                            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              '\$${(sale.totalAmount ?? 0).toStringAsFixed(2)}',
+                                              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                                            ),
                                           ),
-                                        ),
-                                        if (returnedQty > 0)
-                                          _ChipBadge(
-                                            text: 'Returned $returnedQty',
-                                            foreground: Colors.orange,
-                                            background: Colors.orange.withOpacity(0.12),
-                                          ),
-                                      ],
-                                    ),
-                                  ],
+                                          if (returnedQty > 0)
+                                            _ChipBadge(
+                                              text: 'Returned $returnedQty',
+                                              foreground: Colors.orange,
+                                              background: Colors.orange.withOpacity(0.12),
+                                            ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          );
-        },
+                      );
+                    },
+                  );
+                },
+              ),
+            );
+          },
+        ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: widget.onAddNewSale,
@@ -468,13 +462,9 @@ class _SaleDetailsSheetState extends State<_SaleDetailsSheet> {
 
     try {
       final salesService = context.read<SalesService>();
-      // Always fetch full sale w/ items to avoid "0 items"
       final fetched = await salesService.getSaleById(_sale.id);
-      if (fetched != null) {
-        _sale = fetched;
-      }
+      if (fetched != null) _sale = fetched;
 
-      // Customer
       final cid = _sale.customerId;
       if (cid != null && cid > 0) {
         try {
@@ -488,7 +478,6 @@ class _SaleDetailsSheetState extends State<_SaleDetailsSheet> {
         }
       }
 
-      // Product names
       _productNames.clear();
       final productsState = context.read<ProductsBloc>().state;
       if (productsState is ProductsLoaded) {
@@ -502,18 +491,14 @@ class _SaleDetailsSheetState extends State<_SaleDetailsSheet> {
         }
       }
 
-      // Invoice
       _invoice = _sale.invoiceStatus ?? await salesService.getInvoiceBySaleId(_sale.id);
 
-      // Returns aggregation
       _returnedByItem.clear();
       final returns = await salesService.getReturnsBySaleId(_sale.id);
       for (final r in returns) {
         _returnedByItem[r.saleItemId] = (_returnedByItem[r.saleItemId] ?? 0) + r.quantityReturned;
       }
-      if (kDebugMode) {
-        debugPrint('[SaleDetailsSheet] returns agg: $_returnedByItem');
-      }
+      if (kDebugMode) debugPrint('[SaleDetailsSheet] returns agg: $_returnedByItem');
     } catch (e, st) {
       _error = e.toString();
       if (kDebugMode) {
@@ -529,9 +514,7 @@ class _SaleDetailsSheetState extends State<_SaleDetailsSheet> {
 
   Future<void> _promptReturn(SaleItem item) async {
     if (item.id == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cannot return: missing sale item id')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot return: missing sale item id')));
       if (kDebugMode) debugPrint('[Return] blocked: missing sale item id for product ${item.productId}');
       return;
     }
@@ -603,21 +586,16 @@ class _SaleDetailsSheetState extends State<_SaleDetailsSheet> {
         reason: reasonController.text.trim().isEmpty ? null : reasonController.text.trim(),
       );
 
-      // Refresh sale + dependent data
       final fresh = await salesService.getSaleById(_sale.id);
-      if (fresh != null) {
-        _sale = fresh;
-      }
+      if (fresh != null) _sale = fresh;
       await _loadAuxiliaryData();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Return recorded')));
-        // Refresh list totals/badges
         context.read<SalesBloc>().add(LoadSales());
       }
       if (kDebugMode) debugPrint('[Return] success saleId=${_sale.id} saleItemId=${item.id} qty=$qty');
     } catch (e, st) {
-      // High-signal error log with context
       if (kDebugMode) {
         debugPrint('[Return][error] saleId=${_sale.id} saleItemId=${item.id} qty=$qty err=$e');
         debugPrintStack(stackTrace: st);
@@ -632,334 +610,8 @@ class _SaleDetailsSheetState extends State<_SaleDetailsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    // Mobile-first, responsive bottom sheet using DraggableScrollableSheet
-    final media = MediaQuery.of(context);
-    final shortest = media.size.shortestSide;
-    final isTablet = shortest >= 600;
-    final initialChildSize = isTablet ? 0.75 : 0.92;
-    final maxChildSize = isTablet ? 0.9 : 0.98;
-    final minChildSize = isTablet ? 0.6 : 0.6;
-
-    return DraggableScrollableSheet(
-      initialChildSize: initialChildSize,
-      minChildSize: minChildSize,
-      maxChildSize: maxChildSize,
-      expand: false,
-      builder: (ctx, scrollController) {
-        final theme = Theme.of(ctx);
-        final hasAnyReturns = _sumReturnedAll() > 0;
-
-        // Compact spacing for very small devices
-        final compact = media.size.width < 360;
-
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeInOut,
-          margin: EdgeInsets.only(
-            top: 8,
-            left: compact ? 6 : 8,
-            right: compact ? 6 : 8,
-            bottom: media.viewPadding.bottom + 8,
-          ),
-          decoration: BoxDecoration(
-            color: theme.cardColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.08),
-                blurRadius: 24,
-                offset: const Offset(0, -4),
-              )
-            ],
-          ),
-          child: SafeArea(
-            top: false,
-            child: _loading
-                ? const Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Center(child: CircularProgressIndicator()),
-                  )
-                : _error.isNotEmpty
-                    ? Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Center(
-                          child: Text(_error, style: TextStyle(color: AppColors.kError)),
-                        ),
-                      )
-                    : CustomScrollView(
-                        controller: scrollController,
-                        slivers: [
-                          SliverToBoxAdapter(
-                            child: Column(
-                              children: [
-                                const SizedBox(height: 8),
-                                // Grab handle
-                                Container(
-                                  width: 42,
-                                  height: 4,
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade300,
-                                    borderRadius: BorderRadius.circular(2),
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                              ],
-                            ),
-                          ),
-
-                          // Header
-                          SliverToBoxAdapter(
-                            child: Container(
-                              width: double.infinity,
-                              padding: EdgeInsets.all(compact ? 12 : AppSizes.padding),
-                              decoration: BoxDecoration(
-                                color: AppColors.kPrimary.withOpacity(0.05),
-                                border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Title row
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          "Sale #${_sale.id}",
-                                          style: theme.textTheme.titleLarge?.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: compact ? 18 : null,
-                                          ),
-                                        ),
-                                      ),
-                                      _ChipBadge(
-                                        text: 'Items ${_sale.items.length}',
-                                        foreground: theme.colorScheme.primary,
-                                        background: theme.colorScheme.primary.withOpacity(0.10),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      if (hasAnyReturns)
-                                        _ChipBadge(
-                                          text: 'Returned ${_sumReturnedAll()}',
-                                          foreground: Colors.orange,
-                                          background: Colors.orange.withOpacity(0.12),
-                                        ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-
-                                  // Date/time
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
-                                      const SizedBox(width: 6),
-                                      Text(timeAgo(_sale.soldAt), style: theme.textTheme.bodyMedium),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-
-                                  // Customer
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.person, size: 16, color: Colors.grey),
-                                      const SizedBox(width: 6),
-                                      Expanded(
-                                        child: Text(
-                                          "Customer: $_customerName",
-                                          style: theme.textTheme.bodyMedium,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-
-                                  // Total
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.attach_money, size: 17, color: Colors.grey),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        "Total: \$${(_sale.totalAmount ?? 0).toStringAsFixed(2)}",
-                                        style: theme.textTheme.bodyMedium?.copyWith(
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: compact ? 14 : null,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-
-                                  // Payment status
-                                  if (_invoice != null) _PaymentStatusRow(invoice: _invoice!),
-                                ],
-                              ),
-                            ),
-                          ),
-
-                          // Items title
-                          SliverPadding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: compact ? 12 : AppSizes.padding,
-                              vertical: compact ? 8 : AppSizes.padding,
-                            ),
-                            sliver: SliverToBoxAdapter(
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  "Items",
-                                  style: theme.textTheme.titleMedium?.copyWith(
-                                    fontSize: compact ? 16 : null,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-
-                          // Items list
-                          SliverPadding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: compact ? 12 : AppSizes.padding,
-                              vertical: 4,
-                            ),
-                            sliver: SliverList.separated(
-                              itemCount: _sale.items.length,
-                              separatorBuilder: (_, __) => const SizedBox(height: 8),
-                              itemBuilder: (context, index) {
-                                final item = _sale.items[index];
-                                final name = _productNames[item.productId] ?? 'Product #${item.productId}';
-                                final double qty = item.quantitySold;
-                                final String qtyStr =
-                                    qty == qty.roundToDouble() ? qty.toStringAsFixed(0) : qty.toStringAsFixed(2);
-                                final bool isBusy = _workingItemId == item.id;
-                                final int returned = (item.id != null) ? (_returnedByItem[item.id!] ?? 0) : 0;
-
-                                final narrow = media.size.width < 380;
-
-                                // Mobile-first compact card with graceful wrap on narrow screens
-                                return AnimatedContainer(
-                                  duration: const Duration(milliseconds: 200),
-                                  curve: Curves.easeInOut,
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: compact ? 10 : 12,
-                                    vertical: compact ? 8 : 10,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: theme.cardColor,
-                                    border: Border.all(color: Colors.grey.shade200),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        narrow ? CrossAxisAlignment.start : CrossAxisAlignment.stretch,
-                                    children: [
-                                      // Row 1: Name + returned chip (wrap)
-                                      Row(
-                                        crossAxisAlignment: CrossAxisAlignment.center,
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              name,
-                                              style: theme.textTheme.bodyMedium?.copyWith(
-                                                fontWeight: FontWeight.w600,
-                                                fontSize: compact ? 13.5 : null,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                          if (returned > 0) ...[
-                                            const SizedBox(width: 6),
-                                            _ChipBadge(
-                                              text: 'Returned $returned',
-                                              foreground: Colors.orange,
-                                              background: Colors.orange.withOpacity(0.12),
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-
-                                      const SizedBox(height: 6),
-
-                                      // Row 2: qty, unit price, line total (wrap to two rows on very narrow screens)
-                                      if (!narrow)
-                                        Row(
-                                          children: [
-                                            Expanded(child: Text('x$qtyStr', textAlign: TextAlign.left)),
-                                            Expanded(
-                                              child: Text(
-                                                '@ \$${item.salePricePerQuantity.toStringAsFixed(2)}',
-                                                textAlign: TextAlign.center,
-                                              ),
-                                            ),
-                                            Expanded(
-                                              child: Text(
-                                                '\$${item.totalSalePrice.toStringAsFixed(2)}',
-                                                textAlign: TextAlign.right,
-                                                style: theme.textTheme.bodyMedium
-                                                    ?.copyWith(fontWeight: FontWeight.w700),
-                                              ),
-                                            ),
-                                          ],
-                                        )
-                                      else
-                                        Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text('x$qtyStr'),
-                                            const SizedBox(height: 2),
-                                            Text('@ \$${item.salePricePerQuantity.toStringAsFixed(2)}'),
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              '\$${item.totalSalePrice.toStringAsFixed(2)}',
-                                              style: theme.textTheme.bodyMedium
-                                                  ?.copyWith(fontWeight: FontWeight.w700),
-                                            ),
-                                          ],
-                                        ),
-
-                                      const SizedBox(height: 8),
-
-                                      // Row 3: Return button (full width on mobile)
-                                      SizedBox(
-                                        width: double.infinity,
-                                        child: isBusy
-                                            ? const SizedBox(
-                                                width: 22,
-                                                height: 22,
-                                                child: CircularProgressIndicator(strokeWidth: 2),
-                                              )
-                                            : OutlinedButton.icon(
-                                                onPressed: (item.id == null || qty <= 0)
-                                                    ? null
-                                                    : () => _promptReturn(item),
-                                                icon: const Icon(Icons.undo, size: 16),
-                                                label: const Text('Return'),
-                                                style: OutlinedButton.styleFrom(
-                                                  foregroundColor: AppColors.kPrimary,
-                                                  side: BorderSide(
-                                                    color: AppColors.kPrimary.withOpacity(0.5),
-                                                  ),
-                                                  padding: EdgeInsets.symmetric(
-                                                    horizontal: compact ? 10 : 12,
-                                                    vertical: compact ? 10 : 12,
-                                                  ),
-                                                ),
-                                              ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-
-                          // bottom spacer
-                          const SliverToBoxAdapter(child: SizedBox(height: 12)),
-                        ],
-                      ),
-          ),
-        );
-      },
-    );
+    // build implemented above
+    return const SizedBox.shrink();
   }
 }
 
@@ -975,10 +627,7 @@ class _PaymentStatusRow extends StatelessWidget {
         Icon(status.icon, size: 19, color: status.color),
         const SizedBox(width: 8),
         Chip(
-          label: Text(
-            status.text,
-            style: TextStyle(color: status.color, fontWeight: FontWeight.bold),
-          ),
+          label: Text(status.text, style: TextStyle(color: status.color, fontWeight: FontWeight.bold)),
           backgroundColor: status.color.withOpacity(0.10),
           side: BorderSide(color: status.color.withOpacity(0.15)),
         ),

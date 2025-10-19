@@ -1,15 +1,19 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import 'package:sales_app/features/products/services/realtime_product.dart';
 
 import 'package:sales_app/utils/responsive.dart';
+import 'package:sales_app/utils/interaction_lock.dart';
 
 import 'package:sales_app/features/products/bloc/products_bloc.dart';
 import 'package:sales_app/features/products/bloc/products_event.dart';
 import 'package:sales_app/features/products/bloc/products_state.dart';
 import 'package:sales_app/features/products/data/product_model.dart';
 import 'package:sales_app/features/products/services/product_service.dart';
+
 
 import 'package:sales_app/features/products/presentation/product_overlay_screen.dart';
 import 'package:sales_app/features/products/presentation/category_overlay_screen.dart';
@@ -24,7 +28,7 @@ class ProductsScreen extends StatefulWidget {
   State<ProductsScreen> createState() => _ProductsScreenState();
 }
 
-class _ProductsScreenState extends State<ProductsScreen> with TickerProviderStateMixin {
+class _ProductsScreenState extends State<ProductsScreen> with TickerProviderStateMixin, WidgetsBindingObserver {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   int _currentPage = 1;
@@ -39,11 +43,22 @@ class _ProductsScreenState extends State<ProductsScreen> with TickerProviderStat
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
+  // Realtime
+  final RealtimeProducts _rt = RealtimeProducts(debounce: const Duration(milliseconds: 500));
+  StreamSubscription<String>? _rtSub;
+  DateTime _lastRefresh = DateTime.fromMillisecondsSinceEpoch(0);
+  Timer? _refreshDebounce;
+  static const Duration _refreshCooldown = Duration(milliseconds: 900);
+  Timer? _safetyPoller;
+  static const Duration _safetyPollEvery = Duration(seconds: 30);
+
   NumberFormat get _money => NumberFormat.simpleCurrency();
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+
     _scrollController.addListener(_onScroll);
 
     _animationController = AnimationController(duration: const Duration(milliseconds: 600), vsync: this);
@@ -56,6 +71,73 @@ class _ProductsScreenState extends State<ProductsScreen> with TickerProviderStat
     }
 
     _loadMeta();
+    _startRealtime();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _scrollController.dispose();
+    _searchController.dispose();
+    _animationController.dispose();
+    _stopRealtime();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _startRealtime();
+    } else if (state == AppLifecycleState.paused) {
+      _stopRealtime();
+    }
+  }
+
+  void _startRealtime() {
+    _stopRealtime(); // clean previous
+
+    _rt.connect();
+    _rtSub = _rt.events.listen((type) {
+      // Any change on products triggers throttled refresh
+      _scheduleThrottledRefresh();
+    });
+
+    _safetyPoller = Timer.periodic(_safetyPollEvery, (_) {
+      if (InteractionLock.instance.isInteracting.value == true) return;
+      _scheduleThrottledRefresh();
+    });
+  }
+
+  void _stopRealtime() {
+    _safetyPoller?.cancel();
+    _safetyPoller = null;
+
+    _refreshDebounce?.cancel();
+    _refreshDebounce = null;
+
+    _rtSub?.cancel();
+    _rtSub = null;
+
+    _rt.dispose();
+  }
+
+  void _scheduleThrottledRefresh() {
+    if (InteractionLock.instance.isInteracting.value == true) return;
+
+    final now = DateTime.now();
+    final since = now.difference(_lastRefresh);
+    if (since < _refreshCooldown) {
+      _refreshDebounce?.cancel();
+      _refreshDebounce = Timer(_refreshCooldown - since, () {
+        _lastRefresh = DateTime.now();
+        _currentPage = 1;
+        context.read<ProductsBloc>().add(FetchProductsPage(1, _limit));
+      });
+      return;
+    }
+    _lastRefresh = now;
+    _currentPage = 1;
+    context.read<ProductsBloc>().add(FetchProductsPage(1, _limit));
   }
 
   Future<void> _loadMeta() async {
@@ -73,14 +155,6 @@ class _ProductsScreenState extends State<ProductsScreen> with TickerProviderStat
       setState(() => _loadingMeta = false);
       _snack('Failed to load categories: $e', error: true);
     }
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    _searchController.dispose();
-    _animationController.dispose();
-    super.dispose();
   }
 
   void _onScroll() {
@@ -567,6 +641,7 @@ class _ProductsScreenState extends State<ProductsScreen> with TickerProviderStat
         ]),
       ),
     );
+    HapticFeedback.selectionClick();
   }
 
   void _showFilterBottomSheet() {
@@ -585,6 +660,7 @@ class _ProductsScreenState extends State<ProductsScreen> with TickerProviderStat
         ]),
       ),
     );
+    HapticFeedback.selectionClick();
   }
 
   void _toggleViewMode() {
