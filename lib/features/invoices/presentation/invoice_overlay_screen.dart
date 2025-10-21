@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import 'package:sales_app/constants/colors.dart';
 import 'package:sales_app/constants/sizes.dart';
+
 import 'package:sales_app/features/invoices/bloc/invoice_bloc.dart';
 import 'package:sales_app/features/invoices/bloc/invoice_event.dart';
 import 'package:sales_app/features/invoices/bloc/invoice_state.dart';
@@ -13,8 +14,15 @@ import 'package:sales_app/features/invoices/data/invoice_model.dart';
 class InvoiceOverlayScreen extends StatefulWidget {
   final int invoiceId;
   final VoidCallback? onClose;
+  // Called after successful payment so the parent can refresh quietly.
+  final VoidCallback? onCommitted;
 
-  const InvoiceOverlayScreen({super.key, required this.invoiceId, this.onClose});
+  const InvoiceOverlayScreen({
+    super.key,
+    required this.invoiceId,
+    this.onClose,
+    this.onCommitted,
+  });
 
   @override
   State<InvoiceOverlayScreen> createState() => _InvoiceOverlayScreenState();
@@ -29,6 +37,7 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
   void initState() {
     super.initState();
     _fadeIn = AnimationController(vsync: this, duration: const Duration(milliseconds: 350))..forward();
+    // This widget expects a scoped InvoiceBloc provided by the caller (InvoicesScreen)
     context.read<InvoiceBloc>().add(LoadInvoiceDetails(widget.invoiceId));
   }
 
@@ -64,6 +73,7 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(state.message), backgroundColor: AppColors.kSuccess),
           );
+          widget.onCommitted?.call(); // refresh parent quietly
         }
         if (state is InvoicesError) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -71,10 +81,18 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
           );
         }
       },
-      buildWhen: (_, s) => s is InvoicesLoading || s is InvoiceDetailsLoaded,
+      // Rebuild on details loaded, generic loading, or error
+      buildWhen: (_, s) => s is InvoiceDetailsLoaded || s is InvoicesLoading || s is InvoicesError,
       builder: (context, state) {
         if (state is InvoicesLoading) {
           return const SizedBox(height: 360, child: Center(child: CircularProgressIndicator()));
+        }
+        if (state is InvoicesError) {
+          return _OverlayError(
+            message: state.message,
+            onRetry: () => context.read<InvoiceBloc>().add(LoadInvoiceDetails(widget.invoiceId)),
+            onClose: widget.onClose,
+          );
         }
         if (state is! InvoiceDetailsLoaded) {
           return const SizedBox(height: 360, child: Center(child: Text('Failed to load invoice')));
@@ -83,7 +101,6 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
         final Invoice inv = state.invoice;
         final payments = state.payments;
         final paid = payments.fold<double>(0, (s, p) => s + p.amount);
-        // clamp returns num -> cast to double
         final double due = ((inv.totalAmount - paid).clamp(0, double.infinity)).toDouble();
         final status = _computeStatus(inv.totalAmount, paid);
 
@@ -139,7 +156,7 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
                                 border: Border.all(color: Colors.grey.shade200),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(0.05),
+                                    color: Colors.black.withValues(alpha: 0.05),
                                     blurRadius: 24,
                                     offset: const Offset(0, 8),
                                   ),
@@ -152,37 +169,32 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                                     decoration: BoxDecoration(
-                                      color: theme.colorScheme.primary.withOpacity(0.06),
+                                      color: theme.colorScheme.primary.withValues(alpha: 0.06),
                                       borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                                       border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
                                     ),
-                                    child: Column(
+                                    child: Row(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Row(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text('INVOICE', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900, letterSpacing: 1.4)),
+                                              const SizedBox(height: 6),
+                                              Wrap(
+                                                crossAxisAlignment: WrapCrossAlignment.center,
+                                                spacing: 10,
+                                                runSpacing: 6,
                                                 children: [
-                                                  Text('INVOICE', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900, letterSpacing: 1.4)),
-                                                  const SizedBox(height: 6),
-                                                  Wrap(
-                                                    crossAxisAlignment: WrapCrossAlignment.center,
-                                                    spacing: 10,
-                                                    runSpacing: 6,
-                                                    children: [
-                                                      _MetaPill(icon: Icons.confirmation_number, label: 'Invoice #${inv.id}'),
-                                                      _MetaPill(icon: Icons.person, label: 'Customer #${inv.customerId}'),
-                                                    ],
-                                                  ),
+                                                  _MetaPill(icon: Icons.confirmation_number, label: 'Invoice #${inv.id}'),
+                                                  _MetaPill(icon: Icons.person, label: 'Customer #${inv.customerId}'),
                                                 ],
                                               ),
-                                            ),
-                                            _StatusBadgeLarge(label: status.label, color: status.color),
-                                          ],
+                                            ],
+                                          ),
                                         ),
+                                        _StatusBadgeLarge(label: status.label, color: status.color),
                                       ],
                                     ),
                                   ),
@@ -192,7 +204,6 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
                                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                                     child: Column(
                                       children: [
-                                        // Summary row(s)
                                         if (wide)
                                           Row(
                                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -214,12 +225,9 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
                                               _SummaryCard(title: 'Due', value: _currency.format(due), icon: Icons.pending_actions, color: Colors.orange.shade700),
                                             ],
                                           ),
-
                                         const SizedBox(height: 16),
                                         _SectionDivider(title: 'Payments'),
                                         const SizedBox(height: 6),
-
-                                        // Payments list
                                         payments.isEmpty
                                             ? Container(
                                                 width: double.infinity,
@@ -249,7 +257,7 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
                                                     contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                                                     leading: CircleAvatar(
                                                       radius: 18,
-                                                      backgroundColor: Colors.green.withOpacity(0.12),
+                                                      backgroundColor: Colors.green.withValues(alpha: 0.12),
                                                       child: const Icon(Icons.payments, color: Colors.green, size: 20),
                                                     ),
                                                     title: Text(_currency.format(p.amount), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
@@ -257,7 +265,6 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
                                                   );
                                                 },
                                               ),
-
                                         const SizedBox(height: 20),
                                       ],
                                     ),
@@ -265,10 +272,7 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
                                 ],
                               ),
                             ),
-
                             const SizedBox(height: 16),
-
-                            // Payment actions (mobile-first; sits below paper)
                             _PaymentActionsBar(
                               controller: _amountCtrl,
                               onPayCustom: (amt) => _addPayment(amt, due),
@@ -301,6 +305,43 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
   }
 }
 
+class _OverlayError extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+  final VoidCallback? onClose;
+  const _OverlayError({required this.message, required this.onRetry, this.onClose});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Scaffold(
+      backgroundColor: cs.surface,
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        title: const Text('Invoice'),
+        actions: [
+          IconButton(icon: const Icon(Icons.close), onPressed: onClose ?? () => Navigator.pop(context)),
+        ],
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSizes.padding),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.error_outline, size: 36, color: cs.error),
+              const SizedBox(height: 8),
+              Text(message, textAlign: TextAlign.center),
+              const SizedBox(height: 12),
+              FilledButton(onPressed: onRetry, child: const Text('Retry')),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _Status {
   final String label;
   final Color color;
@@ -319,9 +360,9 @@ class _StatusChip extends StatelessWidget {
       curve: Curves.easeInOut,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.10),
+        color: color.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withOpacity(0.20)),
+        border: Border.all(color: color.withValues(alpha: 0.20)),
       ),
       child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w800, letterSpacing: 0.4)),
     );
@@ -338,9 +379,9 @@ class _StatusBadgeLarge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.10),
+        color: color.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
@@ -400,7 +441,7 @@ class _SummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final subtle = theme.colorScheme.primary.withOpacity(0.05);
+    final subtle = theme.colorScheme.primary.withValues(alpha: 0.05);
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -413,7 +454,7 @@ class _SummaryCard extends StatelessWidget {
           Container(
             width: 42,
             height: 42,
-            decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
             child: Icon(icon, color: color),
           ),
           const SizedBox(width: 12),
@@ -486,9 +527,9 @@ class _PaymentActionsBar extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              ElevatedButton(
+              FilledButton(
                 onPressed: () => onPayCustom(null),
-                style: ElevatedButton.styleFrom(
+                style: FilledButton.styleFrom(
                   backgroundColor: AppColors.kPrimary,
                   minimumSize: const Size(120, 48),
                 ),
@@ -511,7 +552,6 @@ class _PaymentActionsBar extends StatelessWidget {
                 child: OutlinedButton.icon(
                   onPressed: due > 0
                       ? () {
-                          // (due * 0.5).clamp returns num -> cast to double
                           final half = ((due * 0.5).clamp(0.0, due) as num).toDouble();
                           onPayCustom(half);
                         }
