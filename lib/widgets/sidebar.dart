@@ -1,8 +1,6 @@
 // features/sidebar/sidebar.dart
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:sales_app/rbac/rbac.dart';
-
 
 final List<Map<String, dynamic>> sidebarMenu = [
   {"label": "Dashboard", "icon": Icons.dashboard_outlined},
@@ -23,7 +21,11 @@ class Sidebar extends StatefulWidget {
   final Function(String) onMenuSelected;
   final String activeMenu;
 
-  const Sidebar({super.key, required this.onMenuSelected, required this.activeMenu});
+  const Sidebar({
+    super.key,
+    required this.onMenuSelected,
+    required this.activeMenu,
+  });
 
   @override
   State<Sidebar> createState() => _SidebarState();
@@ -50,7 +52,10 @@ class _SidebarState extends State<Sidebar> {
         ),
         child: ListTile(
           leading: Icon(icon, color: highlighted ? cs.primary : cs.onSurface),
-          title: Text(title, style: TextStyle(color: highlighted ? cs.primary : cs.onSurface)),
+          title: Text(
+            title,
+            style: TextStyle(color: highlighted ? cs.primary : cs.onSurface),
+          ),
           onTap: () => widget.onMenuSelected(title),
         ),
       ),
@@ -59,8 +64,10 @@ class _SidebarState extends State<Sidebar> {
 
   @override
   Widget build(BuildContext context) {
+    // Filter menus based on RBAC permissions
     final filteredMenu = sidebarMenu.where((m) {
-      return Rbac.canMenu(context, m['label']);
+      final label = m['label'] as String;
+      return Rbac.canMenu(context, label);
     }).toList();
 
     return Container(
@@ -68,7 +75,9 @@ class _SidebarState extends State<Sidebar> {
       color: Theme.of(context).colorScheme.surface,
       child: ListView(
         padding: const EdgeInsets.all(16),
-        children: filteredMenu.map((m) => _buildItem(m['icon'], m['label'])).toList(),
+        children: filteredMenu
+            .map((m) => _buildItem(m['icon'] as IconData, m['label'] as String))
+            .toList(),
       ),
     );
   }

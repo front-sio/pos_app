@@ -26,9 +26,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       final email = await repository.getEmail() ?? '';
 
       // RBAC restore
-      final roles = await repository.getRoles();
-      final permissions = await repository.getPermissions();
-      final isSuperuser = await repository.getIsSuperuser();
+      final roles = await repository.getRoles() ?? <String>[];
+      final permissions = (await repository.getPermissions() ?? <String>[]).map((p) => p.toLowerCase()).toList();
+      final isSuperuser = await repository.getIsSuperuser() ?? false;
 
       emit(AuthAuthenticated(
         token: token,
@@ -51,7 +51,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     try {
       final userData = await repository.login(event.identifier, event.password);
 
-      final token = userData['token'] as String;
+      final token = userData['token'] as String? ?? '';
       final user = (userData['user'] ?? {}) as Map<String, dynamic>;
 
       final userId = (user['id'] ?? 0) as int;
@@ -60,11 +60,22 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       final username = user['username']?.toString() ?? '';
       final email = user['email']?.toString() ?? '';
 
-      final roles = (user['roles'] as List?)?.map((e) => e.toString()).toList() ?? <String>[];
-      final permissions = (user['permissions'] as List?)?.map((e) => e.toString()).toList() ?? <String>[];
-      final isSuperuser = (user['is_superuser'] is bool)
-          ? user['is_superuser'] as bool
-          : user['is_superuser']?.toString().toLowerCase() == 'true';
+      // Normalize roles & permissions
+      final roles = (user['roles'] as List?)
+              ?.map((e) => e.toString().trim())
+              .where((e) => e.isNotEmpty)
+              .toList() ?? <String>[];
+
+      final permissions = (user['permissions'] as List?)
+              ?.map((e) => e.toString().trim().toLowerCase())
+              .where((e) => e.isNotEmpty)
+              .toList() ?? <String>[];
+
+      // Ensure superuser is properly recognized
+      final isSuperuserRaw = user['is_superuser'];
+      final isSuperuser = isSuperuserRaw == true ||
+          (isSuperuserRaw is String && isSuperuserRaw.toLowerCase() == 'true') ||
+          (isSuperuserRaw is num && isSuperuserRaw != 0);
 
       emit(AuthAuthenticated(
         token: token,

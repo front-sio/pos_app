@@ -1,4 +1,3 @@
-// features/auth/rbac.dart
 import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:sales_app/features/auth/logic/auth_bloc.dart';
