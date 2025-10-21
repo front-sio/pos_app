@@ -14,11 +14,19 @@ class CustomerService {
   })  : baseUrl = baseUrl ?? AppConfig.baseUrl,
         _client = client ?? AuthHttpClient();
 
+  Map<String, String> get _jsonHeaders => const {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
   Uri _u(String path, [Map<String, String>? qp]) =>
       Uri.parse('$baseUrl$path').replace(queryParameters: qp);
 
   Future<List<Customer>> getCustomers({int page = 1, int limit = 20}) async {
-    final res = await _client.get(_u('/customers', {'page': '$page', 'limit': '$limit'}));
+    final res = await _client.get(
+      _u('/customers', {'page': '$page', 'limit': '$limit'}),
+      headers: const {'Accept': 'application/json'},
+    );
     if (res.statusCode == 200) {
       final body = json.decode(res.body);
       final List list = body is List ? body : (body['data'] as List? ?? []);
@@ -28,7 +36,7 @@ class CustomerService {
   }
 
   Future<Customer> getCustomerById(int id) async {
-    final res = await _client.get(_u('/customers/$id'));
+    final res = await _client.get(_u('/customers/$id'), headers: const {'Accept': 'application/json'});
     if (res.statusCode == 200) {
       final Map<String, dynamic> data = json.decode(res.body);
       return Customer.fromJson(data);
@@ -39,6 +47,7 @@ class CustomerService {
   Future<Customer> createCustomer(String name) async {
     final res = await _client.post(
       _u('/customers'),
+      headers: _jsonHeaders,
       body: json.encode({'name': name}),
     );
     if (res.statusCode == 201 || res.statusCode == 200) {
@@ -52,6 +61,7 @@ class CustomerService {
   Future<void> updateCustomer(int id, String name) async {
     final res = await _client.put(
       _u('/customers/$id'),
+      headers: _jsonHeaders,
       body: json.encode({'name': name}),
     );
     if (res.statusCode != 200) {
@@ -60,7 +70,10 @@ class CustomerService {
   }
 
   Future<void> deleteCustomer(int id) async {
-    final res = await _client.delete(_u('/customers/$id'));
+    final res = await _client.delete(
+      _u('/customers/$id'),
+      headers: const {'Accept': 'application/json'},
+    );
     if (res.statusCode != 200) {
       throw Exception(_err(res));
     }
