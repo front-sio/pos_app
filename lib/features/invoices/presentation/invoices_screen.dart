@@ -29,6 +29,9 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
   final _searchCtrl = TextEditingController();
   final Map<int, Customer> _customers = {};
   final _currency = NumberFormat.simpleCurrency();
+
+  // Cache last known list to avoid full-screen loader during refresh
+  List<Invoice> _lastKnown = const <Invoice>[];
   bool _loadingCustomers = false;
 
   @override
@@ -91,10 +94,12 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
   }
 
   void _openOverlayWithScopedBloc(Invoice inv) {
+    // If a parent handler exists, use it
     if (widget.onOpenOverlay != null) {
       widget.onOpenOverlay!(inv);
       return;
     }
+    // IMPORTANT: Use a scoped bloc so overlay loading/errors don’t affect the list
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -107,6 +112,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
           child: InvoiceOverlayScreen(
             invoiceId: inv.id,
             onClose: () => Navigator.of(modalCtx).pop(),
+            // Only refresh the parent list after a successful payment
             onCommitted: () => context.read<InvoiceBloc>().add(const LoadInvoices()),
           ),
         );
@@ -130,29 +136,47 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
           );
         }
       },
-      // IMPORTANT: include error states so UI won't get stuck on a spinner
+      // Include error states so UI never gets stuck on a spinner
       buildWhen: (a, b) => b is InvoicesLoading || b is InvoicesLoaded || b is InvoicesError,
       builder: (context, state) {
-        if (state is InvoicesLoading) {
-          return const Center(child: CircularProgressIndicator());
+        // Determine the data source and whether to show a lightweight refresh bar
+        List<Invoice> source = _lastKnown;
+        bool showRefreshingBar = false;
+
+        if (state is InvoicesLoaded) {
+          source = state.invoices;
+          _lastKnown = source;
+        } else if (state is InvoicesLoading) {
+          // If we have no cache yet, show a blocking loader
+          if (_lastKnown.isEmpty) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          // Else: keep showing cached list and a top thin progress bar
+          showRefreshingBar = true;
+        } else if (state is InvoicesError) {
+          // If we have cache, show it with an error banner; else show error with retry button
+          if (_lastKnown.isEmpty) {
+            return _TopLevelError(message: state.message, onRetry: _refresh);
+          } else {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(state.message), backgroundColor: AppColors.kError),
+              );
+            });
+            source = _lastKnown;
+          }
         }
 
-        if (state is InvoicesError) {
-          return _TopLevelError(
-            message: state.message,
-            onRetry: _refresh,
-          );
-        }
-
-        final invoices = state is InvoicesLoaded ? state.invoices : const <Invoice>[];
+        // Apply search
         final q = _searchCtrl.text.trim().toLowerCase();
         final filtered = q.isEmpty
-            ? invoices
-            : invoices.where((i) {
+            ? [...source]
+            : source.where((i) {
                 final name = _customerName(i.customerId).toLowerCase();
                 return name.contains(q) || i.id.toString().contains(q);
               }).toList();
 
+        // Sort newest first by createdAt if available
         filtered.sort((a, b) {
           final ad = a.createdAt;
           final bd = b.createdAt;
@@ -163,44 +187,58 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
         final unpaidOrCredited = filtered.where((i) => i.status.toLowerCase() != 'paid').toList();
         final paid = filtered.where((i) => i.status.toLowerCase() == 'paid').toList();
 
-        return RefreshIndicator(
-          onRefresh: _refresh,
-          color: AppColors.kPrimary,
-          child: Padding(
-            padding: const EdgeInsets.all(AppSizes.padding),
-            child: Column(
-              children: [
-                Row(
+        return Stack(
+          children: [
+            RefreshIndicator(
+              onRefresh: _refresh,
+              color: AppColors.kPrimary,
+              child: Padding(
+                padding: const EdgeInsets.all(AppSizes.padding),
+                child: Column(
                   children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _searchCtrl,
-                        decoration: InputDecoration(
-                          hintText: 'Search invoices by customer or invoice #',
-                          prefixIcon: const Icon(Icons.search),
-                          suffixIcon: _searchCtrl.text.isNotEmpty
-                              ? IconButton(icon: const Icon(Icons.clear), onPressed: () => setState(() => _searchCtrl.clear()))
-                              : null,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _searchCtrl,
+                            decoration: InputDecoration(
+                              hintText: 'Search invoices by customer or invoice #',
+                              prefixIcon: const Icon(Icons.search),
+                              suffixIcon: _searchCtrl.text.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(Icons.clear),
+                                      onPressed: () => setState(() => _searchCtrl.clear()),
+                                    )
+                                  : null,
+                            ),
+                            onChanged: (_) => setState(() {}),
+                          ),
                         ),
-                        onChanged: (_) => setState(() {}),
+                      ],
+                    ),
+                    if (_loadingCustomers) const LinearProgressIndicator(minHeight: 2),
+                    const SizedBox(height: AppSizes.padding),
+                    Expanded(
+                      child: ListView(
+                        children: [
+                          _section(context, 'Unpaid / Credited', unpaidOrCredited),
+                          const SizedBox(height: AppSizes.padding),
+                          _section(context, 'Paid', paid),
+                        ],
                       ),
                     ),
                   ],
                 ),
-                if (_loadingCustomers) const LinearProgressIndicator(minHeight: 2),
-                const SizedBox(height: AppSizes.padding),
-                Expanded(
-                  child: ListView(
-                    children: [
-                      _section(context, 'Unpaid / Credited', unpaidOrCredited),
-                      const SizedBox(height: AppSizes.padding),
-                      _section(context, 'Paid', paid),
-                    ],
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
+            if (showRefreshingBar)
+              const Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: LinearProgressIndicator(minHeight: 2),
+              ),
+          ],
         );
       },
     );
@@ -238,7 +276,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                   final created = inv.createdAt?.toLocal();
                   final createdText = created != null ? _timeAgo(created) : '—';
 
-                  // Status-based progress (1.0 if paid, otherwise 0.0). Extend when API returns paid/due.
+                  // Status-based progress (1.0 if paid, else 0.0). Can extend to real paid/due later.
                   final double ratio = inv.status.toLowerCase() == 'paid' ? 1.0 : 0.0;
 
                   return InkWell(
