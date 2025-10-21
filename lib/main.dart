@@ -15,6 +15,7 @@ import 'package:sales_app/features/auth/logic/auth_state.dart';
 import 'package:sales_app/features/customers/services/customer_services.dart';
 import 'package:sales_app/features/customers/bloc/customer_bloc.dart';
 import 'package:sales_app/features/customers/bloc/customer_event.dart';
+import 'package:sales_app/features/dashboard/bloc/dashboard_event.dart';
 
 // Invoices
 import 'package:sales_app/features/invoices/bloc/invoice_bloc.dart';
@@ -64,10 +65,14 @@ import 'package:sales_app/features/profile/presentation/bloc/profile_bloc.dart';
 // HTTP wrapper
 import 'package:sales_app/network/auth_http_client.dart';
 
-// Purchases (ADDED)
+// Purchases
 import 'package:sales_app/features/purchases/services/purchase_service.dart';
 import 'package:sales_app/features/purchases/bloc/purchase_bloc.dart';
 import 'package:sales_app/features/purchases/bloc/purchase_event.dart';
+
+// Dashboard (ADDED)
+import 'package:sales_app/features/dashboard/services/dashboard_service.dart';
+import 'package:sales_app/features/dashboard/bloc/dashboard_bloc.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -96,8 +101,13 @@ void main() async {
   final usersApiService = UsersApiService(baseUrl: baseUrl);
   final usersRepository = UsersRepository(api: usersApiService, auth: authRepository);
 
-  // ADDED: PurchaseService
   final purchaseService = PurchaseService();
+
+  // Dashboard service composed from existing services
+  final dashboardService = DashboardService(
+    purchaseService: purchaseService,
+    salesService: salesService,
+  );
 
   runApp(
     MultiRepositoryProvider(
@@ -115,8 +125,9 @@ void main() async {
         RepositoryProvider<InvoiceService>(create: (_) => invoiceService),
         RepositoryProvider<UsersApiService>(create: (_) => usersApiService),
         RepositoryProvider<UsersRepository>(create: (_) => usersRepository),
-        // ADDED
         RepositoryProvider<PurchaseService>(create: (_) => purchaseService),
+        // Dashboard
+        RepositoryProvider<DashboardService>(create: (_) => dashboardService),
       ],
       child: MultiBlocProvider(
         providers: [
@@ -139,8 +150,9 @@ void main() async {
           BlocProvider<ReportsBloc>(create: (context) => ReportsBloc(repository: context.read<ReportsRepository>())),
           BlocProvider<UsersBloc>(create: (context) => UsersBloc(repository: context.read<UsersRepository>())),
           BlocProvider<ProfileBloc>(create: (context) => ProfileBloc(repository: context.read<UsersRepository>())),
-          // ADDED: PurchaseBloc
           BlocProvider<PurchaseBloc>(create: (context) => PurchaseBloc(service: context.read<PurchaseService>())..add(const LoadPurchases())),
+          // Dashboard (ADDED)
+          BlocProvider<DashboardBloc>(create: (context) => DashboardBloc(service: context.read<DashboardService>())),
         ],
         child: BlocListener<AuthBloc, AuthState>(
           listenWhen: (prev, next) => next is AuthAuthenticated || next is AuthUnauthenticated,
@@ -154,8 +166,8 @@ void main() async {
               context.read<ProfitBloc>().add(LoadProfit(period: 'This Month', view: 'Daily'));
               context.read<ReportsBloc>().add(LoadDailyReport(DateTime.now()));
               context.read<UsersBloc>().add(LoadUsers());
-              // Ensure purchases refresh after login
-              context.read<PurchaseBloc>().add(const LoadPurchases());
+              // Load dashboard after auth
+              context.read<DashboardBloc>().add(const LoadDashboard());
             }
           },
           child: const PosBusinessApp(),

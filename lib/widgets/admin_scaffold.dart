@@ -10,7 +10,7 @@ import 'package:sales_app/features/products/presentation/products_screen.dart';
 import 'package:sales_app/features/purchases/presentation/purchases_screen.dart';
 import 'package:sales_app/features/sales/presentaion/product_cart_screen.dart' as cart;
 import 'package:sales_app/features/sales/presentaion/sales_screen.dart';
-import 'package:sales_app/features/screens/dashboard_screen.dart';
+import 'package:sales_app/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:sales_app/features/profits/presentation/profit_tracker_screen.dart';
 import 'package:sales_app/features/purchases/presentation/new_purchase_screen.dart';
 import 'package:sales_app/features/reports/reports_screen.dart';
