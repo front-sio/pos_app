@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -85,7 +84,7 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
         final payments = state.payments;
         final paid = payments.fold<double>(0, (s, p) => s + p.amount);
         // clamp returns num -> cast to double
-        final double due = ((inv.totalAmount - paid).clamp(0, double.infinity) as num).toDouble();
+        final double due = ((inv.totalAmount - paid).clamp(0, double.infinity)).toDouble();
         final status = _computeStatus(inv.totalAmount, paid);
 
         final isWide = MediaQuery.of(context).size.width >= 900;

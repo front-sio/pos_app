@@ -1,11 +1,9 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:sales_app/config/config.dart';
 
-/// Socket.IO realtime products listener with auto-reconnect and debounce.
-/// Emits normalized types: product_created, product_updated, product_deleted,
-/// stock_changed, purchase_created, purchase_payment_updated, products_changed.
 class RealtimeProducts {
   final Duration debounce;
   IO.Socket? _socket;
@@ -16,22 +14,34 @@ class RealtimeProducts {
 
   RealtimeProducts({this.debounce = const Duration(milliseconds: 400)});
 
-  void connect() {
+  Future<void> connect() async {
     disconnect();
 
-    final base = AppConfig.baseUrl; // e.g., http://localhost:8080 (gateway)
+    final base = AppConfig.baseUrl;
     final uri = Uri.parse(base);
     final origin = '${uri.scheme}://${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
-    if (kDebugMode) debugPrint('[RealtimeProducts] connecting to $origin/socket.io-products');
 
-    _socket = IO.io(origin, <String, dynamic>{
+    final token = await const FlutterSecureStorage().read(key: 'token');
+
+    if (kDebugMode) {
+      debugPrint('[RealtimeProducts] connecting to $origin/socket.io-products');
+    }
+
+    final options = <String, dynamic>{
       'transports': ['websocket', 'polling'],
       'path': '/socket.io-products',
       'autoConnect': true,
       'reconnection': true,
       'reconnectionAttempts': 999999,
       'reconnectionDelay': 700,
-    });
+      // Web: use auth payload; Server should read socket.handshake.auth.token
+      'auth': token != null && token.isNotEmpty ? {'token': token} : {},
+      // Non-web (native) can also send headers; browsers ignore extraHeaders
+      if (token != null && token.isNotEmpty)
+        'extraHeaders': {'Authorization': 'Bearer $token'},
+    };
+
+    _socket = IO.io(origin, options);
 
     _socket!.onConnect((_) {
       if (kDebugMode) debugPrint('[RealtimeProducts] connected');

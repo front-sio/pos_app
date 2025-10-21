@@ -3,6 +3,8 @@ import 'package:http/http.dart' as http;
 import 'package:sales_app/features/products/data/product_model.dart';
 import 'package:sales_app/features/products/data/unit_model.dart';
 import 'package:sales_app/features/products/data/category_model.dart';
+import 'package:sales_app/network/authed_client.dart';
+
 
 // Simple DTOs for select lists
 class UnitOption {
@@ -31,11 +33,20 @@ class SupplierOption {
 
 class ProductService {
   final String _baseUrl;
-  ProductService({required String baseUrl}) : _baseUrl = baseUrl;
+  final http.Client _client;
+
+  ProductService({required String baseUrl, AuthedClient? client})
+      : _baseUrl = baseUrl,
+        _client = client ?? AuthedClient();
 
   // ---------------- Products ----------------
   Future<List<Product>> getProducts({int page = 1, int limit = 20}) async {
-    final res = await http.get(Uri.parse('$_baseUrl/products?page=$page&limit=$limit'));
+    final uri = Uri.parse('$_baseUrl/products').replace(queryParameters: {
+      'page': '$page',
+      'limit': '$limit',
+    });
+
+    final res = await _client.get(uri);
     if (res.statusCode == 200) {
       final decoded = json.decode(res.body);
       final List list = decoded is List ? decoded : (decoded['data'] as List? ?? []);
@@ -46,10 +57,11 @@ class ProductService {
   }
 
   Future<Product> getProductById(int productId) async {
-    final res = await http.get(Uri.parse('$_baseUrl/products/$productId'));
+    final res = await _client.get(Uri.parse('$_baseUrl/products/$productId'));
     if (res.statusCode == 200) {
       final decoded = json.decode(res.body);
-      final Map<String, dynamic> data = decoded is Map<String, dynamic> ? decoded : (decoded['data'] as Map<String, dynamic>);
+      final Map<String, dynamic> data =
+          decoded is Map<String, dynamic> ? decoded : (decoded['data'] as Map<String, dynamic>);
       return Product.fromJson(data);
     }
     final body = _decodeSafe(res.body);
@@ -58,7 +70,7 @@ class ProductService {
 
   Future<Product> addProduct(Map<String, dynamic> productData) async {
     final clean = Map<String, dynamic>.from(productData)..removeWhere((k, v) => v == null);
-    final res = await http.post(
+    final res = await _client.post(
       Uri.parse('$_baseUrl/products'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode(clean),
@@ -75,7 +87,7 @@ class ProductService {
   // Backend uses PATCH for update
   Future<void> updateProduct(int productId, Map<String, dynamic> updatedData) async {
     final clean = Map<String, dynamic>.from(updatedData)..removeWhere((k, v) => v == null);
-    final res = await http.patch(
+    final res = await _client.patch(
       Uri.parse('$_baseUrl/products/$productId'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode(clean),
@@ -87,7 +99,7 @@ class ProductService {
   }
 
   Future<void> deleteProduct(int productId) async {
-    final res = await http.delete(Uri.parse('$_baseUrl/products/$productId'));
+    final res = await _client.delete(Uri.parse('$_baseUrl/products/$productId'));
     if (res.statusCode != 200) {
       final body = _decodeSafe(res.body);
       throw Exception('Failed to delete product: ${body['error'] ?? res.statusCode}');
@@ -109,7 +121,7 @@ class ProductService {
       'product_id': productId,
       if (supplierId != null) 'supplier_id': supplierId,
     };
-    final res = await http.post(
+    final res = await _client.post(
       Uri.parse('$_baseUrl/products/$productId/add-stock'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode(payload),
@@ -122,7 +134,7 @@ class ProductService {
 
   // ---------------- Meta (Units, Categories, Suppliers) ----------------
   Future<List<UnitOption>> getUnits() async {
-    final res = await http.get(Uri.parse('$_baseUrl/products/units'));
+    final res = await _client.get(Uri.parse('$_baseUrl/products/units'));
     if (res.statusCode == 200) {
       final decoded = json.decode(res.body);
       final List list = decoded is List ? decoded : (decoded['data'] as List? ?? []);
@@ -133,7 +145,7 @@ class ProductService {
   }
 
   Future<List<CategoryOption>> getCategories() async {
-    final res = await http.get(Uri.parse('$_baseUrl/products/categories'));
+    final res = await _client.get(Uri.parse('$_baseUrl/products/categories'));
     if (res.statusCode == 200) {
       final decoded = json.decode(res.body);
       final List list = decoded is List ? decoded : (decoded['data'] as List? ?? []);
@@ -144,7 +156,7 @@ class ProductService {
   }
 
   Future<List<SupplierOption>> getSuppliers() async {
-    final res = await http.get(Uri.parse('$_baseUrl/suppliers'));
+    final res = await _client.get(Uri.parse('$_baseUrl/suppliers'));
     if (res.statusCode == 200) {
       final decoded = json.decode(res.body);
       final List list = decoded is List ? decoded : (decoded['data'] as List? ?? []);
@@ -156,7 +168,7 @@ class ProductService {
 
   // Full entities (useful for management screens/overlays)
   Future<List<UnitModel>> getUnitsFull() async {
-    final res = await http.get(Uri.parse('$_baseUrl/products/units'));
+    final res = await _client.get(Uri.parse('$_baseUrl/products/units'));
     if (res.statusCode == 200) {
       final decoded = json.decode(res.body);
       final List list = decoded is List ? decoded : (decoded['data'] as List? ?? []);
@@ -167,7 +179,7 @@ class ProductService {
   }
 
   Future<UnitModel> createUnit({required String name, String? description}) async {
-    final res = await http.post(
+    final res = await _client.post(
       Uri.parse('$_baseUrl/products/units'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode({'name': name, if (description != null) 'description': description}),
@@ -182,7 +194,7 @@ class ProductService {
   }
 
   Future<UnitModel> getUnitById(int id) async {
-    final res = await http.get(Uri.parse('$_baseUrl/products/units/$id'));
+    final res = await _client.get(Uri.parse('$_baseUrl/products/units/$id'));
     if (res.statusCode == 200) {
       final map = json.decode(res.body) as Map<String, dynamic>;
       return UnitModel.fromJson(map);
@@ -195,7 +207,7 @@ class ProductService {
     final payload = <String, dynamic>{};
     if (name != null) payload['name'] = name;
     if (description != null) payload['description'] = description;
-    final res = await http.patch(
+    final res = await _client.patch(
       Uri.parse('$_baseUrl/products/units/$id'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode(payload),
@@ -207,7 +219,7 @@ class ProductService {
   }
 
   Future<void> deleteUnit(int id) async {
-    final res = await http.delete(Uri.parse('$_baseUrl/products/units/$id'));
+    final res = await _client.delete(Uri.parse('$_baseUrl/products/units/$id'));
     if (res.statusCode != 200) {
       final body = _decodeSafe(res.body);
       throw Exception('Failed to delete unit: ${body['error'] ?? res.statusCode}');
@@ -215,7 +227,7 @@ class ProductService {
   }
 
   Future<List<CategoryModel>> getCategoriesFull() async {
-    final res = await http.get(Uri.parse('$_baseUrl/products/categories'));
+    final res = await _client.get(Uri.parse('$_baseUrl/products/categories'));
     if (res.statusCode == 200) {
       final decoded = json.decode(res.body);
       final List list = decoded is List ? decoded : (decoded['data'] as List? ?? []);
@@ -226,7 +238,7 @@ class ProductService {
   }
 
   Future<CategoryModel> createCategory({required String name, String? description}) async {
-    final res = await http.post(
+    final res = await _client.post(
       Uri.parse('$_baseUrl/products/categories'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode({'name': name, if (description != null) 'description': description}),
@@ -241,7 +253,7 @@ class ProductService {
   }
 
   Future<CategoryModel> getCategoryById(int id) async {
-    final res = await http.get(Uri.parse('$_baseUrl/products/categories/$id'));
+    final res = await _client.get(Uri.parse('$_baseUrl/products/categories/$id'));
     if (res.statusCode == 200) {
       final map = json.decode(res.body) as Map<String, dynamic>;
       return CategoryModel.fromJson(map);
@@ -254,7 +266,7 @@ class ProductService {
     final payload = <String, dynamic>{};
     if (name != null) payload['name'] = name;
     if (description != null) payload['description'] = description;
-    final res = await http.patch(
+    final res = await _client.patch(
       Uri.parse('$_baseUrl/products/categories/$id'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode(payload),
@@ -266,7 +278,7 @@ class ProductService {
   }
 
   Future<void> deleteCategory(int id) async {
-    final res = await http.delete(Uri.parse('$_baseUrl/products/categories/$id'));
+    final res = await _client.delete(Uri.parse('$_baseUrl/products/categories/$id'));
     if (res.statusCode != 200) {
       final body = _decodeSafe(res.body);
       throw Exception('Failed to delete category: ${body['error'] ?? res.statusCode}');

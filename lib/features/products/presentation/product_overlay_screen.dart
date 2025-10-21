@@ -12,7 +12,6 @@ import 'package:sales_app/utils/platform_helper.dart';
 import 'package:sales_app/utils/responsive.dart';
 import 'package:sales_app/widgets/barcode_scanner_screen.dart';
 
-// Quick-create overlays
 import 'package:sales_app/features/products/presentation/unit_overlay_screen.dart';
 import 'package:sales_app/features/products/presentation/category_overlay_screen.dart';
 
@@ -143,7 +142,11 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
     final cs = Theme.of(context).colorScheme;
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: isError ? cs.error : cs.primary),
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: isError ? cs.error : cs.primary,
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
@@ -159,7 +162,6 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
     }
   }
 
-  // Quick-create overlays
   Future<void> _openUnitCreate() async {
     final theme = Theme.of(context);
     await showModalBottomSheet(
@@ -237,25 +239,49 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
           ),
         ],
       ),
-      body: _loadingMeta
-          ? Center(child: CircularProgressIndicator(color: cs.primary))
-          : SingleChildScrollView(
-              padding: EdgeInsets.all(isSmall ? AppSizes.padding : AppSizes.padding * 2),
-              physics: const BouncingScrollPhysics(),
-              child: Container(
-                padding: EdgeInsets.all(isSmall ? AppSizes.padding : AppSizes.padding * 1.5),
-                decoration: BoxDecoration(
-                  color: theme.cardColor,
-                  borderRadius: BorderRadius.circular(AppSizes.borderRadius),
-                  border: Border.all(color: cs.outlineVariant, width: 1.2),
-                  boxShadow: [
-                    if (theme.brightness == Brightness.light)
-                      const BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4)),
-                  ],
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        switchInCurve: Curves.easeOut,
+        switchOutCurve: Curves.easeIn,
+        child: _loadingMeta
+            ? Center(child: CircularProgressIndicator(color: cs.primary))
+            : SingleChildScrollView(
+                padding: EdgeInsets.all(isSmall ? AppSizes.padding : AppSizes.padding * 2),
+                physics: const BouncingScrollPhysics(),
+                child: Container(
+                  padding: EdgeInsets.all(isSmall ? AppSizes.padding : AppSizes.padding * 1.5),
+                  decoration: BoxDecoration(
+                    color: theme.cardColor,
+                    borderRadius: BorderRadius.circular(AppSizes.borderRadius),
+                    border: Border.all(color: cs.outlineVariant, width: 1.2),
+                    boxShadow: [
+                      if (theme.brightness == Brightness.light)
+                        const BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4)),
+                    ],
+                  ),
+                  child: _buildContent(),
                 ),
-                child: _buildContent(),
+              ),
+      ),
+      bottomNavigationBar: SafeArea(
+        minimum: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Expanded(
+              child: ElevatedButton(
+                onPressed: _close,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: cs.primary,
+                  foregroundColor: cs.onPrimary,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                child: const Text('Close'),
               ),
             ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -277,7 +303,7 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
       case ProductOverlayMode.create:
         return _buildCreateOrEdit(isCreate: true);
       case ProductOverlayMode.view:
-        return _buildView();
+        return _buildViewMobileFirst();
       case ProductOverlayMode.edit:
         return _buildCreateOrEdit(isCreate: false);
       case ProductOverlayMode.deleteConfirm:
@@ -285,77 +311,72 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
     }
   }
 
-  // VIEW (added Total Value)
-  Widget _buildView() {
+  // Mobile-first Product Details
+  Widget _buildViewMobileFirst() {
     final p = widget.product!;
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final isDesktop = Responsive.isDesktop(context);
+
     final totalValue = p.totalValue ?? (p.quantity * p.pricePerQuantity);
+    final created = p.createdAt != null ? DateFormat.yMMMd().format(p.createdAt) : '—';
+    final updated = p.updatedAt != null ? DateFormat.yMMMd().format(p.updatedAt) : '—';
 
-    Widget field(String label, String value) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: AppSizes.padding),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurface.withOpacity(0.7), fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            Text(value, style: theme.textTheme.bodyLarge),
-          ],
-        ),
-      );
-    }
-
-    final fields = [
-      field('Quantity', p.unitName != null && p.unitName!.isNotEmpty ? '${p.quantity.toStringAsFixed(2)} ${p.unitName!.toUpperCase()}' : p.quantity.toStringAsFixed(2)),
-      field('Initial Quantity', p.initialQuantity.toStringAsFixed(2)),
-      field('Price per Quantity', _money.format(p.pricePerQuantity)),
-      field('Total Value', _money.format(totalValue)),
-      field('Selling Price', p.price != null ? _money.format(p.price!) : 'N/A'),
-      field('Barcode', p.barcode ?? 'N/A'),
-      field('Category', (p.categoryName ?? 'N/A').toUpperCase()),
-      field('Location', p.location ?? 'N/A'),
-      field('Reorder Level', p.reorderLevel.toStringAsFixed(2)),
-      field('Supplier', p.supplier ?? 'N/A'),
-      field('Created At', DateFormat.yMMMd().format(p.createdAt)),
-      field('Updated At', DateFormat.yMMMd().format(p.updatedAt)),
+    final kpiCards = <_Kpi>[
+      _Kpi(label: 'Quantity', value: p.unitName != null && p.unitName!.isNotEmpty ? '${p.quantity.toStringAsFixed(2)} ${p.unitName!.toUpperCase()}' : p.quantity.toStringAsFixed(2), icon: Icons.inventory_2_outlined),
+      _Kpi(label: 'Total Value', value: _money.format(totalValue), icon: Icons.stacked_bar_chart),
+      _Kpi(label: 'Price/Qty', value: _money.format(p.pricePerQuantity), icon: Icons.price_change_outlined),
+      _Kpi(label: 'Selling Price', value: p.price != null ? _money.format(p.price!) : 'N/A', icon: Icons.attach_money),
     ];
 
-    Widget details() {
-      if (isDesktop) {
-        final split = (fields.length / 3).ceil();
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: Column(children: fields.sublist(0, split))),
-            const SizedBox(width: AppSizes.largePadding),
-            Expanded(child: Column(children: fields.sublist(split))),
-          ],
-        );
-      }
-      return Column(children: fields);
-    }
+    final details = <_Detail>[
+      _Detail('Initial Quantity', p.initialQuantity.toStringAsFixed(2)),
+      _Detail('Barcode', p.barcode ?? 'N/A', copyable: p.barcode != null && p.barcode!.isNotEmpty),
+      _Detail('Category', (p.categoryName ?? 'N/A').toUpperCase()),
+      _Detail('Location', p.location ?? 'N/A'),
+      _Detail('Reorder Level', p.reorderLevel.toStringAsFixed(2)),
+      _Detail('Supplier', p.supplier ?? 'N/A'),
+      _Detail('Created At', created),
+      _Detail('Updated At', updated),
+    ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
+        _HeaderCard(
+          name: p.name,
+          icon: Icons.inventory_2,
+          color: cs.primary,
+          subtitle: p.description?.isNotEmpty == true ? p.description! : null,
+        ),
+        const SizedBox(height: AppSizes.padding),
+
+        // Chips row
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
           children: [
-            CircleAvatar(radius: 28, backgroundColor: cs.primary.withOpacity(0.1), child: Icon(Icons.inventory_2, color: cs.primary)),
-            const SizedBox(width: AppSizes.padding),
-            Expanded(child: Text(p.name, style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)),
+            if (p.unitName != null && p.unitName!.isNotEmpty) _TagChip(label: p.unitName!),
+            if (p.categoryName != null && p.categoryName!.isNotEmpty) _TagChip(label: p.categoryName!.toUpperCase()),
+            if (p.supplier != null && p.supplier!.isNotEmpty) _TagChip(label: p.supplier!),
           ],
         ),
         const SizedBox(height: AppSizes.largePadding),
-        details(),
+
+        // KPI cards
+        _KpiGrid(items: kpiCards),
+
         const SizedBox(height: AppSizes.largePadding),
-        Align(alignment: Alignment.centerRight, child: ElevatedButton(onPressed: widget.onCancel, child: const Text('Close'))),
+
+        // Other details grid
+        _DetailsGrid(items: details),
+
+        if (isDesktop) const SizedBox(height: AppSizes.largePadding),
       ],
     );
   }
 
-  // CREATE/EDIT (unchanged layout; CRUD via bloc)
+  // CREATE/EDIT
   Widget _buildCreateOrEdit({required bool isCreate}) {
     final isDesktop = Responsive.isDesktop(context);
     final theme = Theme.of(context);
@@ -405,6 +426,8 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(isCreate ? 'Add Product' : 'Edit ${widget.product?.name ?? ""}', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+        const SizedBox(height: AppSizes.padding),
+        _input(controller: _descriptionController, label: 'Description', icon: Icons.description_outlined, maxLines: 3),
         const SizedBox(height: AppSizes.largePadding),
         Form(
           key: _formKey,
@@ -414,10 +437,8 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
                   const SizedBox(width: AppSizes.padding),
                   Expanded(child: rightCol()),
                 ])
-              : Column(children: [
-                  _input(controller: _descriptionController, label: 'Description', icon: Icons.description_outlined, maxLines: 3),
-                  const SizedBox(height: AppSizes.padding),
-                  ...[
+              : Column(
+                  children: [
                     leftCol(),
                     const SizedBox(height: AppSizes.padding),
                     _inputRequired(controller: _pricePerQuantityController, label: 'Price per Quantity*', icon: Icons.price_change, keyboardType: TextInputType.number, validator: _numberValidator),
@@ -428,7 +449,7 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
                     const SizedBox(height: AppSizes.padding),
                     _inputRequired(controller: _reorderLevelController, label: 'Reorder Level*', icon: Icons.warning_amber_outlined, keyboardType: TextInputType.number, validator: _numberValidator),
                   ],
-                ]),
+                ),
         ),
         const SizedBox(height: AppSizes.largePadding),
         Row(
@@ -448,7 +469,101 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
     );
   }
 
-  // SAFE dropdown values
+  // DELETE CONFIRM
+  Widget _buildDeleteConfirm() {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final name = widget.product?.name ?? 'this product';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(children: [
+          Icon(Icons.warning_amber_rounded, color: cs.error),
+          const SizedBox(width: 8),
+          Expanded(child: Text('Delete $name', style: theme.textTheme.titleLarge?.copyWith(color: cs.error, fontWeight: FontWeight.bold))),
+        ]),
+        const SizedBox(height: AppSizes.padding),
+        Text('Are you sure you want to delete this product? This action cannot be undone.', style: theme.textTheme.bodyMedium),
+        const SizedBox(height: AppSizes.largePadding),
+        Row(
+          children: [
+            Expanded(child: OutlinedButton(onPressed: widget.onCancel, child: const Text('Cancel'))),
+            const SizedBox(width: AppSizes.padding),
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: _confirmDelete,
+                icon: const Icon(Icons.delete),
+                label: const Text('Delete'),
+                style: ElevatedButton.styleFrom(backgroundColor: cs.error, foregroundColor: cs.onError),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _confirmDelete() async {
+    context.read<ProductsBloc>().add(DeleteProductEvent(widget.product!.id));
+    _snack('Deleting product...');
+    widget.onSaved?.call();
+  }
+
+  // Inputs
+  InputDecoration _inputDecoration(String label) => InputDecoration(labelText: label);
+
+  Widget _input({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    TextInputType? keyboardType,
+    int maxLines = 1,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon, color: cs.primary)),
+    );
+  }
+
+  Widget _inputRequired({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    TextInputType? keyboardType,
+    String? Function(String?)? validator,
+    int maxLines = 1,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      validator: validator,
+      maxLines: maxLines,
+      decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon, color: cs.primary)),
+      onTap: () => HapticFeedback.lightImpact(),
+      inputFormatters: keyboardType == TextInputType.number ? <TextInputFormatter>[FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))] : null,
+    );
+  }
+
+  String? _requiredValidator(String? value) {
+    if (value == null || value.trim().isEmpty) return 'This field cannot be empty';
+    return null;
+  }
+
+  String? _numberValidator(String? value) {
+    if (value == null || value.isEmpty) return 'Please enter a valid number';
+    if (double.tryParse(value) == null) return 'Please enter a valid number';
+    return null;
+  }
+
+  String _formatCategoryName(String category) {
+    return category.split('_').map((w) => w.isEmpty ? w : w[0].toUpperCase() + w.substring(1).toLowerCase()).join(' ');
+  }
+
+  // Dropdowns
   int? get _unitValue => _units.any((u) => u.id == _selectedUnitId) ? _selectedUnitId : null;
   int? get _categoryValue => _categories.any((c) => c.id == _selectedCategoryId) ? _selectedCategoryId : null;
   String? get _supplierValue => _suppliers.any((s) => s.name == _selectedSupplierName) ? _selectedSupplierName : null;
@@ -530,6 +645,7 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
     );
   }
 
+  // Actions
   Future<void> _submitCreate() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
@@ -574,96 +690,235 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
     _snack('Saving changes...');
     widget.onSaved?.call();
   }
+}
 
-  Widget _buildDeleteConfirm() {
+// UI helpers
+
+class _HeaderCard extends StatelessWidget {
+  final String name;
+  final IconData icon;
+  final Color color;
+  final String? subtitle;
+
+  const _HeaderCard({
+    required this.name,
+    required this.icon,
+    required this.color,
+    this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final name = widget.product?.name ?? 'this product';
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(children: [
-          Icon(Icons.warning_amber_rounded, color: cs.error),
-          const SizedBox(width: 8),
-          Expanded(child: Text('Delete $name', style: theme.textTheme.titleLarge?.copyWith(color: cs.error, fontWeight: FontWeight.bold))),
-        ]),
-        const SizedBox(height: AppSizes.padding),
-        Text('Are you sure you want to delete this product? This action cannot be undone.', style: theme.textTheme.bodyMedium),
-        const SizedBox(height: AppSizes.largePadding),
-        Row(
-          children: [
-            Expanded(child: OutlinedButton(onPressed: widget.onCancel, child: const Text('Cancel'))),
-            const SizedBox(width: AppSizes.padding),
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: _confirmDelete,
-                icon: const Icon(Icons.delete),
-                label: const Text('Delete'),
-                style: ElevatedButton.styleFrom(backgroundColor: cs.error, foregroundColor: cs.onError),
-              ),
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
             ),
-          ],
-        ),
-      ],
+            child: Icon(icon, color: color),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name, style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+                if (subtitle != null && subtitle!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(subtitle!, style: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
+}
 
-  Future<void> _confirmDelete() async {
-    context.read<ProductsBloc>().add(DeleteProductEvent(widget.product!.id));
-    _snack('Deleting product...');
-    widget.onSaved?.call();
-  }
+class _TagChip extends StatelessWidget {
+  final String label;
+  const _TagChip({required this.label});
 
-  InputDecoration _inputDecoration(String label) => InputDecoration(labelText: label);
-
-  Widget _input({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    TextInputType? keyboardType,
-    int maxLines = 1,
-  }) {
+  @override
+  Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboardType,
-      maxLines: maxLines,
-      decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon, color: cs.primary)),
+    return Chip(
+      label: Text(label),
+      labelStyle: TextStyle(color: cs.primary),
+      side: BorderSide(color: cs.primary.withValues(alpha: (0.4))),
+      backgroundColor: cs.primary.withValues(alpha: .08),
+      visualDensity: VisualDensity.compact,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
   }
+}
 
-  Widget _inputRequired({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    TextInputType? keyboardType,
-    String? Function(String?)? validator,
-    int maxLines = 1,
-  }) {
-    final cs = Theme.of(context).colorScheme;
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboardType,
-      validator: validator,
-      maxLines: maxLines,
-      decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon, color: cs.primary)),
-      onTap: () => HapticFeedback.lightImpact(),
-      inputFormatters: keyboardType == TextInputType.number ? <TextInputFormatter>[FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))] : null,
+class _Kpi {
+  final String label;
+  final String value;
+  final IconData icon;
+
+  _Kpi({required this.label, required this.value, required this.icon});
+}
+
+class _KpiGrid extends StatelessWidget {
+  final List<_Kpi> items;
+  const _KpiGrid({required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, c) {
+      final w = c.maxWidth;
+      final cols = w < 420 ? 1 : (w < 680 ? 2 : 4);
+      final itemWidth = (w - (cols - 1) * 12) / cols;
+
+      return Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        children: items
+            .map((e) => SizedBox(
+                  width: itemWidth,
+                  child: _KpiCard(kpi: e),
+                ))
+            .toList(),
+      );
+    });
+  }
+}
+
+class _KpiCard extends StatelessWidget {
+  final _Kpi kpi;
+  const _KpiCard({required this.kpi});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: cs.primary.withOpacity(0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(kpi.icon, color: cs.primary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(kpi.label, style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                const SizedBox(height: 2),
+                Text(kpi.value, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
+}
 
-  String? _requiredValidator(String? value) {
-    if (value == null || value.trim().isEmpty) return 'This field cannot be empty';
-    return null;
+class _Detail {
+  final String label;
+  final String value;
+  final bool copyable;
+
+  _Detail(this.label, this.value, {this.copyable = false});
+}
+
+class _DetailsGrid extends StatelessWidget {
+  final List<_Detail> items;
+  const _DetailsGrid({required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, c) {
+      final w = c.maxWidth;
+      final cols = w < 420 ? 1 : 2;
+      final itemWidth = (w - (cols - 1) * 12) / cols;
+
+      return Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        children: items
+            .map(
+              (d) => SizedBox(
+                width: itemWidth,
+                child: _DetailCard(detail: d),
+              ),
+            )
+            .toList(),
+      );
+    });
   }
+}
 
-  String? _numberValidator(String? value) {
-    if (value == null || value.isEmpty) return 'Please enter a valid number';
-    if (double.tryParse(value) == null) return 'Please enter a valid number';
-    return null;
-  }
+class _DetailCard extends StatelessWidget {
+  final _Detail detail;
+  const _DetailCard({required this.detail});
 
-  String _formatCategoryName(String category) {
-    return category.split('_').map((w) => w.isEmpty ? w : w[0].toUpperCase() + w.substring(1).toLowerCase()).join(' ');
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(detail.label, style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 6),
+              SelectableText(detail.value, style: theme.textTheme.bodyLarge),
+            ]),
+          ),
+          if (detail.copyable)
+            IconButton(
+              tooltip: 'Copy',
+              icon: const Icon(Icons.copy_all_rounded, size: 18),
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: detail.value));
+                HapticFeedback.selectionClick();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Copied "${detail.value}"'), behavior: SnackBarBehavior.floating),
+                );
+              },
+            ),
+        ],
+      ),
+    );
   }
 }

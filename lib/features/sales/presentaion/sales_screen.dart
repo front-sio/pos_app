@@ -1,10 +1,10 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:intl/intl.dart';
 
 import 'package:sales_app/constants/colors.dart';
 import 'package:sales_app/constants/sizes.dart';
@@ -47,7 +47,7 @@ String timeAgo(DateTime dt) {
 
 class SalesScreen extends StatefulWidget {
   final VoidCallback? onAddNewSale;
-  const SalesScreen({Key? key, this.onAddNewSale}) : super(key: key);
+  const SalesScreen({super.key, this.onAddNewSale});
 
   @override
   State<SalesScreen> createState() => _SalesScreenState();
@@ -131,14 +131,12 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
   void _startRealtime() {
     _stopRealtime();
 
-    // Start Socket.IO and listen
     _rt.connect();
     _rtSub = _rt.events.listen((type) {
       if (kDebugMode) debugPrint('[SalesScreen][RT] event: $type');
       _scheduleThrottledRefresh();
     });
 
-    // Safety poll (lightweight, infrequent)
     _safetyPoller = Timer.periodic(kSafetyPollEvery, (_) {
       if (InteractionLock.instance.isInteracting.value == true) return;
       _scheduleThrottledRefresh();
@@ -164,7 +162,6 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
 
     // Customer name (cache by sale id)
     String customerName = _customerNames[sale.id] ?? (sale.customerId != null ? 'Customer #${sale.customerId}' : 'Unknown');
-
     if (!_customerNames.containsKey(sale.id) && sale.customerId != null && sale.customerId! > 0) {
       try {
         final list = await customerService.getCustomers(page: 1, limit: 1000);
@@ -201,11 +198,34 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
       }
     }
 
+    // Items quantity sum (prefer existing list; if empty, fetch full sale)
+    double itemsQty = _sumItemsQtyLocal(sale.items);
+    if (itemsQty == 0.0) {
+      try {
+        final full = await salesService.getSaleById(sale.id);
+        if (full != null) {
+          itemsQty = _sumItemsQtyLocal(full.items);
+        }
+      } catch (_) {
+        // ignore and keep 0.0
+      }
+    }
+
     return _TileData(
       customerName: customerName,
       invoice: invoice,
       returnedQty: returnedQty,
+      itemsQty: itemsQty,
     );
+  }
+
+  double _sumItemsQtyLocal(List<SaleItem> items) {
+    if (items.isEmpty) return 0.0;
+    double sum = 0.0;
+    for (final it in items) {
+      sum += (it.quantitySold);
+    }
+    return sum;
   }
 
   void _openSaleDetails(Sale sale) {
@@ -215,6 +235,44 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
       backgroundColor: Colors.transparent,
       useSafeArea: true,
       builder: (_) => _SaleDetailsSheet(sale: sale),
+    );
+  }
+
+  Widget _buildSummary(List<Sale> sales) {
+    double totalItemsQty = 0;
+    int totalReturned = 0;
+    int paid = 0, credited = 0, unpaid = 0;
+
+    for (final s in sales) {
+      totalItemsQty += _sumItemsQtyLocal(s.items);
+      final rid = _returnedQtyBySale[s.id];
+      if (rid != null) totalReturned += rid;
+
+      final inv = _invoiceBySale[s.id];
+      if (inv != null) {
+        final sLower = inv.status.toLowerCase();
+        final isPaid = sLower == 'full' || inv.isPaid || (inv.dueAmount == 0 && inv.paidAmount >= inv.totalAmount);
+        final isCredited = sLower == 'credited' || (inv.paidAmount > 0 && inv.dueAmount > 0);
+        if (isPaid) {
+          paid++;
+        } else if (isCredited) {
+          credited++;
+        } else {
+          unpaid++;
+        }
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+      child: _StatWrap(children: [
+        _StatChip(label: 'Sales', value: '${sales.length}', color: Colors.indigo),
+        _StatChip(label: 'Items', value: totalItemsQty.toStringAsFixed(2), color: Colors.teal),
+        _StatChip(label: 'Returned', value: '$totalReturned', color: Colors.orange),
+        _StatChip(label: 'Paid', value: '$paid', color: Colors.green),
+        _StatChip(label: 'Credited', value: '$credited', color: Colors.amber.shade700),
+        _StatChip(label: 'Unpaid', value: '$unpaid', color: Colors.red),
+      ]),
     );
   }
 
@@ -231,12 +289,11 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
         },
         child: BlocBuilder<SalesBloc, SalesState>(
           builder: (context, state) {
-            // Prefer last known data to avoid spinner flicker
             List<Sale> sales;
             if (state is SalesLoaded) {
               sales = [...state.sales];
             } else if (state is SalesLoading && _latestSales.isNotEmpty) {
-              sales = [..._latestSales]; // show previous data while loading
+              sales = [..._latestSales];
             } else if (state is SalesError) {
               return Center(child: Text(state.message, style: TextStyle(color: AppColors.kError)));
             } else {
@@ -256,125 +313,164 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
               onRefresh: _refresh,
               color: AppColors.kPrimary,
               child: ListView.separated(
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                itemCount: sales.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                padding: const EdgeInsets.only(bottom: 96),
+                itemCount: sales.length + 1,
+                separatorBuilder: (_, i) => i == 0 ? const SizedBox.shrink() : const SizedBox(height: 8),
                 itemBuilder: (context, i) {
-                  final sale = sales[i];
+                  if (i == 0) {
+                    return _buildSummary(sales);
+                  }
+
+                  final sale = sales[i - 1];
                   final isNew = DateTime.now().difference(sale.soldAt).abs() <= kNewSaleWindow;
 
-                  // Cache future to avoid restarting per rebuild
                   final future = _tileFutures.putIfAbsent(sale.id, () => _loadTileData(sale));
 
-                  return FutureBuilder<_TileData>(
-                    future: future,
-                    builder: (context, snap) {
-                      final data = snap.data;
-                      final invoice = data?.invoice;
-                      final returnedQty = data?.returnedQty ?? 0;
-                      final customerName = data?.customerName ?? (sale.customerId?.toString() ?? 'Unknown');
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: FutureBuilder<_TileData>(
+                      future: future,
+                      builder: (context, snap) {
+                        final data = snap.data;
+                        final invoice = data?.invoice;
+                        final returnedQty = data?.returnedQty ?? (_returnedQtyBySale[sale.id] ?? 0);
+                        final customerName = data?.customerName ?? (sale.customerId?.toString() ?? 'Unknown');
+                        final itemsQty = data?.itemsQty ?? _sumItemsQtyLocal(sale.items);
 
-                      return Material(
-                        key: ValueKey('sale-${sale.id}'), // stable key to reduce flicker
-                        color: theme.cardColor,
-                        elevation: 1.2,
-                        borderRadius: BorderRadius.circular(14),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(14),
-                          onTap: () => _openSaleDetails(sale),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  width: 46,
-                                  height: 46,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.kPrimary.withOpacity(0.12),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: Icon(Icons.receipt_long, color: AppColors.kPrimary),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
+                        final statusChip = invoice != null ? _statusChip(invoice) : const SizedBox.shrink();
+
+                        return AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          curve: Curves.easeInOut,
+                          decoration: BoxDecoration(
+                            color: theme.cardColor,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: theme.colorScheme.outlineVariant, width: 1),
+                            boxShadow: [
+                              if (theme.brightness == Brightness.light)
+                                const BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 3)),
+                            ],
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(14),
+                              onTap: () => _openSaleDetails(sale),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      width: 46,
+                                      height: 46,
+                                      decoration: BoxDecoration(
+                                        color: AppColors.kPrimary.withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Icon(Icons.receipt_long, color: AppColors.kPrimary),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Expanded(
-                                            child: Text(
-                                              'Sale #${sale.id}',
-                                              style: theme.textTheme.titleMedium?.copyWith(
-                                                color: theme.colorScheme.primary,
-                                                fontWeight: FontWeight.w700,
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  'Sale #${sale.id}',
+                                                  style: theme.textTheme.titleMedium?.copyWith(
+                                                    color: theme.colorScheme.primary,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                                ),
                                               ),
-                                            ),
-                                          ),
-                                          if (invoice != null) _statusChip(invoice),
-                                          if (isNew) ...[
-                                            const SizedBox(width: 6),
-                                            _ChipBadge(
-                                              text: 'NEW SALE',
-                                              foreground: Colors.blue,
-                                              background: Colors.blue.withOpacity(0.10),
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Wrap(
-                                        crossAxisAlignment: WrapCrossAlignment.center,
-                                        spacing: 10,
-                                        runSpacing: 6,
-                                        children: [
-                                          Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(Icons.person, size: 16, color: Colors.grey.shade600),
-                                              const SizedBox(width: 6),
-                                              Text('Customer: $customerName', style: theme.textTheme.bodySmall),
+                                              statusChip,
+                                              if (isNew) ...[
+                                                const SizedBox(width: 6),
+                                                _ChipBadge(
+                                                  text: 'NEW SALE',
+                                                  foreground: Colors.blue,
+                                                  background: Colors.blue.withValues(alpha: 0.10),
+                                                ),
+                                              ],
                                             ],
                                           ),
-                                          const Text('•'),
-                                          Row(
-                                            mainAxisSize: MainAxisSize.min,
+                                          const SizedBox(height: 6),
+                                          Wrap(
+                                            crossAxisAlignment: WrapCrossAlignment.center,
+                                            spacing: 10,
+                                            runSpacing: 6,
                                             children: [
-                                              Icon(Icons.access_time, size: 14, color: Colors.grey.shade600),
-                                              const SizedBox(width: 6),
-                                              Text(timeAgo(sale.soldAt), style: theme.textTheme.bodySmall),
+                                              Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(Icons.person, size: 16, color: Colors.grey.shade600),
+                                                  const SizedBox(width: 6),
+                                                  Text('Customer: $customerName', style: theme.textTheme.bodySmall),
+                                                ],
+                                              ),
+                                              const Text('•'),
+                                              Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(Icons.inventory_2_outlined, size: 16, color: Colors.grey.shade600),
+                                                  const SizedBox(width: 6),
+                                                  Text('Items: ${itemsQty.toStringAsFixed(2)}', style: theme.textTheme.bodySmall),
+                                                ],
+                                              ),
+                                              const Text('•'),
+                                              Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(Icons.undo, size: 16, color: Colors.grey.shade600),
+                                                  const SizedBox(width: 6),
+                                                  Text(
+                                                    'Returned: $returnedQty',
+                                                    style: theme.textTheme.bodySmall?.copyWith(
+                                                      color: returnedQty > 0 ? Colors.orange.shade700 : Colors.grey.shade700,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
                                             ],
                                           ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Row(
-                                        children: [
-                                          Expanded(
+                                          const SizedBox(height: 6),
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  '\$${(sale.totalAmount ?? 0).toStringAsFixed(2)}',
+                                                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                                                ),
+                                              ),
+                                              if (invoice != null) ...[
+                                                const SizedBox(width: 8),
+                                                _InvoiceShortStatus(invoice: invoice),
+                                              ],
+                                            ],
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Align(
+                                            alignment: Alignment.centerLeft,
                                             child: Text(
-                                              '\$${(sale.totalAmount ?? 0).toStringAsFixed(2)}',
-                                              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                                              timeAgo(sale.soldAt),
+                                              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                                             ),
                                           ),
-                                          if (returnedQty > 0)
-                                            _ChipBadge(
-                                              text: 'Returned $returnedQty',
-                                              foreground: Colors.orange,
-                                              background: Colors.orange.withOpacity(0.12),
-                                            ),
                                         ],
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
-                              ],
+                              ),
                             ),
                           ),
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
                   );
                 },
               ),
@@ -391,27 +487,64 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
     );
   }
 
-  // Create a status chip from invoice status
   Widget _statusChip(InvoiceStatus invoice) {
     final s = invoice.status.toLowerCase();
     if (s == 'full' || (invoice.isPaid || (invoice.dueAmount == 0 && invoice.paidAmount >= invoice.totalAmount))) {
       return _ChipBadge(
         text: 'FULL',
         foreground: Colors.green.shade700,
-        background: Colors.green.withOpacity(0.12),
+        background: Colors.green.withValues(alpha: 0.12),
       );
     }
     if (s == 'credited' || (invoice.paidAmount > 0 && invoice.dueAmount > 0)) {
       return _ChipBadge(
         text: 'CREDITED',
         foreground: Colors.orange.shade700,
-        background: Colors.orange.withOpacity(0.12),
+        background: Colors.orange.withValues(alpha: 0.12),
       );
     }
     return _ChipBadge(
       text: 'UNPAID',
       foreground: Colors.red.shade700,
-      background: Colors.red.withOpacity(0.12),
+      background: Colors.red.withValues(alpha: 0.12),
+    );
+  }
+}
+
+class _InvoiceShortStatus extends StatelessWidget {
+  final InvoiceStatus invoice;
+  const _InvoiceShortStatus({required this.invoice});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = invoice.status.toLowerCase();
+    Color fg;
+    String text;
+    if (s == 'full' || invoice.isPaid || (invoice.dueAmount == 0 && invoice.paidAmount >= invoice.totalAmount)) {
+      fg = Colors.green.shade700;
+      text = 'Paid';
+    } else if (s == 'credited' || (invoice.paidAmount > 0 && invoice.dueAmount > 0)) {
+      fg = Colors.orange.shade700;
+      text = 'Credited';
+    } else {
+      fg = Colors.red.shade700;
+      text = 'Unpaid';
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          text == 'Paid'
+              ? Icons.check_circle
+              : text == 'Credited'
+                  ? Icons.credit_card
+                  : Icons.highlight_off,
+          size: 16,
+          color: fg,
+        ),
+        const SizedBox(width: 4),
+        Text(text, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: fg, fontWeight: FontWeight.w600)),
+      ],
     );
   }
 }
@@ -420,11 +553,13 @@ class _TileData {
   final String customerName;
   final InvoiceStatus? invoice;
   final int returnedQty;
+  final double itemsQty;
 
   _TileData({
     required this.customerName,
     required this.invoice,
     required this.returnedQty,
+    required this.itemsQty,
   });
 }
 
@@ -446,6 +581,8 @@ class _SaleDetailsSheetState extends State<_SaleDetailsSheet> {
   final Map<int, String> _productNames = {};
   final Map<int, int> _returnedByItem = {};
   int? _workingItemId;
+
+  final NumberFormat _money = NumberFormat.simpleCurrency();
 
   @override
   void initState() {
@@ -498,7 +635,6 @@ class _SaleDetailsSheetState extends State<_SaleDetailsSheet> {
       for (final r in returns) {
         _returnedByItem[r.saleItemId] = (_returnedByItem[r.saleItemId] ?? 0) + r.quantityReturned;
       }
-      if (kDebugMode) debugPrint('[SaleDetailsSheet] returns agg: $_returnedByItem');
     } catch (e, st) {
       _error = e.toString();
       if (kDebugMode) {
@@ -510,12 +646,25 @@ class _SaleDetailsSheetState extends State<_SaleDetailsSheet> {
     }
   }
 
+  double _safeUnitPrice(SaleItem item) {
+    if (item.salePricePerQuantity != 0) return item.salePricePerQuantity;
+    final q = item.quantitySold;
+    if (q > 0) return _safeLineTotal(item, allowRecurse: false) / q;
+    return 0.0;
+  }
+
+  double _safeLineTotal(SaleItem item, {bool allowRecurse = true}) {
+    if (item.totalSalePrice != 0) return item.totalSalePrice;
+    if (allowRecurse) return _safeUnitPrice(item) * item.quantitySold;
+    return 0.0;
+  }
+
   int _sumReturnedAll() => _returnedByItem.values.fold(0, (s, v) => s + v);
 
   Future<void> _promptReturn(SaleItem item) async {
     if (item.id == null) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot return: missing sale item id')));
-      if (kDebugMode) debugPrint('[Return] blocked: missing sale item id for product ${item.productId}');
       return;
     }
 
@@ -560,23 +709,19 @@ class _SaleDetailsSheetState extends State<_SaleDetailsSheet> {
     );
 
     if (confirmed != true) return;
+    if (!mounted) return;
 
     final int qty = int.tryParse(qtyController.text) ?? 0;
     if (qty <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a valid quantity')));
-      if (kDebugMode) debugPrint('[Return] invalid qty: $qty for saleItemId=${item.id}');
       return;
     }
     if (qty > maxQty) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Quantity cannot exceed $maxQty')));
-      if (kDebugMode) debugPrint('[Return] qty exceeds max: $qty > $maxQty for saleItemId=${item.id}');
       return;
     }
 
     setState(() => _workingItemId = item.id);
-    if (kDebugMode) {
-      debugPrint('[Return] start saleId=${_sale.id} saleItemId=${item.id} qty=$qty reason="${reasonController.text}"');
-    }
 
     try {
       final salesService = context.read<SalesService>();
@@ -590,19 +735,16 @@ class _SaleDetailsSheetState extends State<_SaleDetailsSheet> {
       if (fresh != null) _sale = fresh;
       await _loadAuxiliaryData();
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Return recorded')));
-        context.read<SalesBloc>().add(LoadSales());
-      }
-      if (kDebugMode) debugPrint('[Return] success saleId=${_sale.id} saleItemId=${item.id} qty=$qty');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Return recorded')));
+      context.read<SalesBloc>().add(LoadSales());
     } catch (e, st) {
       if (kDebugMode) {
-        debugPrint('[Return][error] saleId=${_sale.id} saleItemId=${item.id} qty=$qty err=$e');
+        debugPrint('[Return][error] saleId=${_sale.id} saleItemId=${item.id} err=$e');
         debugPrintStack(stackTrace: st);
       }
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Return failed: $e')));
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Return failed: $e')));
     } finally {
       if (mounted) setState(() => _workingItemId = null);
     }
@@ -610,8 +752,141 @@ class _SaleDetailsSheetState extends State<_SaleDetailsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    // build implemented above
-    return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    return FractionallySizedBox(
+      heightFactor: 0.92,
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        child: Material(
+          color: theme.cardColor,
+          child: Column(
+            children: [
+              Container(
+                width: 42,
+                height: 5,
+                margin: const EdgeInsets.only(top: 10, bottom: 6),
+                decoration: BoxDecoration(
+                  color: cs.outlineVariant,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  child: _loading
+                      ? const Center(child: CircularProgressIndicator())
+                      : (_error.isNotEmpty
+                          ? _ErrorRetry(message: _error, onRetry: _loadAuxiliaryData)
+                          : _buildSheetBody()),
+                ),
+              ),
+              SafeArea(
+                minimum: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: cs.onSurfaceVariant,
+                          side: BorderSide(color: cs.outline),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        child: const Text('Close'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSheetBody() {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final money = _money;
+    final created = DateFormat.yMMMd().add_jm().format(_sale.soldAt);
+
+    final totalItemsQty = _sale.items.fold<double>(0.0, (sum, it) => sum + it.quantitySold);
+    final totalReturned = _sumReturnedAll();
+
+    final kpis = <_Kpi>[
+      _Kpi(label: 'Items', value: totalItemsQty.toStringAsFixed(2), icon: Icons.list_alt),
+      _Kpi(label: 'Returned', value: '$totalReturned', icon: Icons.undo),
+      _Kpi(label: 'Total', value: money.format(_sale.totalAmount ?? 0), icon: Icons.attach_money),
+      _Kpi(label: 'Sold At', value: created, icon: Icons.event),
+    ];
+
+    final chips = <Widget>[
+      _TagChip(label: 'Sale #${_sale.id}'),
+      if (_customerName.isNotEmpty && _customerName != 'Unknown') _TagChip(label: _customerName),
+      if (_invoice != null) _TagChip(label: _invoice!.status.toUpperCase()),
+    ];
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      physics: const BouncingScrollPhysics(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _HeaderCard(
+            title: 'Sale #${_sale.id}',
+            subtitle: 'Customer: $_customerName • ${timeAgo(_sale.soldAt)}',
+            icon: Icons.receipt_long,
+            color: cs.primary,
+          ),
+          const SizedBox(height: 10),
+          Wrap(spacing: 8, runSpacing: 8, children: chips),
+          const SizedBox(height: AppSizes.largePadding),
+          if (_invoice != null) _PaymentStatusRow(invoice: _invoice!),
+          if (_invoice != null) const SizedBox(height: AppSizes.largePadding),
+          _KpiGrid(items: kpis),
+          const SizedBox(height: AppSizes.largePadding),
+          Text('Items', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          ..._sale.items.map((item) {
+            final unitPrice = _safeUnitPrice(item);
+            final lineTotal = _safeLineTotal(item);
+            final returnedQty = _returnedByItem[item.id ?? -1] ?? 0;
+
+            return _ItemTile(
+              title: _productNames[item.productId] ?? 'Product #${item.productId}',
+              quantity: item.quantitySold,
+              unitPrice: unitPrice,
+              total: lineTotal,
+              onReturn: () => _promptReturn(item),
+              returning: _workingItemId == item.id,
+              returnedQty: returnedQty,
+              money: money,
+            );
+          }),
+          const SizedBox(height: AppSizes.padding),
+          Divider(color: cs.outlineVariant),
+          const SizedBox(height: AppSizes.padding),
+          Row(
+            children: [
+              Expanded(
+                child: Text('Total Amount', style: theme.textTheme.titleMedium),
+              ),
+              Text(
+                money.format(_sale.totalAmount ?? 0),
+                style: theme.textTheme.titleLarge?.copyWith(
+                  color: cs.primary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -628,8 +903,8 @@ class _PaymentStatusRow extends StatelessWidget {
         const SizedBox(width: 8),
         Chip(
           label: Text(status.text, style: TextStyle(color: status.color, fontWeight: FontWeight.bold)),
-          backgroundColor: status.color.withOpacity(0.10),
-          side: BorderSide(color: status.color.withOpacity(0.15)),
+          backgroundColor: status.color.withValues(alpha: 0.10),
+          side: BorderSide(color: status.color.withValues(alpha: 0.15)),
         ),
         if (!invoice.isPaid && invoice.dueAmount > 0) ...[
           const SizedBox(width: 12),
@@ -680,7 +955,7 @@ class _ChipBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: foreground.withOpacity(0.25)),
+        border: Border.all(color: foreground.withValues(alpha: 0.25)),
       ),
       child: Text(
         text,
@@ -690,6 +965,305 @@ class _ChipBadge extends StatelessWidget {
           fontSize: 11,
           letterSpacing: 0.2,
         ),
+      ),
+    );
+  }
+}
+
+// ---------- UI helpers ----------
+
+class _HeaderCard extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final IconData icon;
+  final Color color;
+
+  const _HeaderCard({
+    required this.title,
+    required this.icon,
+    required this.color,
+    this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+              if (subtitle != null && subtitle!.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(subtitle!, style: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
+                ),
+            ]),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TagChip extends StatelessWidget {
+  final String label;
+  const _TagChip({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Chip(
+      label: Text(label),
+      labelStyle: TextStyle(color: cs.primary),
+      side: BorderSide(color: cs.primary.withValues(alpha: 0.4)),
+      backgroundColor: cs.primary.withValues(alpha: 0.08),
+      visualDensity: VisualDensity.compact,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
+  }
+}
+
+class _Kpi {
+  final String label;
+  final String value;
+  final IconData icon;
+
+  _Kpi({required this.label, required this.value, required this.icon});
+}
+
+class _KpiGrid extends StatelessWidget {
+  final List<_Kpi> items;
+  const _KpiGrid({required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, c) {
+      final w = c.maxWidth;
+      final cols = w < 420 ? 1 : (w < 680 ? 2 : 4);
+      final itemWidth = (w - (cols - 1) * 12) / cols;
+
+      return Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        children: items
+            .map((e) => SizedBox(
+                  width: itemWidth,
+                  child: _KpiCard(kpi: e),
+                ))
+            .toList(),
+      );
+    });
+  }
+}
+
+class _KpiCard extends StatelessWidget {
+  final _Kpi kpi;
+  const _KpiCard({required this.kpi});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: cs.primary.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(kpi.icon, color: cs.primary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(kpi.label, style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                const SizedBox(height: 2),
+                Text(kpi.value, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ItemTile extends StatelessWidget {
+  final String title;
+  final double quantity;
+  final double unitPrice;
+  final double total;
+  final int returnedQty;
+  final VoidCallback onReturn;
+  final bool returning;
+  final NumberFormat money;
+
+  const _ItemTile({
+    required this.title,
+    required this.quantity,
+    required this.unitPrice,
+    required this.total,
+    required this.returnedQty,
+    required this.onReturn,
+    required this.returning,
+    required this.money,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 4),
+              Text(
+                '${quantity.toStringAsFixed(2)} × ${money.format(unitPrice)} = ${money.format(total)}',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              Text(
+                'Returned: $returnedQty',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: returnedQty > 0 ? Colors.orange.shade700 : Colors.grey.shade700,
+                    ),
+              ),
+            ]),
+          ),
+          const SizedBox(width: 12),
+          returning
+              ? const SizedBox(height: 32, width: 32, child: CircularProgressIndicator(strokeWidth: 2))
+              : TextButton.icon(
+                  onPressed: onReturn,
+                  icon: const Icon(Icons.undo, size: 18),
+                  label: const Text('Return'),
+                ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorRetry extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+  const _ErrorRetry({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.error_outline, color: cs.error, size: 36),
+          const SizedBox(height: 8),
+          Text(message, textAlign: TextAlign.center),
+          const SizedBox(height: 12),
+          FilledButton(onPressed: onRetry, child: const Text('Retry')),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatWrap extends StatelessWidget {
+  final List<Widget> children;
+  const _StatWrap({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, c) {
+      final w = c.maxWidth;
+      final runSpacing = 10.0;
+      final spacing = 10.0;
+      final cols = w < 420 ? 2 : (w < 680 ? 3 : 6);
+      final itemWidth = (w - (cols - 1) * spacing) / cols;
+      return Wrap(
+        spacing: spacing,
+        runSpacing: runSpacing,
+        children: children.map((e) => SizedBox(width: itemWidth, child: e)).toList(),
+      );
+    });
+  }
+}
+
+class _StatChip extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  const _StatChip({required this.label, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeInOut,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.12), shape: BoxShape.circle),
+            alignment: Alignment.center,
+            child: Icon(Icons.circle, size: 12, color: color),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(label, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+              const SizedBox(height: 2),
+              Text(value, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+            ]),
+          ),
+        ],
       ),
     );
   }

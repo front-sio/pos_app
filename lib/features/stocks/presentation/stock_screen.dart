@@ -149,7 +149,7 @@ class _StockScreenState extends State<StockScreen> {
                                 return ListTile(
                                   contentPadding: EdgeInsets.zero,
                                   title: Text(
-                                    'Amount: ${txn.amountAdded.toStringAsFixed(2)} ${txn.unitName ?? ''}',
+                                    'Quantity: ${txn.amountAdded.toStringAsFixed(2)} ${txn.unitName ?? ''}',
                                     style: Theme.of(context).textTheme.bodyLarge,
                                   ),
                                   subtitle: Text(

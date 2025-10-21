@@ -22,6 +22,7 @@ class AuthApiService {
     }
   }
 
+  // Note: Backend register returns a message/id (not token)
   Future<Map<String, dynamic>> register(
     String username,
     String email,

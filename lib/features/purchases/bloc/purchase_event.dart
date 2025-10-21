@@ -30,3 +30,19 @@ class CreatePurchase extends PurchaseEvent {
   @override
   List<Object?> get props => [supplierId, status, paidAmount, items, notes];
 }
+
+// NEW: update payment for a purchase (pay remaining or partial)
+class UpdatePurchasePayment extends PurchaseEvent {
+  final int purchaseId;
+  final double newPaidAmountAbsolute;
+  final String? statusOverride; // 'paid' | 'unpaid' | 'credited'
+
+  const UpdatePurchasePayment({
+    required this.purchaseId,
+    required this.newPaidAmountAbsolute,
+    this.statusOverride,
+  });
+
+  @override
+  List<Object?> get props => [purchaseId, newPaidAmountAbsolute, statusOverride];
+}

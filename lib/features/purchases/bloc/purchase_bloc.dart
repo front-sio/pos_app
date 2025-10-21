@@ -10,6 +10,7 @@ class PurchaseBloc extends Bloc<PurchaseEvent, PurchaseState> {
   PurchaseBloc({required this.service}) : super(PurchaseInitial()) {
     on<LoadPurchases>(_onLoad);
     on<CreatePurchase>(_onCreate);
+    on<UpdatePurchasePayment>(_onUpdatePayment);
   }
 
   Future<void> _onLoad(LoadPurchases event, Emitter<PurchaseState> emit) async {
@@ -23,10 +24,8 @@ class PurchaseBloc extends Bloc<PurchaseEvent, PurchaseState> {
   }
 
   Future<void> _onCreate(CreatePurchase event, Emitter<PurchaseState> emit) async {
-    // Keep current list visible while submitting (avoid flicker)
     final hadLoaded = state is PurchaseLoaded;
-    final List<Purchase> previousList =
-        hadLoaded ? (state as PurchaseLoaded).purchases : const <Purchase>[];
+    final prev = hadLoaded ? (state as PurchaseLoaded).purchases : const <Purchase>[];
 
     try {
       await service.createPurchase(
@@ -43,9 +42,25 @@ class PurchaseBloc extends Bloc<PurchaseEvent, PurchaseState> {
       emit(PurchaseLoaded(list));
     } catch (e) {
       emit(PurchaseError(e.toString()));
-      if (hadLoaded) {
-        emit(PurchaseLoaded(previousList));
-      }
+      if (hadLoaded) emit(PurchaseLoaded(prev));
+    }
+  }
+
+  Future<void> _onUpdatePayment(UpdatePurchasePayment event, Emitter<PurchaseState> emit) async {
+    final hadLoaded = state is PurchaseLoaded;
+    final prev = hadLoaded ? (state as PurchaseLoaded).purchases : const <Purchase>[];
+    try {
+      await service.updatePurchasePayment(
+        purchaseId: event.purchaseId,
+        paidAmount: event.newPaidAmountAbsolute,
+        status: event.statusOverride,
+      );
+      final list = await service.getAllPurchases();
+      emit(const PurchaseOperationSuccess('Payment updated'));
+      emit(PurchaseLoaded(list));
+    } catch (e) {
+      emit(PurchaseError(e.toString()));
+      if (hadLoaded) emit(PurchaseLoaded(prev));
     }
   }
 }

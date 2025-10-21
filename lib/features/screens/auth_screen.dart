@@ -3,8 +3,6 @@ import 'package:sales_app/features/auth/presentation/login_screen.dart';
 import '../../constants/colors.dart';
 import '../../widgets/auth_scaffold.dart';
 
-import '../auth/presentation/register_screen.dart';
-
 class AuthScreen extends StatelessWidget {
   const AuthScreen({super.key});
 
@@ -100,20 +98,6 @@ class AuthScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 16),
-
-                    // Register button
-                    OutlinedButton.icon(
-                      onPressed: () => _navigate(context, const RegisterScreen()),
-                      icon: const Icon(Icons.app_registration),
-                      label: const Text("Register"),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(50),
-                        side: BorderSide(color: AppColors.kPrimary, width: 2),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               ),

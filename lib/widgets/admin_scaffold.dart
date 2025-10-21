@@ -59,6 +59,7 @@ import 'package:sales_app/features/auth/logic/auth_state.dart';
 
 import 'package:sales_app/constants/colors.dart';
 import 'package:sales_app/constants/sizes.dart';
+import 'package:sales_app/rbac/rbac.dart';
 
 class AdminScaffold extends StatefulWidget {
   final String initialPage;
@@ -108,6 +109,9 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
   // Focus management for overlay
   final FocusScopeNode _overlayFocusScope = FocusScopeNode();
 
+  // Global Focus to intercept keys (backspace/browserBack) only when overlays visible and not typing
+  late final FocusNode _rootKeyFocus;
+
   @override
   void initState() {
     super.initState();
@@ -140,15 +144,32 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
       begin: const Offset(0, 0.06),
       end: Offset.zero,
     ).chain(CurveTween(curve: Curves.easeOutCubic)).animate(_overlayCtrl);
+
+    _rootKeyFocus = FocusNode(debugLabel: 'AdminScaffoldRootKeyFocus');
   }
 
   @override
   void dispose() {
     _overlayCtrl.dispose();
     _overlayFocusScope.dispose();
+    _rootKeyFocus.dispose();
     _productsBloc.close();
     super.dispose();
   }
+
+  // ===== RBAC helpers =====
+
+  bool _can(String permission) => Rbac.can(context, permission);
+
+  bool _guard(String permission, String featureName) {
+    if (_can(permission)) return true;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Access denied: $featureName'), backgroundColor: AppColors.kError),
+    );
+    return false;
+  }
+
+  // ===== Pages =====
 
   Widget _getPage(String menu) {
     switch (menu) {
@@ -157,38 +178,57 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
       case "Profile":
         return const ProfileScreen();
       case "Users":
-        return const UsersAdminScreen();
+        return _can("users:view") ? const UsersAdminScreen() : _forbidden();
       case "Sales":
-        return SalesScreen(onAddNewSale: _openProductCart);
+        return _can("sales:view") ? SalesScreen(onAddNewSale: _openProductCart) : _forbidden();
       case "Stock":
-        return StockScreen(onOpenOverlay: _openStockOverlay);
+        return _can("stock:view") ? StockScreen(onOpenOverlay: _openStockOverlay) : _forbidden();
       case "Customers":
-        return CustomersScreen(onOpenOverlay: _openCustomerOverlay);
+        return _can("customers:view") ? CustomersScreen(onOpenOverlay: _openCustomerOverlay) : _forbidden();
       case "Suppliers":
-        return SuppliersScreen(onOpenOverlay: _openSupplierOverlay);
+        return _can("suppliers:view") ? SuppliersScreen(onOpenOverlay: _openSupplierOverlay) : _forbidden();
       case "Products":
-        return BlocProvider.value(
-          value: _productsBloc,
-          child: ProductsScreen(onOpenOverlay: _openProductOverlay),
-        );
+        return _can("products:view")
+            ? BlocProvider.value(
+                value: _productsBloc,
+                child: ProductsScreen(onOpenOverlay: _openProductOverlay),
+              )
+            : _forbidden();
       case "Purchases":
-        return PurchasesScreen(onAddNewPurchase: _openNewPurchase);
+        return _can("purchases:view") ? PurchasesScreen(onAddNewPurchase: _openNewPurchase) : _forbidden();
       case "Invoices":
-        return InvoicesScreen(onOpenOverlay: _openInvoiceOverlay);
+        return _can("invoices:view") ? InvoicesScreen(onOpenOverlay: _openInvoiceOverlay) : _forbidden();
       case "Profit Tracker":
-        return const ProfitTrackerScreen();
+        return _can("profits:view") ? const ProfitTrackerScreen() : _forbidden();
       case "Reports":
-        return const ReportsScreen();
+        return _can("reports:view") ? const ReportsScreen() : _forbidden();
       case "Settings":
-        return SettingsScreen(settings: appSettings);
+        return _can("settings:view") ? SettingsScreen(settings: appSettings) : _forbidden();
       case "Returns":
-        return const ReturnsScreen();
+        return _can("returns:view") ? const ReturnsScreen() : _forbidden();
       default:
         return const DashboardScreen();
     }
   }
 
+  Widget _forbidden() {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Center(
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Icon(Icons.lock_outline, size: 64, color: cs.error),
+        const SizedBox(height: 12),
+        Text('403 — Forbidden', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 6),
+        Text('You do not have permission to view this page.', style: theme.textTheme.bodyMedium),
+      ]),
+    );
+  }
+
+  // ===== Overlay openings with RBAC guards =====
+
   Future<void> _openProductCart() async {
+    if (!_guard("sales:create", "Create Sale")) return;
     if (activeMenu != "Sales") setState(() => activeMenu = "Sales");
     setState(() {
       _hideAllOverlays();
@@ -199,6 +239,7 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
   }
 
   Future<void> _openNewPurchase() async {
+    if (!_guard("purchases:create", "Create Purchase")) return;
     if (activeMenu != "Purchases") setState(() => activeMenu = "Purchases");
     setState(() {
       _hideAllOverlays();
@@ -209,6 +250,8 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
   }
 
   Future<void> _openStockOverlay(Product product, StockOverlayMode mode) async {
+    final needs = mode == StockOverlayMode.view ? "stock:view" : "stock:edit";
+    if (!_guard(needs, "Stock")) return;
     if (activeMenu != "Stock") setState(() => activeMenu = "Stock");
     setState(() {
       _hideAllOverlays();
@@ -221,6 +264,12 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
   }
 
   Future<void> _openProductOverlay(Product? product, ProductOverlayMode mode) async {
+    final needs = switch (mode) {
+      ProductOverlayMode.create => "products:create",
+      ProductOverlayMode.edit => "products:edit",
+      _ => "products:view",
+    };
+    if (!_guard(needs, "Products")) return;
     if (activeMenu != "Products") setState(() => activeMenu = "Products");
     setState(() {
       _hideAllOverlays();
@@ -233,6 +282,12 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
   }
 
   Future<void> _openCustomerOverlay(Customer? customer, CustomerOverlayMode mode) async {
+    final needs = switch (mode) {
+      CustomerOverlayMode.create => "customers:create",
+      CustomerOverlayMode.edit => "customers:edit",
+      _ => "customers:view",
+    };
+    if (!_guard(needs, "Customers")) return;
     if (activeMenu != "Customers") setState(() => activeMenu = "Customers");
     setState(() {
       _hideAllOverlays();
@@ -245,6 +300,12 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
   }
 
   Future<void> _openSupplierOverlay(Supplier? supplier, SupplierOverlayMode mode) async {
+    final needs = switch (mode) {
+      SupplierOverlayMode.create => "suppliers:create",
+      SupplierOverlayMode.edit => "suppliers:edit",
+      _ => "suppliers:view",
+    };
+    if (!_guard(needs, "Suppliers")) return;
     if (activeMenu != "Suppliers") setState(() => activeMenu = "Suppliers");
     setState(() {
       _hideAllOverlays();
@@ -257,6 +318,7 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
   }
 
   Future<void> _openInvoiceOverlay(Invoice invoice) async {
+    if (!_guard("invoices:view", "Invoices")) return;
     if (activeMenu != "Invoices") setState(() => activeMenu = "Invoices");
     setState(() {
       _hideAllOverlays();
@@ -266,6 +328,8 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
     await _overlayCtrl.forward();
     _focusOverlay();
   }
+
+  // ===== Overlay helpers =====
 
   void _hideAllOverlays() {
     _showProductCart = false;
@@ -294,9 +358,18 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
   }
 
   void _onMenuSelected(String menu) {
+    // RBAC: prevent switching into pages user cannot view
+    if (!Rbac.canMenu(context, menu)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Access denied: $menu'), backgroundColor: AppColors.kError),
+      );
+      return;
+    }
+
     setState(() {
       activeMenu = menu;
     });
+
     // Close any visible overlay immediately (no confirm)
     if (_anyOverlayVisible()) {
       _closeOverlay();
@@ -312,13 +385,23 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
       _showSupplierOverlay ||
       _showInvoiceOverlay;
 
-  bool _isEditingTextField() {
+  // Detection for "typing in a text field?"
+  bool _isTextEditingFocused() {
     final focus = FocusManager.instance.primaryFocus;
     if (focus == null) return false;
     final ctx = focus.context;
     if (ctx == null) return false;
-    // EditableText is the underlying widget for TextField
-    return ctx.widget is EditableText;
+    if (ctx.widget is EditableText) return true;
+
+    bool found = false;
+    ctx.visitAncestorElements((ancestor) {
+      if (ancestor.widget is EditableText) {
+        found = true;
+        return false;
+      }
+      return true;
+    });
+    return found;
   }
 
   @override
@@ -336,16 +419,9 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
       LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.shift, LogicalKeyboardKey.keyN): const NewPurchaseIntent(),
     };
 
-    // IMPORTANT: Prevent Backspace and BrowserBack from popping routes when an overlay is open.
-    // Preserve typing behavior: if the user currently focuses an EditableText (typing), allow backspace to work.
-    if (_anyOverlayVisible() && !_isEditingTextField()) {
-      shortcuts[LogicalKeySet(LogicalKeyboardKey.backspace)] = const DoNothingAndStopPropagationIntent();
-      shortcuts[LogicalKeySet(LogicalKeyboardKey.browserBack)] = const DoNothingAndStopPropagationIntent();
-    }
-
+    // Intercept backspace/browserBack only when overlay is open and user not typing
     final actions = <Type, Action<Intent>>{
       OpenSearchIntent: OpenSearchAction(context),
-      // Close overlays immediately on ESC/back (no confirm)
       DismissIntent: CallbackAction<DismissIntent>(onInvoke: (_) {
         if (_anyOverlayVisible()) {
           _closeOverlay();
@@ -360,7 +436,6 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
         if (activeMenu == "Purchases") _openNewPurchase();
         return null;
       }),
-      // Wire DoNothing intents so the framework consumes the key
       DoNothingAndStopPropagationIntent: DoNothingAction(consumesKey: true),
     };
 
@@ -368,199 +443,213 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
       shortcuts: shortcuts,
       child: Actions(
         actions: actions,
-        child: FocusableActionDetector(
-          child: PopScope(
-            canPop: !_anyOverlayVisible(),
-            onPopInvoked: (didPop) {
-              if (!didPop && _anyOverlayVisible()) {
-                // Close overlay without confirmation
-                _closeOverlay();
-              }
-            },
-            child: Scaffold(
-              drawer: isDesktop
-                  ? null
-                  : Sidebar(
-                      activeMenu: activeMenu,
-                      onMenuSelected: (menu) {
-                        _onMenuSelected(menu);
-                        Navigator.pop(context);
-                      },
-                    ),
-              body: Row(
-                children: [
-                  if (isDesktop)
-                    Sidebar(
-                      activeMenu: activeMenu,
-                      onMenuSelected: _onMenuSelected,
-                    ),
-                  Expanded(
-                    child: Stack(
-                      children: [
-                        Column(
-                          children: [
-                            const AdminAppBar(),
-                            Expanded(
-                              child: AbsorbPointer(
-                                absorbing: _anyOverlayVisible(),
-                                child: Semantics(
-                                  container: true,
-                                  child: AnimatedSwitcher(
-                                    duration: const Duration(milliseconds: 250),
-                                    switchInCurve: Curves.easeOutCubic,
-                                    switchOutCurve: Curves.easeInCubic,
-                                    transitionBuilder: (child, animation) {
-                                      final offset = Tween<Offset>(
-                                        begin: const Offset(0.02, 0),
-                                        end: Offset.zero,
-                                      ).animate(animation);
-                                      return FadeTransition(
-                                        opacity: animation,
-                                        child: SlideTransition(position: offset, child: child),
-                                      );
-                                    },
-                                    child: KeyedSubtree(
-                                      key: ValueKey(activeMenu),
-                                      child: _getPage(activeMenu),
+        child: Focus(
+          focusNode: _rootKeyFocus,
+          autofocus: true,
+          onKey: (node, event) {
+            if (!_anyOverlayVisible()) return KeyEventResult.ignored;
+            if (event is! KeyDownEvent) return KeyEventResult.ignored;
+
+            final key = event.logicalKey;
+
+            if ((key == LogicalKeyboardKey.backspace || key == LogicalKeyboardKey.browserBack) && !_isTextEditingFocused()) {
+              return KeyEventResult.handled;
+            }
+            return KeyEventResult.ignored;
+          },
+          child: FocusableActionDetector(
+            child: PopScope(
+              canPop: !_anyOverlayVisible(),
+              onPopInvoked: (didPop) {
+                if (!didPop && _anyOverlayVisible()) {
+                  _closeOverlay();
+                }
+              },
+              child: Scaffold(
+                drawer: isDesktop
+                    ? null
+                    : Sidebar(
+                        activeMenu: activeMenu,
+                        onMenuSelected: (menu) {
+                          _onMenuSelected(menu);
+                          Navigator.pop(context);
+                        },
+                      ),
+                body: Row(
+                  children: [
+                    if (isDesktop)
+                      Sidebar(
+                        activeMenu: activeMenu,
+                        onMenuSelected: _onMenuSelected,
+                      ),
+                    Expanded(
+                      child: Stack(
+                        children: [
+                          Column(
+                            children: [
+                              const AdminAppBar(),
+                              Expanded(
+                                child: AbsorbPointer(
+                                  absorbing: _anyOverlayVisible(),
+                                  child: Semantics(
+                                    container: true,
+                                    child: AnimatedSwitcher(
+                                      duration: const Duration(milliseconds: 250),
+                                      switchInCurve: Curves.easeOutCubic,
+                                      switchOutCurve: Curves.easeInCubic,
+                                      transitionBuilder: (child, animation) {
+                                        final offset = Tween<Offset>(
+                                          begin: const Offset(0.02, 0),
+                                          end: Offset.zero,
+                                        ).animate(animation);
+                                        return FadeTransition(
+                                          opacity: animation,
+                                          child: SlideTransition(position: offset, child: child),
+                                        );
+                                      },
+                                      child: KeyedSubtree(
+                                        key: ValueKey(activeMenu),
+                                        child: _getPage(activeMenu),
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-
-                        // Sales cart overlay
-                        if (_showProductCart && activeMenu == "Sales")
-                          _OverlaySheet(
-                            controller: _overlayCtrl,
-                            backdropOpacity: _backdropOpacity,
-                            sheetOffset: _sheetOffset,
-                            onBackdropTap: _closeOverlay,
-                            isDesktop: isDesktop,
-                            focusScopeNode: _overlayFocusScope,
-                            child: cart.ProductCartScreen(
-                              onCheckout: _closeOverlay,
-                              onCancel: _closeOverlay,
-                            ),
+                            ],
                           ),
 
-                        // New purchase overlay
-                        if (_showNewPurchase && activeMenu == "Purchases")
-                          _OverlaySheet(
-                            controller: _overlayCtrl,
-                            backdropOpacity: _backdropOpacity,
-                            sheetOffset: _sheetOffset,
-                            onBackdropTap: _closeOverlay,
-                            isDesktop: isDesktop,
-                            focusScopeNode: _overlayFocusScope,
-                            child: NewPurchaseScreen(
-                              onSaved: _closeOverlay,
-                              onCancel: _closeOverlay,
-                            ),
-                          ),
-
-                        // Stock overlay
-                        if (_showStockOverlay && activeMenu == "Stock" && _stockProduct != null)
-                          _OverlaySheet(
-                            controller: _overlayCtrl,
-                            backdropOpacity: _backdropOpacity,
-                            sheetOffset: _sheetOffset,
-                            onBackdropTap: _closeOverlay,
-                            isDesktop: isDesktop,
-                            focusScopeNode: _overlayFocusScope,
-                            child: StockOverlayScreen(
-                              product: _stockProduct!,
-                              mode: _stockMode,
-                              onSaved: _closeOverlay,
-                              onCancel: _closeOverlay,
-                            ),
-                          ),
-
-                        // Product overlay (supports create with null product)
-                        if (_showProductOverlay && activeMenu == "Products")
-                          BlocProvider.value(
-                            value: _productsBloc,
-                            child: _OverlaySheet(
+                          // Sales cart overlay
+                          if (_showProductCart && activeMenu == "Sales")
+                            _OverlaySheet(
                               controller: _overlayCtrl,
                               backdropOpacity: _backdropOpacity,
                               sheetOffset: _sheetOffset,
                               onBackdropTap: _closeOverlay,
                               isDesktop: isDesktop,
                               focusScopeNode: _overlayFocusScope,
-                              child: ProductOverlayScreen(
-                                product: _productOverlayProduct,
-                                mode: _productOverlayMode,
+                              child: cart.ProductCartScreen(
+                                onCheckout: _closeOverlay,
+                                onCancel: _closeOverlay,
+                              ),
+                            ),
+
+                          // New purchase overlay
+                          if (_showNewPurchase && activeMenu == "Purchases")
+                            _OverlaySheet(
+                              controller: _overlayCtrl,
+                              backdropOpacity: _backdropOpacity,
+                              sheetOffset: _sheetOffset,
+                              onBackdropTap: _closeOverlay,
+                              isDesktop: isDesktop,
+                              focusScopeNode: _overlayFocusScope,
+                              child: NewPurchaseScreen(
                                 onSaved: _closeOverlay,
                                 onCancel: _closeOverlay,
                               ),
                             ),
-                          ),
 
-                        // Customer overlay
-                        if (_showCustomerOverlay && activeMenu == "Customers")
-                          BlocProvider.value(
-                            value: context.read<CustomerBloc>(),
-                            child: _OverlaySheet(
+                          // Stock overlay
+                          if (_showStockOverlay && activeMenu == "Stock" && _stockProduct != null)
+                            _OverlaySheet(
                               controller: _overlayCtrl,
                               backdropOpacity: _backdropOpacity,
                               sheetOffset: _sheetOffset,
                               onBackdropTap: _closeOverlay,
                               isDesktop: isDesktop,
                               focusScopeNode: _overlayFocusScope,
-                              child: CustomerOverlayScreen(
-                                customer: _customerOverlayCustomer,
-                                mode: _customerOverlayMode,
-                                onSaved: () {
-                                  _closeOverlay();
-                                  context.read<CustomerBloc>().add(FetchCustomersPage(1, 20));
-                                },
+                              child: StockOverlayScreen(
+                                product: _stockProduct!,
+                                mode: _stockMode,
+                                onSaved: _closeOverlay,
                                 onCancel: _closeOverlay,
                               ),
                             ),
-                          ),
 
-                        // Supplier overlay
-                        if (_showSupplierOverlay && activeMenu == "Suppliers")
-                          BlocProvider.value(
-                            value: context.read<SupplierBloc>(),
-                            child: _OverlaySheet(
+                          // Product overlay
+                          if (_showProductOverlay && activeMenu == "Products")
+                            BlocProvider.value(
+                              value: _productsBloc,
+                              child: _OverlaySheet(
+                                controller: _overlayCtrl,
+                                backdropOpacity: _backdropOpacity,
+                                sheetOffset: _sheetOffset,
+                                onBackdropTap: _closeOverlay,
+                                isDesktop: isDesktop,
+                                focusScopeNode: _overlayFocusScope,
+                                child: ProductOverlayScreen(
+                                  product: _productOverlayProduct,
+                                  mode: _productOverlayMode,
+                                  onSaved: _closeOverlay,
+                                  onCancel: _closeOverlay,
+                                ),
+                              ),
+                            ),
+
+                          // Customer overlay
+                          if (_showCustomerOverlay && activeMenu == "Customers")
+                            BlocProvider.value(
+                              value: context.read<CustomerBloc>(),
+                              child: _OverlaySheet(
+                                controller: _overlayCtrl,
+                                backdropOpacity: _backdropOpacity,
+                                sheetOffset: _sheetOffset,
+                                onBackdropTap: _closeOverlay,
+                                isDesktop: isDesktop,
+                                focusScopeNode: _overlayFocusScope,
+                                child: CustomerOverlayScreen(
+                                  customer: _customerOverlayCustomer,
+                                  mode: _customerOverlayMode,
+                                  onSaved: () {
+                                    _closeOverlay();
+                                    context.read<CustomerBloc>().add(FetchCustomersPage(1, 20));
+                                  },
+                                  onCancel: _closeOverlay,
+                                ),
+                              ),
+                            ),
+
+                          // Supplier overlay
+                          if (_showSupplierOverlay && activeMenu == "Suppliers")
+                            BlocProvider.value(
+                              value: context.read<SupplierBloc>(),
+                              child: _OverlaySheet(
+                                controller: _overlayCtrl,
+                                backdropOpacity: _backdropOpacity,
+                                sheetOffset: _sheetOffset,
+                                onBackdropTap: _closeOverlay,
+                                isDesktop: isDesktop,
+                                focusScopeNode: _overlayFocusScope,
+                                child: SupplierOverlayScreen(
+                                  supplier: _supplierOverlaySupplier,
+                                  mode: _supplierOverlayMode,
+                                  onSaved: () {
+                                    _closeOverlay();
+                                    context.read<SupplierBloc>().add(FetchSuppliersPage(1, 20));
+                                  },
+                                  onCancel: _closeOverlay,
+                                ),
+                              ),
+                            ),
+
+                          // Invoice overlay
+                          if (_showInvoiceOverlay && activeMenu == "Invoices" && _invoiceOverlayId != null)
+                            _OverlaySheet(
                               controller: _overlayCtrl,
                               backdropOpacity: _backdropOpacity,
                               sheetOffset: _sheetOffset,
                               onBackdropTap: _closeOverlay,
                               isDesktop: isDesktop,
                               focusScopeNode: _overlayFocusScope,
-                              child: SupplierOverlayScreen(
-                                supplier: _supplierOverlaySupplier,
-                                mode: _supplierOverlayMode,
-                                onSaved: () {
-                                  _closeOverlay();
-                                  context.read<SupplierBloc>().add(FetchSuppliersPage(1, 20));
-                                },
-                                onCancel: _closeOverlay,
+                              child: InvoiceOverlayScreen(
+                                invoiceId: _invoiceOverlayId!,
+                                onClose: _closeOverlay,
                               ),
                             ),
-                          ),
-
-                        // Invoice overlay
-                        if (_showInvoiceOverlay && activeMenu == "Invoices" && _invoiceOverlayId != null)
-                          _OverlaySheet(
-                            controller: _overlayCtrl,
-                            backdropOpacity: _backdropOpacity,
-                            sheetOffset: _sheetOffset,
-                            onBackdropTap: _closeOverlay,
-                            isDesktop: isDesktop,
-                            focusScopeNode: _overlayFocusScope,
-                            child: InvoiceOverlayScreen(
-                              invoiceId: _invoiceOverlayId!,
-                              onClose: _closeOverlay,
-                            ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -581,7 +670,6 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
             children: [
               GestureDetector(
                 onTap: () {
-                  // navigate to Profile screen inside main content
                   _onMenuSelected("Profile");
                 },
                 child: Row(
@@ -642,7 +730,6 @@ class _OverlaySheet extends StatelessWidget {
     final widthFactor = isDesktop ? 0.7 : 1.0;
     final heightFactor = isDesktop ? 0.92 : 1.0;
 
-    // Adaptive scrim for dark/light
     final Color scrimColor = isDark ? Colors.black.withOpacity(0.40) : Colors.black.withOpacity(0.15);
 
     return AnimatedBuilder(
@@ -696,6 +783,19 @@ class _OverlaySheet extends StatelessWidget {
   }
 }
 
-class DismissIntent extends Intent { const DismissIntent(); }
-class NewSaleIntent extends Intent { const NewSaleIntent(); }
-class NewPurchaseIntent extends Intent { const NewPurchaseIntent(); }
+class DismissIntent extends Intent {
+  const DismissIntent();
+}
+
+class NewSaleIntent extends Intent {
+  const NewSaleIntent();
+}
+
+class NewPurchaseIntent extends Intent {
+  const NewPurchaseIntent();
+}
+
+// An intent used to consume keys without further propagation if needed elsewhere.
+class DoNothingAndStopPropagationIntent extends Intent {
+  const DoNothingAndStopPropagationIntent();
+}

@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:sales_app/constants/colors.dart';
@@ -10,7 +9,6 @@ import 'package:sales_app/features/invoices/bloc/invoice_state.dart';
 import 'package:sales_app/features/invoices/data/invoice_model.dart';
 import 'package:sales_app/features/invoices/presentation/invoice_overlay_screen.dart';
 import 'package:sales_app/features/customers/data/customer_model.dart';
-import 'package:sales_app/config/config.dart';
 
 class InvoicesScreen extends StatefulWidget {
   final void Function(Invoice)? onOpenOverlay;
@@ -35,7 +33,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
   Future<void> _loadCustomers() async {
     setState(() => _loadingCustomers = true);
     try {
-      final svc = CustomerService(baseUrl: AppConfig.baseUrl);
+      final svc = context.read<CustomerService>();
       final list = await svc.getCustomers(page: 1, limit: 1000);
       for (final c in list) {
         if (c.id != null) _customers[c.id!] = c;
@@ -54,10 +52,14 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
       listenWhen: (a, b) => b is InvoiceOperationSuccess || b is InvoicesError,
       listener: (context, state) {
         if (state is InvoiceOperationSuccess) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(state.message), backgroundColor: AppColors.kSuccess));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(state.message), backgroundColor: AppColors.kSuccess),
+          );
         }
         if (state is InvoicesError) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(state.message), backgroundColor: AppColors.kError));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(state.message), backgroundColor: AppColors.kError),
+          );
         }
       },
       buildWhen: (a, b) => b is InvoicesLoading || b is InvoicesLoaded,
@@ -75,7 +77,6 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                 return name.contains(q) || i.id.toString().contains(q);
               }).toList();
 
-        // Group by status for readability
         final paid = filtered.where((i) => i.status == 'paid').toList();
         final unpaid = filtered.where((i) => i.status != 'paid').toList();
 
@@ -161,7 +162,6 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                       if (widget.onOpenOverlay != null) {
                         widget.onOpenOverlay!(inv);
                       } else {
-                        // Fallback inline dialog
                         showDialog(
                           context: context,
                           builder: (_) => Dialog(

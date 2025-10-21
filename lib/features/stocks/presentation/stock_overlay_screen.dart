@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
@@ -57,7 +58,7 @@ class _StockOverlayScreenState extends State<StockOverlayScreen> {
   SupplierOption? _selectedSupplier;
   bool _loadingSuppliers = false;
 
-  // Supplier name for View mode (ensure we show name, not id)
+  // Supplier name for View mode
   String? _viewSupplierName;
   bool _loadingViewSupplierName = false;
 
@@ -116,9 +117,7 @@ class _StockOverlayScreenState extends State<StockOverlayScreen> {
     }
     setState(() => _loadingViewSupplierName = true);
     try {
-      // Reuse ProductService suppliers endpoint
       final ps = context.read<ProductService>();
-      // Use the in-memory results if already loaded during add flow, else fetch
       if (_supplierResults.isEmpty) {
         final list = await ps.getSuppliers();
         _supplierResults = list;
@@ -173,42 +172,56 @@ class _StockOverlayScreenState extends State<StockOverlayScreen> {
   void _snack(String msg, {Color? color}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: color ?? AppColors.kPrimary),
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: color ?? AppColors.kPrimary,
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final isSmall = MediaQuery.of(context).size.width < AppSizes.mobileBreakpoint;
 
     return Scaffold(
-      backgroundColor: AppColors.kBackground,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: AppColors.kPrimary,
-        foregroundColor: AppColors.kTextOnPrimary,
+        backgroundColor: cs.surface,
+        foregroundColor: cs.onSurface,
         elevation: 0,
         title: Text(_titleForMode(widget.mode)),
         actions: [
           IconButton(icon: const Icon(Icons.close), onPressed: _close, tooltip: 'Close'),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: EdgeInsets.all(isSmall ? AppSizes.padding : AppSizes.padding * 2),
-        child: Container(
-          padding: EdgeInsets.all(isSmall ? AppSizes.padding : AppSizes.padding * 1.5),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(AppSizes.borderRadius),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        switchInCurve: Curves.easeOut,
+        switchOutCurve: Curves.easeIn,
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(isSmall ? AppSizes.padding : AppSizes.padding * 2),
+          physics: const BouncingScrollPhysics(),
+          child: Container(
+            padding: EdgeInsets.all(isSmall ? AppSizes.padding : AppSizes.padding * 1.5),
+            decoration: BoxDecoration(
+              color: theme.cardColor,
+              borderRadius: BorderRadius.circular(AppSizes.borderRadius),
+              border: Border.all(color: cs.outlineVariant, width: 1.2),
+              boxShadow: [
+                if (theme.brightness == Brightness.light)
+                  const BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4)),
+              ],
+            ),
+            child: _buildContent(),
           ),
-          child: _buildContent(),
         ),
+      ),
+      bottomNavigationBar: SafeArea(
+        minimum: const EdgeInsets.all(12),
+        child: _buildBottomBar(),
       ),
     );
   }
@@ -216,7 +229,7 @@ class _StockOverlayScreenState extends State<StockOverlayScreen> {
   String _titleForMode(StockOverlayMode mode) {
     switch (mode) {
       case StockOverlayMode.view:
-        return 'Stock Transaction Details';
+        return 'Stock Transaction';
       case StockOverlayMode.addStock:
         return 'Add Stock';
       case StockOverlayMode.edit:
@@ -229,186 +242,159 @@ class _StockOverlayScreenState extends State<StockOverlayScreen> {
   Widget _buildContent() {
     switch (widget.mode) {
       case StockOverlayMode.view:
-        return _buildTxnView();
+        return _buildTxnViewMobileFirst();
       case StockOverlayMode.addStock:
-        return _buildAddStock();
+        return _buildAddStockMobileFirst();
       case StockOverlayMode.edit:
-        return _buildTxnEdit();
+        return _buildTxnEditMobileFirst();
       case StockOverlayMode.deleteConfirm:
-        return _buildTxnDeleteConfirm();
+        return _buildTxnDeleteConfirmMobileFirst();
     }
   }
 
-  // VIEW TRANSACTION
-  Widget _buildTxnView() {
+  // ---------------- VIEW (Mobile-first, responsive) ----------------
+  Widget _buildTxnViewMobileFirst() {
     final t = widget.transaction!;
-    final isDesktop = Responsive.isDesktop(context);
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
-    Widget field(String label, String value) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: AppSizes.padding),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: AppColors.kTextSecondary, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            Text(value, style: Theme.of(context).textTheme.bodyLarge),
-          ],
-        ),
-      );
-    }
+    final createdAt = DateFormat.yMMMd().add_jm().format(t.date);
+    final supplierText = _loadingViewSupplierName
+        ? 'Loading...'
+        : (_viewSupplierName ?? t.supplierName ?? 'N/A');
 
-    final supplierText = () {
-      if (_loadingViewSupplierName) return 'Loading supplier...';
-      final name = _viewSupplierName ?? t.supplierName;
-      return name ?? 'N/A';
-    }();
-
-    final fields = [
-      field('Product', (t.productName ?? 'Product #${t.productId}')),
-      field('Supplier', supplierText),
-      field('Amount Added', t.amountAdded.toStringAsFixed(2)),
-      field('Price per Unit', _money.format(t.pricePerUnit)),
-      field('Total Cost', _money.format(t.totalCost)),
-      field('Unit', t.unitName ?? 'N/A'),
-      field('User ID', t.userId.toString()),
-      field('Date', DateFormat.yMMMd().add_jm().format(t.date)),
-      field('Transaction ID', '#${t.id}'),
+    final kpis = <_Kpi>[
+      _Kpi(label: 'Quantity Added', value: t.amountAdded.toStringAsFixed(2), icon: Icons.add_chart),
+      _Kpi(label: 'Price/Unit', value: _money.format(t.pricePerUnit), icon: Icons.price_change_outlined),
+      _Kpi(label: 'Total Cost', value: _money.format(t.totalCost), icon: Icons.account_balance_wallet_outlined),
+      _Kpi(label: 'Date', value: createdAt, icon: Icons.event),
     ];
 
-    Widget details() {
-      if (isDesktop) {
-        final split = (fields.length / 2).ceil();
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: Column(children: fields.sublist(0, split))),
-            const SizedBox(width: AppSizes.largePadding),
-            Expanded(child: Column(children: fields.sublist(split))),
-          ],
-        );
-      }
-      return Column(children: fields);
-    }
+    final details = <_Detail>[
+      _Detail('Transaction ID', '#${t.id}', copyable: true),
+      _Detail('Product', t.productName ?? 'Product #${t.productId}'),
+      _Detail('Unit', t.unitName ?? 'N/A'),
+      _Detail('Supplier', supplierText),
+      _Detail('User ID', t.userId.toString()),
+    ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
+        _HeaderCard(
+          title: 'Txn #${t.id}',
+          subtitle: t.productName ?? 'Product #${t.productId}',
+          icon: Icons.receipt_long,
+          color: cs.primary,
+        ),
+        const SizedBox(height: AppSizes.padding),
+
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
           children: [
-            CircleAvatar(
-              radius: 28,
-              backgroundColor: AppColors.kPrimary.withValues(alpha: 0.1),
-              child:  Icon(Icons.receipt_long, color: AppColors.kPrimary),
-            ),
-            const SizedBox(width: AppSizes.padding),
-            Expanded(
-              child: Text(
-                'Txn #${t.id}',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
+            if (t.unitName != null && t.unitName!.isNotEmpty) _TagChip(label: t.unitName!),
+            if ((t.productName ?? '').isNotEmpty) _TagChip(label: t.productName!),
+            if ((supplierText).isNotEmpty && supplierText != 'N/A') _TagChip(label: supplierText),
           ],
         ),
+
         const SizedBox(height: AppSizes.largePadding),
-        details(),
+        _KpiGrid(items: kpis),
+
         const SizedBox(height: AppSizes.largePadding),
-        Align(
-          alignment: Alignment.centerRight,
-          child: ElevatedButton(
-            onPressed: widget.onCancel,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.kPrimary,
-              foregroundColor: AppColors.kTextOnPrimary,
-              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 18),
-            ),
-            child: const Text('Close'),
-          ),
-        ),
+        _DetailsGrid(items: details),
       ],
     );
   }
 
-  // ADD STOCK
-  Widget _buildAddStock() {
+  // ---------------- ADD STOCK (Mobile-first) ----------------
+  Widget _buildAddStockMobileFirst() {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    Widget productSelector() {
+      final hasSelection = _selectedProduct != null;
+      return AnimatedSwitcher(
+        duration: const Duration(milliseconds: 250),
+        child: hasSelection
+            ? _SelectedTile(
+                leadingIcon: Icons.inventory_2,
+                color: cs.primary,
+                title: _selectedProduct!.name,
+                subtitle: 'ID: ${_selectedProduct!.id} • In stock: ${_selectedProduct!.quantity.toStringAsFixed(2)}',
+                onClear: widget.product == null ? () => setState(() => _selectedProduct = null) : null,
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  CustomInput(
+                    controller: _productSearchController,
+                    label: 'Search Product',
+                    prefixIcon: Icons.search,
+                  ),
+                  const SizedBox(height: AppSizes.smallPadding),
+                  SizedBox(
+                    height: 220,
+                    child: _loadingProducts
+                        ? const Center(child: CircularProgressIndicator())
+                        : _buildProductResults(),
+                  ),
+                ],
+              ),
+      );
+    }
+
+    Widget supplierSelector() {
+      final hasSelection = _selectedSupplier != null;
+      return AnimatedSwitcher(
+        duration: const Duration(milliseconds: 250),
+        child: hasSelection
+            ? _SelectedTile(
+                leadingIcon: Icons.local_shipping,
+                color: cs.primary,
+                title: _selectedSupplier!.name,
+                subtitle: 'ID: ${_selectedSupplier!.id}',
+                onClear: () => setState(() => _selectedSupplier = null),
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  CustomInput(
+                    controller: _supplierSearchController,
+                    label: 'Search Supplier',
+                    prefixIcon: Icons.search,
+                  ),
+                  const SizedBox(height: AppSizes.smallPadding),
+                  SizedBox(
+                    height: 200,
+                    child: _loadingSuppliers
+                        ? const Center(child: CircularProgressIndicator())
+                        : _buildSupplierResults(),
+                  ),
+                ],
+              ),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Add Stock',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+        _HeaderCard(
+          title: 'Add Stock',
+          subtitle: _selectedProduct?.name ?? 'Select a product and supplier',
+          icon: Icons.add_shopping_cart,
+          color: cs.primary,
+        ),
         const SizedBox(height: AppSizes.largePadding),
 
-        // Product selector
-        if (_selectedProduct != null)
-          _SelectedProductTile(
-            product: _selectedProduct!,
-            onClear: widget.product == null
-                ? () {
-                    setState(() => _selectedProduct = null);
-                  }
-                : null,
-          )
-        else
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              CustomInput(
-                controller: _productSearchController,
-                label: 'Search Product',
-                prefixIcon: Icons.search,
-              ),
-              const SizedBox(height: AppSizes.smallPadding),
-              SizedBox(
-                height: 200,
-                child: _loadingProducts
-                    ? const Center(child: CircularProgressIndicator())
-                    : _buildProductResults(),
-              ),
-              const SizedBox(height: AppSizes.padding),
-            ],
-          ),
+        productSelector(),
+        const SizedBox(height: AppSizes.largePadding),
 
-        // Supplier selector
-        Text('Supplier', style: Theme.of(context).textTheme.titleMedium),
+        Text('Supplier', style: theme.textTheme.titleMedium),
         const SizedBox(height: AppSizes.smallPadding),
-        if (_selectedSupplier != null)
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: CircleAvatar(
-              backgroundColor: AppColors.kPrimary.withValues(alpha: 0.08),
-              child:  Icon(Icons.local_shipping, color: AppColors.kPrimary),
-            ),
-            title: Text(_selectedSupplier!.name, overflow: TextOverflow.ellipsis),
-            subtitle: Text('ID: ${_selectedSupplier!.id}'),
-            trailing: IconButton(
-              icon: const Icon(Icons.close),
-              onPressed: () => setState(() => _selectedSupplier = null),
-            ),
-          )
-        else
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              CustomInput(
-                controller: _supplierSearchController,
-                label: 'Search Supplier',
-                prefixIcon: Icons.search,
-              ),
-              const SizedBox(height: AppSizes.smallPadding),
-              SizedBox(
-                height: 180,
-                child: _loadingSuppliers
-                    ? const Center(child: CircularProgressIndicator())
-                    : _buildSupplierResults(),
-              ),
-            ],
-          ),
-        const SizedBox(height: AppSizes.padding),
+        supplierSelector(),
+        const SizedBox(height: AppSizes.largePadding),
 
         Form(
           key: _addFormKey,
@@ -442,34 +428,6 @@ class _StockOverlayScreenState extends State<StockOverlayScreen> {
             ],
           ),
         ),
-        const SizedBox(height: AppSizes.largePadding),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: widget.onCancel,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.kTextSecondary,
-                  side: const BorderSide(color: AppColors.kDivider),
-                  padding: const EdgeInsets.symmetric(vertical: AppSizes.smallPadding),
-                ),
-                child: const Text('Cancel'),
-              ),
-            ),
-            const SizedBox(width: AppSizes.padding),
-            Expanded(
-              child: ElevatedButton(
-                onPressed: _submitAddStock,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.kPrimary,
-                  foregroundColor: AppColors.kTextOnPrimary,
-                  padding: const EdgeInsets.symmetric(vertical: AppSizes.smallPadding),
-                ),
-                child: const Text('Add'),
-              ),
-            ),
-          ],
-        ),
       ],
     );
   }
@@ -490,12 +448,13 @@ class _StockOverlayScreenState extends State<StockOverlayScreen> {
       itemBuilder: (context, index) {
         final p = filtered[index];
         return ListTile(
+          leading: CircleAvatar(
+            backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+            child: Icon(Icons.inventory_2, color: Theme.of(context).colorScheme.primary),
+          ),
           title: Text(p.name, overflow: TextOverflow.ellipsis),
           subtitle: Text('ID: ${p.id} • In stock: ${p.quantity.toStringAsFixed(2)}'),
-          leading: const Icon(Icons.inventory_2),
-          onTap: () {
-            setState(() => _selectedProduct = p);
-          },
+          onTap: () => setState(() => _selectedProduct = p),
         );
       },
     );
@@ -517,31 +476,218 @@ class _StockOverlayScreenState extends State<StockOverlayScreen> {
       itemBuilder: (context, index) {
         final s = filtered[index];
         return ListTile(
+          leading: CircleAvatar(
+            backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+            child: Icon(Icons.local_shipping, color: Theme.of(context).colorScheme.primary),
+          ),
           title: Text(s.name, overflow: TextOverflow.ellipsis),
           subtitle: Text('ID: ${s.id}'),
-          leading: const Icon(Icons.local_shipping),
-          onTap: () {
-            setState(() => _selectedSupplier = s);
-          },
+          onTap: () => setState(() => _selectedSupplier = s),
         );
       },
     );
   }
 
+  // ---------------- EDIT TXN (Mobile-first) ----------------
+  Widget _buildTxnEditMobileFirst() {
+    final t = widget.transaction!;
+    final theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _HeaderCard(
+          title: 'Edit Txn #${t.id}',
+          subtitle: t.productName ?? 'Product #${t.productId}',
+          icon: Icons.edit_note,
+          color: theme.colorScheme.primary,
+        ),
+        const SizedBox(height: AppSizes.largePadding),
+
+        Form(
+          key: _editTxnFormKey,
+          child: Column(
+            children: [
+              CustomInput(
+                controller: _editAmountController,
+                label: 'Amount Added',
+                prefixIcon: Icons.add,
+                keyboardType: TextInputType.number,
+                validator: (v) => _positiveValidator(v, 'Amount'),
+              ),
+              const SizedBox(height: AppSizes.padding),
+              CustomInput(
+                controller: _editPricePerUnitController,
+                label: 'Price per Unit',
+                prefixIcon: Icons.attach_money,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                validator: (v) => _positiveValidator(v, 'Price per unit'),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  String? _positiveValidator(String? value, String label) {
+    if (value == null || value.isEmpty) return '$label cannot be empty';
+    final v = double.tryParse(value);
+    if (v == null || v <= 0) return 'Enter a valid positive number';
+    return null;
+  }
+
+  // ---------------- DELETE CONFIRM (Mobile-first) ----------------
+  Widget _buildTxnDeleteConfirmMobileFirst() {
+    final t = widget.transaction!;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _HeaderCard(
+          title: 'Delete Txn #${t.id}',
+          subtitle: 'This action cannot be undone',
+          icon: Icons.warning_amber_rounded,
+          color: cs.error,
+        ),
+        const SizedBox(height: AppSizes.padding),
+        Text(
+          'Are you sure you want to delete this stock transaction?',
+          style: theme.textTheme.bodyLarge,
+        ),
+      ],
+    );
+  }
+
+  // ---------------- Bottom action bar (sticky) ----------------
+  Widget _buildBottomBar() {
+    final cs = Theme.of(context).colorScheme;
+
+    switch (widget.mode) {
+      case StockOverlayMode.view:
+        return ElevatedButton(
+          onPressed: _close,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: cs.primary,
+            foregroundColor: cs.onPrimary,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+          child: const Text('Close'),
+        );
+
+      case StockOverlayMode.addStock:
+        return Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: widget.onCancel,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: cs.onSurfaceVariant,
+                  side: BorderSide(color: cs.outline),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                child: const Text('Cancel'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: _submitAddStock,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: cs.primary,
+                  foregroundColor: cs.onPrimary,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                child: const Text('Add'),
+              ),
+            ),
+          ],
+        );
+
+      case StockOverlayMode.edit:
+        return Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: widget.onCancel,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: cs.onSurfaceVariant,
+                  side: BorderSide(color: cs.outline),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                child: const Text('Cancel'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: _submitTxnEdit,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: cs.primary,
+                  foregroundColor: cs.onPrimary,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                child: const Text('Save'),
+              ),
+            ),
+          ],
+        );
+
+      case StockOverlayMode.deleteConfirm:
+        return Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: widget.onCancel,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: cs.onSurfaceVariant,
+                  side: BorderSide(color: cs.outline),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                child: const Text('Cancel'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: _confirmTxnDelete,
+                icon: const Icon(Icons.delete),
+                label: const Text('Delete'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.error,
+                  foregroundColor: Theme.of(context).colorScheme.onError,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+            ),
+          ],
+        );
+    }
+  }
+
+  // ---------------- Actions ----------------
   void _submitAddStock() {
     if (_selectedProduct == null) {
-      _snack('Please select a product first.', color: AppColors.kError);
+      _snack('Please select a product first.', color: Theme.of(context).colorScheme.error);
       return;
     }
     if (!(_addFormKey.currentState?.validate() ?? false)) return;
 
     final authState = context.read<AuthBloc>().state;
     if (authState is! AuthAuthenticated) {
-      _snack('User is not authenticated.', color: AppColors.kError);
+      _snack('User is not authenticated.', color: Theme.of(context).colorScheme.error);
       return;
     }
 
-    // Dispatch with product & supplier so it shows instantly and links on backend
     context.read<StockBloc>().add(
           AddStockToProduct(
             productId: _selectedProduct!.id,
@@ -555,104 +701,6 @@ class _StockOverlayScreenState extends State<StockOverlayScreen> {
     widget.onSaved?.call();
   }
 
-  // EDIT TRANSACTION
-  Widget _buildTxnEdit() {
-    final t = widget.transaction!;
-    final isDesktop = Responsive.isDesktop(context);
-
-    Widget twoCol() => Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(children: [
-                CustomInput(
-                  controller: _editAmountController,
-                  label: 'Amount Added',
-                  prefixIcon: Icons.add,
-                  keyboardType: TextInputType.number,
-                  validator: (v) => _positiveValidator(v, 'Amount'),
-                ),
-              ]),
-            ),
-            const SizedBox(width: AppSizes.padding),
-            Expanded(
-              child: Column(children: [
-                CustomInput(
-                  controller: _editPricePerUnitController,
-                  label: 'Price per Unit',
-                  prefixIcon: Icons.attach_money,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  validator: (v) => _positiveValidator(v, 'Price per unit'),
-                ),
-              ]),
-            ),
-          ],
-        );
-
-    Widget oneCol() => Column(children: [
-          CustomInput(
-            controller: _editAmountController,
-            label: 'Amount Added',
-            prefixIcon: Icons.add,
-            keyboardType: TextInputType.number,
-            validator: (v) => _positiveValidator(v, 'Amount'),
-          ),
-          const SizedBox(height: AppSizes.padding),
-          CustomInput(
-            controller: _editPricePerUnitController,
-            label: 'Price per Unit',
-            prefixIcon: Icons.attach_money,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            validator: (v) => _positiveValidator(v, 'Price per unit'),
-          ),
-        ]);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text('Edit Txn #${t.id}',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-        const SizedBox(height: AppSizes.largePadding),
-        Form(key: _editTxnFormKey, child: isDesktop ? twoCol() : oneCol()),
-        const SizedBox(height: AppSizes.largePadding),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: widget.onCancel,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.kTextSecondary,
-                  side: const BorderSide(color: AppColors.kDivider),
-                  padding: const EdgeInsets.symmetric(vertical: AppSizes.smallPadding),
-                ),
-                child: const Text('Cancel'),
-              ),
-            ),
-            const SizedBox(width: AppSizes.padding),
-            Expanded(
-              child: ElevatedButton(
-                onPressed: _submitTxnEdit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.kPrimary,
-                  foregroundColor: AppColors.kTextOnPrimary,
-                  padding: const EdgeInsets.symmetric(vertical: AppSizes.smallPadding),
-                ),
-                child: const Text('Save'),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  String? _positiveValidator(String? value, String label) {
-    if (value == null || value.isEmpty) return '$label cannot be empty';
-    final v = double.tryParse(value);
-    if (v == null || v <= 0) return 'Enter a valid positive number';
-    return null;
-  }
-
   void _submitTxnEdit() {
     if (!(_editTxnFormKey.currentState?.validate() ?? false)) return;
     final id = widget.transaction!.id;
@@ -664,84 +712,265 @@ class _StockOverlayScreenState extends State<StockOverlayScreen> {
     widget.onSaved?.call();
   }
 
-  // DELETE TRANSACTION
-  Widget _buildTxnDeleteConfirm() {
-    final t = widget.transaction!;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(children: [
-          const Icon(Icons.warning_amber_rounded, color: AppColors.kError),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Delete Txn #${t.id}',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge
-                  ?.copyWith(color: AppColors.kError, fontWeight: FontWeight.bold),
-            ),
-          ),
-        ]),
-        const SizedBox(height: AppSizes.padding),
-        Text(
-          'Are you sure you want to delete this stock transaction? This action cannot be undone.',
-          style: Theme.of(context).textTheme.bodyMedium,
-        ),
-        const SizedBox(height: AppSizes.largePadding),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: widget.onCancel,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.kTextSecondary,
-                  side: const BorderSide(color: AppColors.kDivider),
-                  padding: const EdgeInsets.symmetric(vertical: AppSizes.smallPadding),
-                ),
-                child: const Text('Cancel'),
-              ),
-            ),
-            const SizedBox(width: AppSizes.padding),
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: _confirmTxnDelete,
-                icon: const Icon(Icons.delete),
-                label: const Text('Delete'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.kError,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: AppSizes.smallPadding),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
   void _confirmTxnDelete() {
     context.read<StockBloc>().add(DeleteStockTransactionEvent(widget.transaction!.id));
     widget.onSaved?.call();
   }
 }
 
-class _SelectedProductTile extends StatelessWidget {
-  final Product product;
+// ---------------- UI helpers ----------------
+
+class _HeaderCard extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final IconData icon;
+  final Color color;
+
+  const _HeaderCard({
+    required this.title,
+    required this.icon,
+    required this.color,
+    this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+              if (subtitle != null && subtitle!.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(subtitle!, style: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
+                ),
+            ]),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TagChip extends StatelessWidget {
+  final String label;
+  const _TagChip({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Chip(
+      label: Text(label),
+      labelStyle: TextStyle(color: cs.primary),
+      side: BorderSide(color: cs.primary.withOpacity(0.4)),
+      backgroundColor: cs.primary.withOpacity(0.08),
+      visualDensity: VisualDensity.compact,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
+  }
+}
+
+class _Kpi {
+  final String label;
+  final String value;
+  final IconData icon;
+
+  _Kpi({required this.label, required this.value, required this.icon});
+}
+
+class _KpiGrid extends StatelessWidget {
+  final List<_Kpi> items;
+  const _KpiGrid({required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, c) {
+      final w = c.maxWidth;
+      final cols = w < 420 ? 1 : (w < 680 ? 2 : 4);
+      final itemWidth = (w - (cols - 1) * 12) / cols;
+
+      return Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        children: items
+            .map((e) => SizedBox(
+                  width: itemWidth,
+                  child: _KpiCard(kpi: e),
+                ))
+            .toList(),
+      );
+    });
+  }
+}
+
+class _KpiCard extends StatelessWidget {
+  final _Kpi kpi;
+  const _KpiCard({required this.kpi});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: cs.primary.withOpacity(0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(kpi.icon, color: cs.primary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(kpi.label, style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                const SizedBox(height: 2),
+                Text(kpi.value, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Detail {
+  final String label;
+  final String value;
+  final bool copyable;
+
+  _Detail(this.label, this.value, {this.copyable = false});
+}
+
+class _DetailsGrid extends StatelessWidget {
+  final List<_Detail> items;
+  const _DetailsGrid({required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, c) {
+      final w = c.maxWidth;
+      final cols = w < 420 ? 1 : 2;
+      final itemWidth = (w - (cols - 1) * 12) / cols;
+
+      return Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        children: items
+            .map(
+              (d) => SizedBox(
+                width: itemWidth,
+                child: _DetailCard(detail: d),
+              ),
+            )
+            .toList(),
+      );
+    });
+  }
+}
+
+class _DetailCard extends StatelessWidget {
+  final _Detail detail;
+  const _DetailCard({required this.detail});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(detail.label, style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 6),
+              SelectableText(detail.value, style: theme.textTheme.bodyLarge),
+            ]),
+          ),
+          if (detail.copyable)
+            IconButton(
+              tooltip: 'Copy',
+              icon: const Icon(Icons.copy_all_rounded, size: 18),
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: detail.value));
+                HapticFeedback.selectionClick();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Copied "${detail.value}"'), behavior: SnackBarBehavior.floating),
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SelectedTile extends StatelessWidget {
+  final IconData leadingIcon;
+  final Color color;
+  final String title;
+  final String? subtitle;
   final VoidCallback? onClear;
-  const _SelectedProductTile({required this.product, this.onClear});
+
+  const _SelectedTile({
+    required this.leadingIcon,
+    required this.color,
+    required this.title,
+    this.subtitle,
+    this.onClear,
+  });
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: CircleAvatar(
-        backgroundColor: AppColors.kPrimary.withValues(alpha: 0.1),
-        child: Icon(Icons.inventory_2, color: AppColors.kPrimary),
+        backgroundColor: color.withOpacity(0.1),
+        child: Icon(leadingIcon, color: color),
       ),
-      title: Text(product.name, overflow: TextOverflow.ellipsis),
-      subtitle: Text('ID: ${product.id} • In stock: ${product.quantity.toStringAsFixed(2)}'),
+      title: Text(title, overflow: TextOverflow.ellipsis),
+      subtitle: (subtitle != null && subtitle!.isNotEmpty) ? Text(subtitle!) : null,
       trailing: onClear != null ? IconButton(icon: const Icon(Icons.close), onPressed: onClear) : null,
     );
   }
