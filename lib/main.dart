@@ -21,7 +21,7 @@ import 'package:sales_app/features/invoices/bloc/invoice_bloc.dart';
 import 'package:sales_app/features/invoices/bloc/invoice_event.dart';
 import 'package:sales_app/features/invoices/services/invoice_services.dart';
 
-// Notifications (Socket.IO realtime)
+// Notifications
 import 'package:sales_app/features/notitications/bloc/notification_bloc.dart';
 import 'package:sales_app/features/notitications/bloc/notification_event.dart';
 import 'package:sales_app/features/notitications/services/notification_socket_services.dart';
@@ -56,6 +56,7 @@ import 'package:sales_app/features/reports/services/reports_service.dart';
 import 'package:sales_app/features/reports/repository/reports_repository.dart';
 import 'package:sales_app/features/reports/bloc/reports_bloc.dart';
 import 'package:sales_app/features/reports/bloc/reports_event.dart';
+import 'package:sales_app/features/units/services/unit_services.dart';
 
 // Users
 import 'package:sales_app/features/users/services/users_api_service.dart';
@@ -82,10 +83,17 @@ import 'package:sales_app/features/settings/services/settings_service.dart';
 import 'package:sales_app/features/settings/bloc/settings_bloc.dart';
 import 'package:sales_app/features/settings/bloc/settings_event.dart';
 
-// Expenses (NEW)
+// Expenses
 import 'package:sales_app/features/expenses/services/expense_services.dart';
 import 'package:sales_app/features/expenses/bloc/expense_bloc.dart';
 import 'package:sales_app/features/expenses/bloc/expense_event.dart';
+
+// New: Categories & Units
+import 'package:sales_app/features/categories/services/category_service.dart';
+import 'package:sales_app/features/categories/bloc/category_bloc.dart';
+import 'package:sales_app/features/categories/bloc/category_event.dart';
+import 'package:sales_app/features/units/bloc/unit_bloc.dart';
+import 'package:sales_app/features/units/bloc/unit_event.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -111,9 +119,13 @@ void main() async {
   final usersRepository = UsersRepository(api: usersApiService, auth: authRepository);
   final purchaseService = PurchaseService();
   final dashboardService = DashboardService(purchaseService: purchaseService, salesService: salesService);
-  final notificationSocketService = NotificationSocketService(); // Socket.IO realtime notifications
+  final notificationSocketService = NotificationSocketService();
   final settingsService = SettingsService(baseUrl: baseUrl, client: httpClient);
   final expenseService = ExpenseService(baseUrl: baseUrl, client: httpClient);
+
+  // New services
+  final categoryService = CategoryService(baseUrl: baseUrl, client: httpClient);
+  final unitService = UnitService(baseUrl: baseUrl, client: httpClient);
 
   runApp(
     MultiRepositoryProvider(
@@ -135,8 +147,10 @@ void main() async {
         RepositoryProvider<DashboardService>(create: (_) => dashboardService),
         RepositoryProvider<SettingsService>(create: (_) => settingsService),
         RepositoryProvider<ExpenseService>(create: (_) => expenseService),
-        // Realtime notifications service (Socket.IO)
         RepositoryProvider<NotificationSocketService>(create: (_) => notificationSocketService),
+        // New
+        RepositoryProvider<CategoryService>(create: (_) => categoryService),
+        RepositoryProvider<UnitService>(create: (_) => unitService),
       ],
       child: MultiBlocProvider(
         providers: [
@@ -145,9 +159,7 @@ void main() async {
                 productService: context.read<ProductService>(),
                 stockService: context.read<StockService>(),
               )),
-          BlocProvider<ProductsBloc>(create: (context) => ProductsBloc(
-                productService: context.read<ProductService>(),
-              )),
+          BlocProvider<ProductsBloc>(create: (context) => ProductsBloc(productService: context.read<ProductService>())),
           BlocProvider<SalesBloc>(create: (context) => SalesBloc(
                 repository: SalesRepository(service: context.read<SalesService>()),
                 productsBloc: context.read<ProductsBloc>(),
@@ -163,17 +175,18 @@ void main() async {
           BlocProvider<DashboardBloc>(create: (context) => DashboardBloc(service: context.read<DashboardService>())),
           BlocProvider<SettingsBloc>(create: (context) => SettingsBloc(context.read<SettingsService>())),
           BlocProvider<ExpenseBloc>(create: (context) => ExpenseBloc(service: context.read<ExpenseService>())),
-          // Realtime Notifications BLoC (uses Socket.IO service)
           BlocProvider<NotificationBloc>(
             create: (context) => NotificationBloc(service: context.read<NotificationSocketService>())
               ..add(const StartNotifications()),
           ),
+          // New blocs
+          BlocProvider<CategoryBloc>(create: (context) => CategoryBloc(service: context.read<CategoryService>())..add(const LoadCategories())),
+          BlocProvider<UnitBloc>(create: (context) => UnitBloc(service: context.read<UnitService>())..add(const LoadUnits())),
         ],
         child: BlocListener<AuthBloc, AuthState>(
           listenWhen: (prev, next) => next is AuthAuthenticated || next is AuthUnauthenticated,
           listener: (context, state) {
             if (state is AuthAuthenticated) {
-              // Kick off initial data loads after successful auth
               context.read<ProductsBloc>().add(FetchProducts());
               context.read<StockBloc>().add(const LoadProducts(page: 1));
               context.read<CustomerBloc>().add(FetchCustomersPage(1, 20));
@@ -185,12 +198,8 @@ void main() async {
               context.read<SettingsBloc>().add(const LoadSettings());
               context.read<SettingsBloc>().add(const LoadCurrencies());
               context.read<ExpenseBloc>().add(const LoadExpenses());
-
-              // Optionally restart notifications with an auth token if available
-              // context.read<NotificationBloc>().add(StartNotifications(token: state.token));
             }
             if (state is AuthUnauthenticated) {
-              // Stop realtime notifications on logout
               context.read<NotificationBloc>().add(const StopNotifications());
             }
           },

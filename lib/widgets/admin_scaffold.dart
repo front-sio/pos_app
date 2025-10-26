@@ -30,6 +30,10 @@ import 'package:sales_app/features/users/presentation/pages/users_admin_screen.d
 // Expenses
 import 'package:sales_app/features/expenses/presentation/expenses_screen.dart';
 
+// Categories & Units
+import 'package:sales_app/features/categories/presentation/categories_screen.dart';
+import 'package:sales_app/features/units/presentation/units_screen.dart';
+
 // Models/Utils
 import 'package:sales_app/models/settings.dart';
 import 'package:sales_app/utils/responsive.dart';
@@ -187,6 +191,10 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
                 child: ProductsScreen(onOpenOverlay: _openProductOverlay),
               )
             : _forbidden();
+      case "Categories":
+        return _can("categories:view") ? const CategoriesScreen() : _forbidden();
+      case "Units":
+        return _can("units:view") ? const UnitsScreen() : _forbidden();
       case "Purchases":
         return _can("purchases:view") ? PurchasesScreen(onAddNewPurchase: _openNewPurchase) : _forbidden();
       case "Invoices":
@@ -373,6 +381,10 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
         return "dashboard:view";
       case "Products":
         return "products:view";
+      case "Categories":
+        return "categories:view";
+      case "Units":
+        return "units:view";
       case "Stock":
         return "stock:view";
       case "Purchases":

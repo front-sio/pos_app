@@ -4,6 +4,8 @@ import 'package:sales_app/rbac/rbac.dart';
 final List<Map<String, dynamic>> sidebarMenu = [
   {"label": "Dashboard", "icon": Icons.dashboard_outlined},
   {"label": "Products", "icon": Icons.add_box_outlined},
+  {"label": "Categories", "icon": Icons.category_outlined},
+  {"label": "Units", "icon": Icons.straighten},
   {"label": "Stock", "icon": Icons.inventory_2_outlined},
   {"label": "Purchases", "icon": Icons.shopping_cart_checkout_outlined},
   {"label": "Sales", "icon": Icons.point_of_sale_outlined},
@@ -20,6 +22,8 @@ final List<Map<String, dynamic>> sidebarMenu = [
 const Map<String, String> _menuPermissions = {
   "Dashboard": "dashboard:view",
   "Products": "products:view",
+  // "Categories": "categories:view",
+  // "Units": "units:view",
   "Stock": "stock:view",
   "Purchases": "purchases:view",
   "Sales": "sales:view",

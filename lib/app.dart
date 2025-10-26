@@ -8,9 +8,13 @@ import 'package:sales_app/theme/app_theme.dart';
 import 'package:sales_app/widgets/admin_scaffold.dart';
 import 'package:sales_app/widgets/app_loader.dart';
 
-// Routes
+// Existing routes
 import 'package:sales_app/features/notitications/presentation/notifications_screen.dart';
 
+
+// New: categories/units
+import 'package:sales_app/features/categories/presentation/categories_screen.dart';
+import 'package:sales_app/features/units/presentation/units_screen.dart';
 
 class PosBusinessApp extends StatelessWidget {
   const PosBusinessApp({super.key});
@@ -21,10 +25,11 @@ class PosBusinessApp extends StatelessWidget {
       title: "POS Business App",
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
-      // Named routes used by AppBar actions
       routes: {
         '/notifications': (_) => const NotificationsScreen(),
         '/settings': (_) => const CurrencySettingsScreen(),
+        '/categories': (_) => const _ScopedCategoriesScreen(),
+        '/units': (_) => const _ScopedUnitsScreen(),
       },
       onUnknownRoute: (settings) => MaterialPageRoute(
         builder: (_) => const _UnknownRouteScreen(),
@@ -48,6 +53,21 @@ class PosBusinessApp extends StatelessWidget {
       ),
     );
   }
+}
+
+// Provide scoped blocs via context.read in main.dart; here we just build screens
+class _ScopedCategoriesScreen extends StatelessWidget {
+  const _ScopedCategoriesScreen();
+
+  @override
+  Widget build(BuildContext context) => const CategoriesScreen();
+}
+
+class _ScopedUnitsScreen extends StatelessWidget {
+  const _ScopedUnitsScreen();
+
+  @override
+  Widget build(BuildContext context) => const UnitsScreen();
 }
 
 class _UnknownRouteScreen extends StatelessWidget {
