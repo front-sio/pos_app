@@ -22,8 +22,8 @@ final List<Map<String, dynamic>> sidebarMenu = [
 const Map<String, String> _menuPermissions = {
   "Dashboard": "dashboard:view",
   "Products": "products:view",
-  // "Categories": "categories:view",
-  // "Units": "units:view",
+  "Categories": "categories:view",
+  "Units": "units:view",
   "Stock": "stock:view",
   "Purchases": "purchases:view",
   "Sales": "sales:view",
