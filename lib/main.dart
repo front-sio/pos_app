@@ -21,6 +21,11 @@ import 'package:sales_app/features/invoices/bloc/invoice_bloc.dart';
 import 'package:sales_app/features/invoices/bloc/invoice_event.dart';
 import 'package:sales_app/features/invoices/services/invoice_services.dart';
 
+// Notifications (Socket.IO realtime)
+import 'package:sales_app/features/notitications/bloc/notification_bloc.dart';
+import 'package:sales_app/features/notitications/bloc/notification_event.dart';
+import 'package:sales_app/features/notitications/services/notification_socket_services.dart';
+
 // Products
 import 'package:sales_app/features/products/bloc/products_bloc.dart';
 import 'package:sales_app/features/products/bloc/products_event.dart';
@@ -106,11 +111,8 @@ void main() async {
   final usersRepository = UsersRepository(api: usersApiService, auth: authRepository);
   final purchaseService = PurchaseService();
   final dashboardService = DashboardService(purchaseService: purchaseService, salesService: salesService);
-
-  // Settings
+  final notificationSocketService = NotificationSocketService(); // Socket.IO realtime notifications
   final settingsService = SettingsService(baseUrl: baseUrl, client: httpClient);
-
-  // Expenses (NEW)
   final expenseService = ExpenseService(baseUrl: baseUrl, client: httpClient);
 
   runApp(
@@ -132,8 +134,9 @@ void main() async {
         RepositoryProvider<PurchaseService>(create: (_) => purchaseService),
         RepositoryProvider<DashboardService>(create: (_) => dashboardService),
         RepositoryProvider<SettingsService>(create: (_) => settingsService),
-        // Expenses (NEW)
         RepositoryProvider<ExpenseService>(create: (_) => expenseService),
+        // Realtime notifications service (Socket.IO)
+        RepositoryProvider<NotificationSocketService>(create: (_) => notificationSocketService),
       ],
       child: MultiBlocProvider(
         providers: [
@@ -158,15 +161,19 @@ void main() async {
           BlocProvider<ProfileBloc>(create: (context) => ProfileBloc(repository: context.read<UsersRepository>())),
           BlocProvider<PurchaseBloc>(create: (context) => PurchaseBloc(service: context.read<PurchaseService>())),
           BlocProvider<DashboardBloc>(create: (context) => DashboardBloc(service: context.read<DashboardService>())),
-          // SettingsBloc fixed: pass positional service argument
-          BlocProvider<SettingsBloc>(create: (context) => SettingsBloc(settingsService)),
-          // Expenses (NEW)
+          BlocProvider<SettingsBloc>(create: (context) => SettingsBloc(context.read<SettingsService>())),
           BlocProvider<ExpenseBloc>(create: (context) => ExpenseBloc(service: context.read<ExpenseService>())),
+          // Realtime Notifications BLoC (uses Socket.IO service)
+          BlocProvider<NotificationBloc>(
+            create: (context) => NotificationBloc(service: context.read<NotificationSocketService>())
+              ..add(const StartNotifications()),
+          ),
         ],
         child: BlocListener<AuthBloc, AuthState>(
           listenWhen: (prev, next) => next is AuthAuthenticated || next is AuthUnauthenticated,
           listener: (context, state) {
             if (state is AuthAuthenticated) {
+              // Kick off initial data loads after successful auth
               context.read<ProductsBloc>().add(FetchProducts());
               context.read<StockBloc>().add(const LoadProducts(page: 1));
               context.read<CustomerBloc>().add(FetchCustomersPage(1, 20));
@@ -177,8 +184,14 @@ void main() async {
               context.read<UsersBloc>().add(LoadUsers());
               context.read<SettingsBloc>().add(const LoadSettings());
               context.read<SettingsBloc>().add(const LoadCurrencies());
-              // Expenses (NEW)
               context.read<ExpenseBloc>().add(const LoadExpenses());
+
+              // Optionally restart notifications with an auth token if available
+              // context.read<NotificationBloc>().add(StartNotifications(token: state.token));
+            }
+            if (state is AuthUnauthenticated) {
+              // Stop realtime notifications on logout
+              context.read<NotificationBloc>().add(const StopNotifications());
             }
           },
           child: const PosBusinessApp(),
