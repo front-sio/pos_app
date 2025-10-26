@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:sales_app/rbac/rbac.dart'; // Adjust import path if needed
+import 'package:sales_app/rbac/rbac.dart';
 
 final List<Map<String, dynamic>> sidebarMenu = [
   {"label": "Dashboard", "icon": Icons.dashboard_outlined},
@@ -9,12 +9,29 @@ final List<Map<String, dynamic>> sidebarMenu = [
   {"label": "Sales", "icon": Icons.point_of_sale_outlined},
   {"label": "Returns", "icon": Icons.keyboard_return_outlined},
   {"label": "Invoices", "icon": Icons.receipt_long_outlined},
+  {"label": "Expenses", "icon": Icons.account_balance_wallet_outlined}, // Always visible
   {"label": "Reports", "icon": Icons.bar_chart_outlined},
   {"label": "Suppliers", "icon": Icons.people_outline},
   {"label": "Customers", "icon": Icons.people_outline},
   {"label": "Users", "icon": Icons.people_outline},
   {"label": "Settings", "icon": Icons.settings_outlined},
 ];
+
+const Map<String, String> _menuPermissions = {
+  "Dashboard": "dashboard:view",
+  "Products": "products:view",
+  "Stock": "stock:view",
+  "Purchases": "purchases:view",
+  "Sales": "sales:view",
+  "Returns": "returns:view",
+  "Invoices": "invoices:view",
+  "Expenses": "expenses:view",
+  "Reports": "reports:view",
+  "Suppliers": "suppliers:view",
+  "Customers": "customers:view",
+  "Users": "users:view",
+  "Settings": "settings:view",
+};
 
 class Sidebar extends StatefulWidget {
   final Function(String) onMenuSelected;
@@ -67,9 +84,16 @@ class _SidebarState extends State<Sidebar> {
 
   @override
   Widget build(BuildContext context) {
-    // Filter menus based on RBAC permissions
     final filteredMenu = sidebarMenu.where((menu) {
-      return Rbac.canMenu(context, menu['label']);
+      final label = (menu['label'] as String?) ?? '';
+
+      // Always show Dashboard and Expenses to all users
+      if (label == "Dashboard" || label == "Expenses") return true;
+
+      final perm = _menuPermissions[label];
+      final allowedByExplicitPerm = perm == null ? true : Rbac.can(context, perm);
+      final allowedByMenuHelper = Rbac.canMenu(context, label);
+      return allowedByExplicitPerm && allowedByMenuHelper;
     }).toList();
 
     return Container(
@@ -78,7 +102,6 @@ class _SidebarState extends State<Sidebar> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 🏷 Sidebar Header
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Text(
@@ -90,13 +113,11 @@ class _SidebarState extends State<Sidebar> {
             ),
           ),
           const Divider(height: 1),
-
-          // 🧭 Menu Items
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(12),
               children: filteredMenu
-                  .map((menu) => _buildItem(menu['icon'], menu['label']))
+                  .map((menu) => _buildItem(menu['icon'] as IconData, menu['label'] as String))
                   .toList(),
             ),
           ),

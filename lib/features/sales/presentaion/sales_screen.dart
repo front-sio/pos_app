@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 
 import 'package:sales_app/constants/colors.dart';
 import 'package:sales_app/constants/sizes.dart';
+import 'package:sales_app/utils/currency.dart';
 
 // Services and blocs
 import 'package:sales_app/features/customers/services/customer_services.dart';
@@ -18,6 +19,7 @@ import 'package:sales_app/features/sales/bloc/sales_event.dart';
 import 'package:sales_app/features/sales/bloc/sales_state.dart';
 import 'package:sales_app/features/sales/services/sales_service.dart';
 import 'package:sales_app/features/sales/services/realtime_sales.dart';
+import 'package:sales_app/features/invoices/services/realtime_invoices.dart';
 import 'package:sales_app/utils/interaction_lock.dart';
 
 // Models
@@ -55,14 +57,16 @@ class SalesScreen extends StatefulWidget {
 
 class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
   // Caches
-  final Map<int, String> _customerNames = {}; // saleId -> name
+  final Map<int, String> _customerNames = {}; // saleId -> customer name
   final Map<int, InvoiceStatus?> _invoiceBySale = {}; // saleId -> invoice
   final Map<int, int> _returnedQtyBySale = {}; // saleId -> sum returned qty
-  final Map<int, Future<_TileData>> _tileFutures = {}; // cache futures to avoid flicker
+  final Map<int, Future<_TileData>> _tileFutures = {}; // cache futures per tile
 
-  // Realtime via Socket.IO
-  final RealtimeSales _rt = RealtimeSales(debounce: const Duration(milliseconds: 500));
-  StreamSubscription<String>? _rtSub;
+  // Realtime
+  final RealtimeSales _rtSales = RealtimeSales(debounce: const Duration(milliseconds: 500));
+  final RealtimeInvoices _rtInvoices = RealtimeInvoices(debounce: const Duration(milliseconds: 500));
+  StreamSubscription<String>? _rtSalesSub;
+  StreamSubscription<String>? _rtInvSub;
 
   // Refresh throttling
   DateTime _lastRefresh = DateTime.fromMillisecondsSinceEpoch(0);
@@ -131,9 +135,14 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
   void _startRealtime() {
     _stopRealtime();
 
-    _rt.connect();
-    _rtSub = _rt.events.listen((type) {
-      if (kDebugMode) debugPrint('[SalesScreen][RT] event: $type');
+    _rtSales.connect();
+    _rtSalesSub = _rtSales.events.listen((type) {
+      _scheduleThrottledRefresh();
+    });
+
+    _rtInvoices.connect();
+    _rtInvSub = _rtInvoices.events.listen((type) {
+      // invoice changes should reflect on Sales status/due quickly
       _scheduleThrottledRefresh();
     });
 
@@ -150,10 +159,13 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
     _refreshDebounce?.cancel();
     _refreshDebounce = null;
 
-    _rtSub?.cancel();
-    _rtSub = null;
+    _rtSalesSub?.cancel();
+    _rtInvSub?.cancel();
+    _rtSalesSub = null;
+    _rtInvSub = null;
 
-    _rt.dispose();
+    _rtSales.dispose();
+    _rtInvoices.dispose();
   }
 
   Future<_TileData> _loadTileData(Sale sale) async {
@@ -365,7 +377,7 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
                                       width: 46,
                                       height: 46,
                                       decoration: BoxDecoration(
-                                        color: AppColors.kPrimary.withValues(alpha: 0.12),
+                                        color: AppColors.kPrimary.withOpacity(0.12),
                                         borderRadius: BorderRadius.circular(10),
                                       ),
                                       alignment: Alignment.center,
@@ -393,7 +405,7 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
                                                 _ChipBadge(
                                                   text: 'NEW SALE',
                                                   foreground: Colors.blue,
-                                                  background: Colors.blue.withValues(alpha: 0.10),
+                                                  background: Colors.blue.withOpacity(0.10),
                                                 ),
                                               ],
                                             ],
@@ -442,7 +454,7 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
                                             children: [
                                               Expanded(
                                                 child: Text(
-                                                  '\$${(sale.totalAmount ?? 0).toStringAsFixed(2)}',
+                                                  CurrencyFmt.format(context, sale.totalAmount ?? 0),
                                                   style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
                                                 ),
                                               ),
@@ -493,23 +505,25 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
       return _ChipBadge(
         text: 'FULL',
         foreground: Colors.green.shade700,
-        background: Colors.green.withValues(alpha: 0.12),
+        background: Colors.green.withOpacity(0.12),
       );
     }
     if (s == 'credited' || (invoice.paidAmount > 0 && invoice.dueAmount > 0)) {
       return _ChipBadge(
         text: 'CREDITED',
         foreground: Colors.orange.shade700,
-        background: Colors.orange.withValues(alpha: 0.12),
+        background: Colors.orange.withOpacity(0.12),
       );
     }
     return _ChipBadge(
       text: 'UNPAID',
       foreground: Colors.red.shade700,
-      background: Colors.red.withValues(alpha: 0.12),
+      background: Colors.red.withOpacity(0.12),
     );
   }
 }
+
+/* ----------------------------- Status helpers ------------------------------ */
 
 class _InvoiceShortStatus extends StatelessWidget {
   final InvoiceStatus invoice;
@@ -563,6 +577,8 @@ class _TileData {
   });
 }
 
+/* ------------------------------ Details bottom sheet ------------------------------ */
+
 class _SaleDetailsSheet extends StatefulWidget {
   final Sale sale;
   const _SaleDetailsSheet({required this.sale});
@@ -581,8 +597,6 @@ class _SaleDetailsSheetState extends State<_SaleDetailsSheet> {
   final Map<int, String> _productNames = {};
   final Map<int, int> _returnedByItem = {};
   int? _workingItemId;
-
-  final NumberFormat _money = NumberFormat.simpleCurrency();
 
   @override
   void initState() {
@@ -811,7 +825,6 @@ class _SaleDetailsSheetState extends State<_SaleDetailsSheet> {
   Widget _buildSheetBody() {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final money = _money;
     final created = DateFormat.yMMMd().add_jm().format(_sale.soldAt);
 
     final totalItemsQty = _sale.items.fold<double>(0.0, (sum, it) => sum + it.quantitySold);
@@ -820,7 +833,7 @@ class _SaleDetailsSheetState extends State<_SaleDetailsSheet> {
     final kpis = <_Kpi>[
       _Kpi(label: 'Items', value: totalItemsQty.toStringAsFixed(2), icon: Icons.list_alt),
       _Kpi(label: 'Returned', value: '$totalReturned', icon: Icons.undo),
-      _Kpi(label: 'Total', value: money.format(_sale.totalAmount ?? 0), icon: Icons.attach_money),
+      _Kpi(label: 'Total', value: CurrencyFmt.format(context, _sale.totalAmount ?? 0), icon: Icons.attach_money),
       _Kpi(label: 'Sold At', value: created, icon: Icons.event),
     ];
 
@@ -864,7 +877,6 @@ class _SaleDetailsSheetState extends State<_SaleDetailsSheet> {
               onReturn: () => _promptReturn(item),
               returning: _workingItemId == item.id,
               returnedQty: returnedQty,
-              money: money,
             );
           }),
           const SizedBox(height: AppSizes.padding),
@@ -876,7 +888,7 @@ class _SaleDetailsSheetState extends State<_SaleDetailsSheet> {
                 child: Text('Total Amount', style: theme.textTheme.titleMedium),
               ),
               Text(
-                money.format(_sale.totalAmount ?? 0),
+                CurrencyFmt.format(context, _sale.totalAmount ?? 0),
                 style: theme.textTheme.titleLarge?.copyWith(
                   color: cs.primary,
                   fontWeight: FontWeight.bold,
@@ -889,6 +901,8 @@ class _SaleDetailsSheetState extends State<_SaleDetailsSheet> {
     );
   }
 }
+
+/* ----------------------------- UI widgets ------------------------------ */
 
 class _PaymentStatusRow extends StatelessWidget {
   final InvoiceStatus invoice;
@@ -903,14 +917,17 @@ class _PaymentStatusRow extends StatelessWidget {
         const SizedBox(width: 8),
         Chip(
           label: Text(status.text, style: TextStyle(color: status.color, fontWeight: FontWeight.bold)),
-          backgroundColor: status.color.withValues(alpha: 0.10),
-          side: BorderSide(color: status.color.withValues(alpha: 0.15)),
+          backgroundColor: status.color.withOpacity(0.10),
+          side: BorderSide(color: status.color.withOpacity(0.15)),
         ),
         if (!invoice.isPaid && invoice.dueAmount > 0) ...[
           const SizedBox(width: 12),
-          Text("Paid: \$${invoice.paidAmount.toStringAsFixed(2)}"),
+          Text("Paid: ${CurrencyFmt.format(context, invoice.paidAmount)}"),
           const SizedBox(width: 8),
-          Text("Due: \$${invoice.dueAmount.toStringAsFixed(2)}", style: const TextStyle(color: Colors.orange)),
+          Text(
+            "Due: ${CurrencyFmt.format(context, invoice.dueAmount)}",
+            style: const TextStyle(color: Colors.orange),
+          ),
         ],
       ],
     );
@@ -955,7 +972,7 @@ class _ChipBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: foreground.withValues(alpha: 0.25)),
+        border: Border.all(color: foreground.withOpacity(0.25)),
       ),
       child: Text(
         text,
@@ -969,8 +986,6 @@ class _ChipBadge extends StatelessWidget {
     );
   }
 }
-
-// ---------- UI helpers ----------
 
 class _HeaderCard extends StatelessWidget {
   final String title;
@@ -1002,7 +1017,7 @@ class _HeaderCard extends StatelessWidget {
             width: 50,
             height: 50,
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
+              color: color.withOpacity(0.12),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: color),
@@ -1034,8 +1049,8 @@ class _TagChip extends StatelessWidget {
     return Chip(
       label: Text(label),
       labelStyle: TextStyle(color: cs.primary),
-      side: BorderSide(color: cs.primary.withValues(alpha: 0.4)),
-      backgroundColor: cs.primary.withValues(alpha: 0.08),
+      side: BorderSide(color: cs.primary.withOpacity(0.4)),
+      backgroundColor: cs.primary.withOpacity(0.08),
       visualDensity: VisualDensity.compact,
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
@@ -1098,7 +1113,7 @@ class _KpiCard extends StatelessWidget {
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-              color: cs.primary.withValues(alpha: 0.12),
+              color: cs.primary.withOpacity(0.12),
               shape: BoxShape.circle,
             ),
             child: Icon(kpi.icon, color: cs.primary),
@@ -1128,7 +1143,6 @@ class _ItemTile extends StatelessWidget {
   final int returnedQty;
   final VoidCallback onReturn;
   final bool returning;
-  final NumberFormat money;
 
   const _ItemTile({
     required this.title,
@@ -1138,7 +1152,6 @@ class _ItemTile extends StatelessWidget {
     required this.returnedQty,
     required this.onReturn,
     required this.returning,
-    required this.money,
   });
 
   @override
@@ -1159,7 +1172,7 @@ class _ItemTile extends StatelessWidget {
               Text(title, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
               const SizedBox(height: 4),
               Text(
-                '${quantity.toStringAsFixed(2)} × ${money.format(unitPrice)} = ${money.format(total)}',
+                '${quantity.toStringAsFixed(2)} × ${CurrencyFmt.format(context, unitPrice)} = ${CurrencyFmt.format(context, total)}',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               Text(
@@ -1251,7 +1264,7 @@ class _StatChip extends StatelessWidget {
           Container(
             width: 34,
             height: 34,
-            decoration: BoxDecoration(color: color.withValues(alpha: 0.12), shape: BoxShape.circle),
+            decoration: BoxDecoration(color: color.withOpacity(0.12), shape: BoxShape.circle),
             alignment: Alignment.center,
             child: Icon(Icons.circle, size: 12, color: color),
           ),

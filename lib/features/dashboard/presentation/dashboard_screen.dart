@@ -1,17 +1,41 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:intl/intl.dart';
 
 import 'package:sales_app/constants/colors.dart';
 import 'package:sales_app/constants/sizes.dart';
+import 'package:sales_app/utils/currency.dart';
 
 import 'package:sales_app/features/dashboard/bloc/dashboard_bloc.dart';
 import 'package:sales_app/features/dashboard/bloc/dashboard_event.dart';
 import 'package:sales_app/features/dashboard/bloc/dashboard_state.dart';
 import 'package:sales_app/features/dashboard/data/dashboard_models.dart';
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Load once after the first frame to avoid dispatching during build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final bloc = context.read<DashboardBloc>();
+      final s = bloc.state;
+      if (s is! DashboardLoaded && s is! DashboardLoading) {
+        bloc.add(const LoadDashboard());
+      }
+    });
+  }
+
+  Future<void> _refresh() async {
+    final bloc = context.read<DashboardBloc>()..add(const RefreshDashboard());
+    // Wait for the next terminal state (Loaded or Error) to finish the indicator
+    await bloc.stream.firstWhere((s) => s is DashboardLoaded || s is DashboardError);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -19,7 +43,7 @@ class DashboardScreen extends StatelessWidget {
       body: SafeArea(
         child: RefreshIndicator(
           color: AppColors.kPrimary,
-          onRefresh: () async => context.read<DashboardBloc>().add(const RefreshDashboard()),
+          onRefresh: _refresh,
           child: CustomScrollView(
             slivers: [
               SliverPadding(
@@ -28,11 +52,7 @@ class DashboardScreen extends StatelessWidget {
                   child: BlocBuilder<DashboardBloc, DashboardState>(
                     buildWhen: (p, n) => n is DashboardLoading || n is DashboardLoaded || n is DashboardError,
                     builder: (context, state) {
-                      if (state is DashboardInitial) {
-                        context.read<DashboardBloc>().add(const LoadDashboard());
-                        return const _LoadingBlock();
-                      }
-                      if (state is DashboardLoading) {
+                      if (state is DashboardLoading || state is DashboardInitial) {
                         return const _LoadingBlock();
                       }
                       if (state is DashboardError) {
@@ -42,7 +62,13 @@ class DashboardScreen extends StatelessWidget {
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _SummaryGrid(summary: data.summary),
+                          // Animated switch for a smooth appearance
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 250),
+                            switchInCurve: Curves.easeInOut,
+                            switchOutCurve: Curves.easeInOut,
+                            child: _SummaryGrid(key: ValueKey(data.summary.hashCode), summary: data.summary),
+                          ),
                           const SizedBox(height: AppSizes.padding * 2),
                           _SectionHeader(
                             title: 'Recent Activity',
@@ -52,7 +78,12 @@ class DashboardScreen extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: AppSizes.padding),
-                          _RecentActivityList(items: data.recent),
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 250),
+                            switchInCurve: Curves.easeInOut,
+                            switchOutCurve: Curves.easeInOut,
+                            child: _RecentActivityList(key: ValueKey(data.recent.hashCode), items: data.recent),
+                          ),
                         ],
                       );
                     },
@@ -94,7 +125,7 @@ class _SectionHeader extends StatelessWidget {
 
 class _SummaryGrid extends StatelessWidget {
   final DashboardSummary summary;
-  const _SummaryGrid({required this.summary});
+  const _SummaryGrid({super.key, required this.summary});
 
   @override
   Widget build(BuildContext context) {
@@ -110,7 +141,7 @@ class _SummaryGrid extends StatelessWidget {
       children: [
         _SummaryCard(
           title: "Today's Sales",
-          value: NumberFormat.simpleCurrency().format(summary.todaySalesTotal),
+          value: CurrencyFmt.format(context, summary.todaySalesTotal),
           icon: Icons.trending_up,
           color: AppColors.kPrimary,
         ),
@@ -123,7 +154,7 @@ class _SummaryGrid extends StatelessWidget {
         if (!isSmall)
           _SummaryCard(
             title: "Estimated Profit",
-            value: NumberFormat.simpleCurrency().format(summary.estimatedProfit),
+            value: CurrencyFmt.format(context, summary.estimatedProfit),
             icon: Icons.account_balance_wallet,
             color: AppColors.kSuccess,
           ),
@@ -173,9 +204,12 @@ class _SummaryCard extends StatelessWidget {
             const Spacer(),
             Row(
               children: [
-                Text(
-                  value,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: AppColors.kText, fontWeight: FontWeight.bold),
+                Flexible(
+                  child: Text(
+                    value,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: AppColors.kText, fontWeight: FontWeight.bold),
+                  ),
                 ),
                 const SizedBox(width: 6),
                 Flexible(
@@ -196,7 +230,7 @@ class _SummaryCard extends StatelessWidget {
 
 class _RecentActivityList extends StatelessWidget {
   final List<ActivityItem> items;
-  const _RecentActivityList({required this.items});
+  const _RecentActivityList({super.key, required this.items});
 
   @override
   Widget build(BuildContext context) {
@@ -230,7 +264,6 @@ class _ActivityTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = item.type == ActivityType.sale ? AppColors.kSuccess : AppColors.kPrimary;
     final icon = item.type == ActivityType.sale ? Icons.sell : Icons.receipt_long;
-    final money = NumberFormat.simpleCurrency();
 
     return Container(
       decoration: BoxDecoration(
@@ -245,7 +278,7 @@ class _ActivityTile extends StatelessWidget {
         title: Text(item.subtitle, style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w500)),
         subtitle: Text(_timeAgo(item.timestamp), style: Theme.of(context).textTheme.bodySmall),
         trailing: Text(
-          money.format(item.amount),
+          CurrencyFmt.format(context, item.amount),
           style: Theme.of(context).textTheme.titleMedium?.copyWith(color: item.type == ActivityType.sale ? AppColors.kSuccess : AppColors.kPrimary, fontWeight: FontWeight.bold),
         ),
       ),
@@ -261,11 +294,11 @@ class _LoadingBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      _Shimmer(height: 120),
+      const _Shimmer(height: 120),
       const SizedBox(height: AppSizes.padding),
-      _Shimmer(height: 120),
+      const _Shimmer(height: 120),
       const SizedBox(height: AppSizes.padding),
-      _Shimmer(height: 240),
+      const _Shimmer(height: 240),
     ]);
   }
 }

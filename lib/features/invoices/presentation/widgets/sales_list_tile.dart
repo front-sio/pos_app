@@ -1,86 +1,56 @@
 import 'package:flutter/material.dart';
-import 'package:sales_app/config/config.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:sales_app/constants/colors.dart';
-import 'package:sales_app/features/invoices/data/invoice_model.dart';
-import 'package:sales_app/features/invoices/services/invoice_services.dart';
+import 'package:sales_app/features/products/bloc/products_bloc.dart';
+import 'package:sales_app/features/products/bloc/products_state.dart';
+import 'package:sales_app/features/sales/data/sale_item.dart';
 
-class SalesListTile extends StatefulWidget {
-  final int saleId;
-  final int customerId;
-  final double totalAmount;
-  final DateTime soldAt;
-  final VoidCallback? onTap;
+class SaleItemList extends StatelessWidget {
+  final List<SaleItem> items;
+  final Map<int, String>? productNames; // Optional: provide id -> name map
 
-  const SalesListTile({
+  const SaleItemList({
     super.key,
-    required this.saleId,
-    required this.customerId,
-    required this.totalAmount,
-    required this.soldAt,
-    this.onTap,
+    required this.items,
+    this.productNames,
   });
 
-  @override
-  State<SalesListTile> createState() => _SalesListTileState();
-}
-
-class _SalesListTileState extends State<SalesListTile> {
-  late final InvoiceService _invoiceService;
-  Invoice? _invoice;
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _invoiceService = InvoiceService(baseUrl: AppConfig.baseUrl); // FIX: pass baseUrl
-    _fetch();
-  }
-
-  Future<void> _fetch() async {
-    setState(() => _loading = true);
-    try {
-      // FIX: use a defined method in service
-      _invoice = await _invoiceService.getInvoiceBySale(widget.saleId);
-    } catch (_) {
-      _invoice = null;
-    } finally {
-      if (mounted) setState(() => _loading = false);
+  String _resolveName(BuildContext context, int productId) {
+    if (productNames != null && productNames!.containsKey(productId)) {
+      return productNames![productId]!;
     }
-  }
+    final ps = context.read<ProductsBloc>().state;
+    if (ps is ProductsLoaded) {
+      final found = ps.products.where((p) => p.id == productId);
+      if (found.isNotEmpty) return found.first.name;
+    }
+    return 'Product #$productId';
+    }
 
   @override
   Widget build(BuildContext context) {
-    final color = _invoice == null
-        ? Colors.orange
-        : (_invoice!.status.toLowerCase() == 'paid' || _invoice!.status.toLowerCase() == 'full'
-            ? AppColors.kSuccess
-            : AppColors.kWarning);
-
-    return ListTile(
-      onTap: widget.onTap,
-      leading: CircleAvatar(
-        backgroundColor: color.withValues(alpha: 0.12), // FIX: replace withOpacity
-        child: Icon(Icons.receipt_long, color: color),
-      ),
-      title: Text('Sale #${widget.saleId} • Customer #${widget.customerId}'),
-      subtitle: Text('Total: \$${widget.totalAmount.toStringAsFixed(2)} • ${widget.soldAt.toLocal()}'),
-      trailing: _loading
-          ? const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : _invoice == null
-              ? Chip(
-                  label: const Text('NO INVOICE'),
-                  backgroundColor: Colors.orange.withValues(alpha: 0.12), // FIX: replace withOpacity
-                  labelStyle: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
-                )
-              : Chip(
-                  label: Text(_invoice!.status.toUpperCase()),
-                  backgroundColor: color.withValues(alpha: 0.12), // FIX
-                  labelStyle: TextStyle(color: color, fontWeight: FontWeight.bold),
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: items.length,
+      separatorBuilder: (_, __) => const Divider(),
+      itemBuilder: (context, index) {
+        final item = items[index];
+        final title = _resolveName(context, item.productId);
+        return ListTile(
+          title: Text(title),
+          subtitle: Text(
+            '${item.quantitySold} x \$${item.salePricePerQuantity.toStringAsFixed(2)}',
+          ),
+          trailing: Text(
+            '\$${item.totalSalePrice.toStringAsFixed(2)}',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: AppColors.kPrimary,
+                  fontWeight: FontWeight.w500,
                 ),
+          ),
+        );
+      },
     );
   }
 }

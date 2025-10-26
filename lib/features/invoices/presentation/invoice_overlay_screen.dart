@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -5,16 +7,19 @@ import 'package:intl/intl.dart';
 
 import 'package:sales_app/constants/colors.dart';
 import 'package:sales_app/constants/sizes.dart';
+import 'package:sales_app/utils/currency.dart';
 
 import 'package:sales_app/features/invoices/bloc/invoice_bloc.dart';
 import 'package:sales_app/features/invoices/bloc/invoice_event.dart';
 import 'package:sales_app/features/invoices/bloc/invoice_state.dart';
 import 'package:sales_app/features/invoices/data/invoice_model.dart';
+import 'package:sales_app/features/invoices/services/invoice_services.dart';
+import 'package:sales_app/features/sales/services/sales_service.dart';
+import 'package:sales_app/features/sales/data/sale_item.dart';
 
 class InvoiceOverlayScreen extends StatefulWidget {
   final int invoiceId;
   final VoidCallback? onClose;
-  // Called after successful payment so the parent can refresh quietly.
   final VoidCallback? onCommitted;
 
   const InvoiceOverlayScreen({
@@ -30,22 +35,74 @@ class InvoiceOverlayScreen extends StatefulWidget {
 
 class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with TickerProviderStateMixin {
   final _amountCtrl = TextEditingController();
+  final _discountCtrl = TextEditingController();
   late final AnimationController _fadeIn;
-  final _currency = NumberFormat.simpleCurrency();
+
+  // Returns
+  bool _loadingReturns = false;
+  String _returnsError = '';
+  List<_ReturnLine> _returns = const [];
 
   @override
   void initState() {
     super.initState();
     _fadeIn = AnimationController(vsync: this, duration: const Duration(milliseconds: 350))..forward();
-    // This widget expects a scoped InvoiceBloc provided by the caller (InvoicesScreen)
     context.read<InvoiceBloc>().add(LoadInvoiceDetails(widget.invoiceId));
+    _loadReturns();
   }
 
   @override
   void dispose() {
     _amountCtrl.dispose();
+    _discountCtrl.dispose();
     _fadeIn.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadReturns() async {
+    setState(() {
+      _loadingReturns = true;
+      _returnsError = '';
+      _returns = const [];
+    });
+
+    try {
+      final invoiceService = context.read<InvoiceService>();
+      final salesService = context.read<SalesService>();
+
+      final saleIds = await invoiceService.getInvoiceSales(widget.invoiceId);
+      final List<_ReturnLine> lines = [];
+
+      for (final saleId in saleIds) {
+        // Fetch sale with items to resolve product names and saleitem ids
+        final sale = await salesService.getSaleById(saleId);
+        final itemsById = <int, SaleItem>{};
+        if (sale != null) {
+          for (final it in sale.items) {
+            if (it.id != null) itemsById[it.id!] = it;
+          }
+        }
+
+        // Fetch returns for this sale
+        final returns = await salesService.getReturnsBySaleId(saleId);
+        for (final r in returns) {
+          final saleItem = itemsById[r.saleItemId];
+          final productName = saleItem != null ? 'Product #${saleItem.productId}' : 'Item #${r.saleItemId}';
+          lines.add(_ReturnLine(
+            productName: productName,
+            quantity: r.quantityReturned,
+            returnedAt: r.returnedAt,
+          ));
+        }
+      }
+
+      lines.sort((a, b) => b.returnedAt.compareTo(a.returnedAt));
+      if (mounted) setState(() => _returns = lines);
+    } catch (e) {
+      if (mounted) setState(() => _returnsError = e.toString());
+    } finally {
+      if (mounted) setState(() => _loadingReturns = false);
+    }
   }
 
   void _addPayment(double? quickAmount, double due) {
@@ -62,6 +119,18 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
     _amountCtrl.clear();
   }
 
+  void _applyDiscount(double total) {
+    final input = double.tryParse(_discountCtrl.text.trim());
+    if (input == null || input <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a valid discount amount'), backgroundColor: AppColors.kError),
+      );
+      return;
+    }
+    context.read<InvoiceBloc>().add(ApplyDiscountToInvoice(invoiceId: widget.invoiceId, discountAmount: input));
+    _discountCtrl.clear();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -73,7 +142,9 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(state.message), backgroundColor: AppColors.kSuccess),
           );
-          widget.onCommitted?.call(); // refresh parent quietly
+          widget.onCommitted?.call();
+          // reload returns in case totals changed due to returns discount logic
+          _loadReturns();
         }
         if (state is InvoicesError) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -81,7 +152,6 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
           );
         }
       },
-      // Rebuild on details loaded, generic loading, or error
       buildWhen: (_, s) => s is InvoiceDetailsLoaded || s is InvoicesLoading || s is InvoicesError,
       builder: (context, state) {
         if (state is InvoicesLoading) {
@@ -146,7 +216,6 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
                         physics: const BouncingScrollPhysics(),
                         child: Column(
                           children: [
-                            // Paper-like invoice container
                             AnimatedContainer(
                               duration: const Duration(milliseconds: 220),
                               curve: Curves.easeInOut,
@@ -165,7 +234,6 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  // Header band
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                                     decoration: BoxDecoration(
@@ -199,7 +267,6 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
                                     ),
                                   ),
 
-                                  // Body sections
                                   Padding(
                                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                                     child: Column(
@@ -208,21 +275,21 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
                                           Row(
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
-                                              Expanded(child: _SummaryCard(title: 'Total', value: _currency.format(inv.totalAmount), icon: Icons.receipt_long, color: theme.colorScheme.primary)),
+                                              Expanded(child: _SummaryCard(title: 'Total', value: CurrencyFmt.format(context, inv.totalAmount), icon: Icons.receipt_long, color: theme.colorScheme.primary)),
                                               const SizedBox(width: 12),
-                                              Expanded(child: _SummaryCard(title: 'Paid', value: _currency.format(paid), icon: Icons.payments, color: Colors.green.shade700)),
+                                              Expanded(child: _SummaryCard(title: 'Paid', value: CurrencyFmt.format(context, paid), icon: Icons.payments, color: Colors.green.shade700)),
                                               const SizedBox(width: 12),
-                                              Expanded(child: _SummaryCard(title: 'Due', value: _currency.format(due), icon: Icons.pending_actions, color: Colors.orange.shade700)),
+                                              Expanded(child: _SummaryCard(title: 'Due', value: CurrencyFmt.format(context, due), icon: Icons.pending_actions, color: Colors.orange.shade700)),
                                             ],
                                           )
                                         else
                                           Column(
                                             children: [
-                                              _SummaryCard(title: 'Total', value: _currency.format(inv.totalAmount), icon: Icons.receipt_long, color: theme.colorScheme.primary),
+                                              _SummaryCard(title: 'Total', value: CurrencyFmt.format(context, inv.totalAmount), icon: Icons.receipt_long, color: theme.colorScheme.primary),
                                               const SizedBox(height: 10),
-                                              _SummaryCard(title: 'Paid', value: _currency.format(paid), icon: Icons.payments, color: Colors.green.shade700),
+                                              _SummaryCard(title: 'Paid', value: CurrencyFmt.format(context, paid), icon: Icons.payments, color: Colors.green.shade700),
                                               const SizedBox(height: 10),
-                                              _SummaryCard(title: 'Due', value: _currency.format(due), icon: Icons.pending_actions, color: Colors.orange.shade700),
+                                              _SummaryCard(title: 'Due', value: CurrencyFmt.format(context, due), icon: Icons.pending_actions, color: Colors.orange.shade700),
                                             ],
                                           ),
                                         const SizedBox(height: 16),
@@ -260,12 +327,63 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
                                                       backgroundColor: Colors.green.withValues(alpha: 0.12),
                                                       child: const Icon(Icons.payments, color: Colors.green, size: 20),
                                                     ),
-                                                    title: Text(_currency.format(p.amount), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                                                    title: Text(CurrencyFmt.format(context, p.amount), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
                                                     subtitle: Text(DateFormat.yMMMEd().add_jm().format(p.paidAt.toLocal())),
                                                   );
                                                 },
                                               ),
                                         const SizedBox(height: 20),
+
+                                        // Returns section
+                                        _SectionDivider(title: 'Returns'),
+                                        const SizedBox(height: 6),
+                                        if (_loadingReturns)
+                                          const Padding(
+                                            padding: EdgeInsets.symmetric(vertical: 16),
+                                            child: Center(child: CircularProgressIndicator()),
+                                          )
+                                        else if (_returnsError.isNotEmpty)
+                                          Padding(
+                                            padding: const EdgeInsets.symmetric(vertical: 16),
+                                            child: Text(_returnsError, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                                          )
+                                        else if (_returns.isEmpty)
+                                          Container(
+                                            width: double.infinity,
+                                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+                                            decoration: BoxDecoration(
+                                              color: Colors.grey.shade50,
+                                              borderRadius: BorderRadius.circular(12),
+                                              border: Border.all(color: Colors.grey.shade200),
+                                            ),
+                                            child: Row(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                Icon(Icons.info_outline, size: 18, color: Colors.grey.shade600),
+                                                const SizedBox(width: 8),
+                                                Text('No returns recorded', style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey.shade700)),
+                                              ],
+                                            ),
+                                          )
+                                        else
+                                          ListView.separated(
+                                            physics: const NeverScrollableScrollPhysics(),
+                                            shrinkWrap: true,
+                                            itemCount: _returns.length,
+                                            separatorBuilder: (_, __) => Divider(height: 1, color: Colors.grey.shade200),
+                                            itemBuilder: (_, i) {
+                                              final r = _returns[i];
+                                              return ListTile(
+                                                leading: CircleAvatar(
+                                                  radius: 18,
+                                                  backgroundColor: Colors.orange.withValues(alpha: 0.12),
+                                                  child: const Icon(Icons.undo, color: Colors.orange, size: 20),
+                                                ),
+                                                title: Text('${r.productName} • Qty: ${r.quantity}'),
+                                                subtitle: Text(DateFormat.yMMMEd().add_jm().format(r.returnedAt.toLocal())),
+                                              );
+                                            },
+                                          ),
                                       ],
                                     ),
                                   ),
@@ -273,10 +391,12 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
                               ),
                             ),
                             const SizedBox(height: 16),
-                            _PaymentActionsBar(
-                              controller: _amountCtrl,
+                            _PaymentAndDiscountBar(
+                              payController: _amountCtrl,
+                              discountController: _discountCtrl,
                               onPayCustom: (amt) => _addPayment(amt, due),
                               onPayDue: due > 0 ? () => _addPayment(due, due) : null,
+                              onApplyDiscount: () => _applyDiscount(inv.totalAmount),
                               due: due,
                             ),
                           ],
@@ -303,6 +423,18 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
     }
     return _Status('CREDITED', Colors.orange.shade700);
   }
+}
+
+class _ReturnLine {
+  final String productName;
+  final int quantity;
+  final DateTime returnedAt;
+
+  _ReturnLine({
+    required this.productName,
+    required this.quantity,
+    required this.returnedAt,
+  });
 }
 
 class _OverlayError extends StatelessWidget {
@@ -486,16 +618,20 @@ class _SectionDivider extends StatelessWidget {
   }
 }
 
-class _PaymentActionsBar extends StatelessWidget {
-  final TextEditingController controller;
+class _PaymentAndDiscountBar extends StatelessWidget {
+  final TextEditingController payController;
+  final TextEditingController discountController;
   final void Function(double?) onPayCustom;
   final VoidCallback? onPayDue;
+  final VoidCallback onApplyDiscount;
   final double due;
 
-  const _PaymentActionsBar({
-    required this.controller,
+  const _PaymentAndDiscountBar({
+    required this.payController,
+    required this.discountController,
     required this.onPayCustom,
     required this.onPayDue,
+    required this.onApplyDiscount,
     required this.due,
   });
 
@@ -503,6 +639,8 @@ class _PaymentActionsBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final disabled = onPayDue == null;
+    final isNarrow = MediaQuery.of(context).size.width < 420;
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -511,18 +649,44 @@ class _PaymentActionsBar extends StatelessWidget {
       ),
       child: Column(
         children: [
+          if (isNarrow) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: discountController,
+                    decoration: const InputDecoration(
+                      labelText: 'Discount amount',
+                      prefixIcon: Icon(Icons.local_offer),
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: onApplyDiscount,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.purple,
+                    minimumSize: const Size(120, 48),
+                  ),
+                  child: const Text('Apply'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
           Row(
             children: [
               Expanded(
                 child: TextField(
-                  controller: controller,
+                  controller: payController,
                   decoration: const InputDecoration(
                     labelText: 'Payment amount',
                     prefixIcon: Icon(Icons.attach_money),
                     border: OutlineInputBorder(),
                   ),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}'))],
                   onSubmitted: (_) => onPayCustom(null),
                 ),
               ),
@@ -530,7 +694,7 @@ class _PaymentActionsBar extends StatelessWidget {
               FilledButton(
                 onPressed: () => onPayCustom(null),
                 style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.kPrimary,
+                  backgroundColor: cs.primary,
                   minimumSize: const Size(120, 48),
                 ),
                 child: const Text('Add Payment'),
@@ -544,7 +708,7 @@ class _PaymentActionsBar extends StatelessWidget {
                 child: OutlinedButton.icon(
                   onPressed: disabled ? null : onPayDue,
                   icon: const Icon(Icons.done_all),
-                  label: Text('Pay Due (${NumberFormat.simpleCurrency().format(due)})'),
+                  label: Text('Pay Due (${CurrencyFmt.format(context, due)})'),
                 ),
               ),
               const SizedBox(width: 8),
@@ -562,6 +726,33 @@ class _PaymentActionsBar extends StatelessWidget {
               ),
             ],
           ),
+          if (!isNarrow) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: discountController,
+                    decoration: const InputDecoration(
+                      labelText: 'Discount amount',
+                      prefixIcon: Icon(Icons.local_offer),
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: onApplyDiscount,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.purple,
+                    minimumSize: const Size(120, 48),
+                  ),
+                  child: const Text('Apply'),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

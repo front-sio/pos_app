@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 // Screens
 import 'package:sales_app/features/customers/presentation/customers_screen.dart';
 import 'package:sales_app/features/profile/presentation/pages/profile_screen.dart';
+import 'package:sales_app/features/settings/presentation/currency_settings_screen.dart';
 import 'package:sales_app/features/suppliers/presentation/suppliers_screen.dart';
 import 'package:sales_app/features/products/presentation/products_screen.dart';
 import 'package:sales_app/features/purchases/presentation/purchases_screen.dart';
@@ -25,6 +26,9 @@ import 'package:sales_app/features/invoices/presentation/invoices_screen.dart';
 import 'package:sales_app/features/invoices/presentation/invoice_overlay_screen.dart';
 import 'package:sales_app/features/invoices/data/invoice_model.dart';
 import 'package:sales_app/features/users/presentation/pages/users_admin_screen.dart';
+
+// Expenses
+import 'package:sales_app/features/expenses/presentation/expenses_screen.dart';
 
 // Models/Utils
 import 'package:sales_app/models/settings.dart';
@@ -74,7 +78,6 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
   late String activeMenu;
   late AppSettings appSettings;
 
-  // Overlays
   bool _showProductCart = false;
   bool _showNewPurchase = false;
   bool _showStockOverlay = false;
@@ -83,7 +86,6 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
   bool _showSupplierOverlay = false;
   bool _showInvoiceOverlay = false;
 
-  // Overlay payloads
   Product? _stockProduct;
   StockOverlayMode _stockMode = StockOverlayMode.view;
 
@@ -98,18 +100,13 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
 
   int? _invoiceOverlayId;
 
-  // Shared ProductsBloc so screen and overlay use the same instance
   late final ProductsBloc _productsBloc;
 
-  // Overlay animations (shared)
   late final AnimationController _overlayCtrl;
   late final Animation<double> _backdropOpacity;
   late final Animation<Offset> _sheetOffset;
 
-  // Focus management for overlay
   final FocusScopeNode _overlayFocusScope = FocusScopeNode();
-
-  // Global Focus to intercept keys (backspace/browserBack) only when overlays visible and not typing
   late final FocusNode _rootKeyFocus;
 
   @override
@@ -124,7 +121,6 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
       appIconUrl: null,
     );
 
-    // Instantiate ProductsBloc here so overlays can access it
     final productService = context.read<ProductService>();
     _productsBloc = ProductsBloc(productService: productService)..add(FetchProductsPage(1, 20));
 
@@ -157,8 +153,6 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
     super.dispose();
   }
 
-  // ===== RBAC helpers =====
-
   bool _can(String permission) => Rbac.can(context, permission);
 
   bool _guard(String permission, String featureName) {
@@ -169,11 +163,10 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
     return false;
   }
 
-  // ===== Pages =====
-
   Widget _getPage(String menu) {
     switch (menu) {
       case "Dashboard":
+        // Allow ALL users to view Dashboard
         return const DashboardScreen();
       case "Profile":
         return const ProfileScreen();
@@ -198,12 +191,15 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
         return _can("purchases:view") ? PurchasesScreen(onAddNewPurchase: _openNewPurchase) : _forbidden();
       case "Invoices":
         return _can("invoices:view") ? InvoicesScreen(onOpenOverlay: _openInvoiceOverlay) : _forbidden();
+      case "Expenses":
+        // Allow ALL users to view Expenses
+        return const ExpensesScreen();
       case "Profit Tracker":
         return _can("profits:view") ? const ProfitTrackerScreen() : _forbidden();
       case "Reports":
         return _can("reports:view") ? const ReportsScreen() : _forbidden();
       case "Settings":
-        return _can("settings:view") ? SettingsScreen(settings: appSettings) : _forbidden();
+        return _can("settings:view") ? CurrencySettingsScreen() : _forbidden();
       case "Returns":
         return _can("returns:view") ? const ReturnsScreen() : _forbidden();
       default:
@@ -224,8 +220,6 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
       ]),
     );
   }
-
-  // ===== Overlay openings with RBAC guards =====
 
   Future<void> _openProductCart() async {
     if (!_guard("sales:create", "Create Sale")) return;
@@ -329,8 +323,6 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
     _focusOverlay();
   }
 
-  // ===== Overlay helpers =====
-
   void _hideAllOverlays() {
     _showProductCart = false;
     _showNewPurchase = false;
@@ -358,8 +350,8 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
   }
 
   void _onMenuSelected(String menu) {
-    // RBAC: prevent switching into pages user cannot view
-    if (!Rbac.canMenu(context, menu)) {
+    // Always allow Dashboard and Expenses, otherwise enforce RBAC
+    if (menu != "Dashboard" && menu != "Expenses" && !_can(_permissionForMenu(menu))) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Access denied: $menu'), backgroundColor: AppColors.kError),
       );
@@ -370,9 +362,41 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
       activeMenu = menu;
     });
 
-    // Close any visible overlay immediately (no confirm)
     if (_anyOverlayVisible()) {
       _closeOverlay();
+    }
+  }
+
+  String _permissionForMenu(String menu) {
+    switch (menu) {
+      case "Dashboard":
+        return "dashboard:view";
+      case "Products":
+        return "products:view";
+      case "Stock":
+        return "stock:view";
+      case "Purchases":
+        return "purchases:view";
+      case "Sales":
+        return "sales:view";
+      case "Returns":
+        return "returns:view";
+      case "Invoices":
+        return "invoices:view";
+      case "Expenses":
+        return "expenses:view";
+      case "Reports":
+        return "reports:view";
+      case "Suppliers":
+        return "suppliers:view";
+      case "Customers":
+        return "customers:view";
+      case "Users":
+        return "users:view";
+      case "Settings":
+        return "settings:view";
+      default:
+        return "dashboard:view";
     }
   }
 
@@ -385,7 +409,6 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
       _showSupplierOverlay ||
       _showInvoiceOverlay;
 
-  // Detection for "typing in a text field?"
   bool _isTextEditingFocused() {
     final focus = FocusManager.instance.primaryFocus;
     if (focus == null) return false;
@@ -408,7 +431,6 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
   Widget build(BuildContext context) {
     final isDesktop = Responsive.isDesktop(context);
 
-    // Base shortcuts
     final Map<LogicalKeySet, Intent> shortcuts = <LogicalKeySet, Intent>{
       LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyK): const OpenSearchIntent(),
       LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyK): const OpenSearchIntent(),
@@ -419,7 +441,6 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
       LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.shift, LogicalKeyboardKey.keyN): const NewPurchaseIntent(),
     };
 
-    // Intercept backspace/browserBack only when overlay is open and user not typing
     final actions = <Type, Action<Intent>>{
       OpenSearchIntent: OpenSearchAction(context),
       DismissIntent: CallbackAction<DismissIntent>(onInvoke: (_) {
@@ -449,9 +470,7 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
           onKey: (node, event) {
             if (!_anyOverlayVisible()) return KeyEventResult.ignored;
             if (event is! KeyDownEvent) return KeyEventResult.ignored;
-
             final key = event.logicalKey;
-
             if ((key == LogicalKeyboardKey.backspace || key == LogicalKeyboardKey.browserBack) && !_isTextEditingFocused()) {
               return KeyEventResult.handled;
             }
@@ -518,7 +537,6 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
                             ],
                           ),
 
-                          // Sales cart overlay
                           if (_showProductCart && activeMenu == "Sales")
                             _OverlaySheet(
                               controller: _overlayCtrl,
@@ -533,7 +551,6 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
                               ),
                             ),
 
-                          // New purchase overlay
                           if (_showNewPurchase && activeMenu == "Purchases")
                             _OverlaySheet(
                               controller: _overlayCtrl,
@@ -548,7 +565,6 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
                               ),
                             ),
 
-                          // Stock overlay
                           if (_showStockOverlay && activeMenu == "Stock" && _stockProduct != null)
                             _OverlaySheet(
                               controller: _overlayCtrl,
@@ -565,7 +581,6 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
                               ),
                             ),
 
-                          // Product overlay
                           if (_showProductOverlay && activeMenu == "Products")
                             BlocProvider.value(
                               value: _productsBloc,
@@ -585,7 +600,6 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
                               ),
                             ),
 
-                          // Customer overlay
                           if (_showCustomerOverlay && activeMenu == "Customers")
                             BlocProvider.value(
                               value: context.read<CustomerBloc>(),
@@ -608,7 +622,6 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
                               ),
                             ),
 
-                          // Supplier overlay
                           if (_showSupplierOverlay && activeMenu == "Suppliers")
                             BlocProvider.value(
                               value: context.read<SupplierBloc>(),
@@ -631,7 +644,6 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
                               ),
                             ),
 
-                          // Invoice overlay
                           if (_showInvoiceOverlay && activeMenu == "Invoices" && _invoiceOverlayId != null)
                             _OverlaySheet(
                               controller: _overlayCtrl,
@@ -737,7 +749,6 @@ class _OverlaySheet extends StatelessWidget {
       builder: (context, _) {
         return Stack(
           children: [
-            // Backdrop scrim
             Semantics(
               label: 'Overlay backdrop',
               button: true,
@@ -749,7 +760,6 @@ class _OverlaySheet extends StatelessWidget {
                 ),
               ),
             ),
-            // Sheet
             Center(
               child: FractionallySizedBox(
                 widthFactor: widthFactor,
@@ -795,7 +805,6 @@ class NewPurchaseIntent extends Intent {
   const NewPurchaseIntent();
 }
 
-// An intent used to consume keys without further propagation if needed elsewhere.
 class DoNothingAndStopPropagationIntent extends Intent {
   const DoNothingAndStopPropagationIntent();
 }

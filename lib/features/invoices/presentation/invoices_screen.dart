@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:intl/intl.dart';
 
 import 'package:sales_app/constants/colors.dart';
 import 'package:sales_app/constants/sizes.dart';
+import 'package:sales_app/utils/currency.dart';
 
 // Customers
 import 'package:sales_app/features/customers/services/customer_services.dart';
@@ -28,7 +28,6 @@ class InvoicesScreen extends StatefulWidget {
 class _InvoicesScreenState extends State<InvoicesScreen> {
   final _searchCtrl = TextEditingController();
   final Map<int, Customer> _customers = {};
-  final _currency = NumberFormat.simpleCurrency();
 
   // Cache last known list to avoid full-screen loader during refresh
   List<Invoice> _lastKnown = const <Invoice>[];
@@ -330,7 +329,10 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                                       children: [
                                         const Icon(Icons.payments, size: 16, color: Colors.grey),
                                         const SizedBox(width: 6),
-                                        Text('Total: ${_currency.format(inv.totalAmount)}', style: theme.textTheme.bodyMedium),
+                                        Text(
+                                          'Total: ${CurrencyFmt.format(context, inv.totalAmount)}',
+                                          style: theme.textTheme.bodyMedium,
+                                        ),
                                       ],
                                     ),
                                     const Text('•'),

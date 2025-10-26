@@ -3,7 +3,6 @@ import 'package:sales_app/features/invoices/bloc/invoice_event.dart';
 import 'package:sales_app/features/invoices/bloc/invoice_state.dart';
 import 'package:sales_app/features/invoices/services/invoice_services.dart';
 
-
 class InvoiceBloc extends Bloc<InvoiceEvent, InvoiceState> {
   final InvoiceService service;
 
@@ -12,6 +11,8 @@ class InvoiceBloc extends Bloc<InvoiceEvent, InvoiceState> {
     on<LoadInvoiceDetails>(_onLoadInvoiceDetails);
     on<CreateInvoiceEvent>(_onCreateInvoice);
     on<AddPaymentEvent>(_onAddPayment);
+    on<ApplyDiscountToInvoice>(_onApplyDiscount);
+    on<UpdateInvoiceTotalEvent>(_onUpdateInvoiceTotal);
   }
 
   Future<void> _onLoadInvoices(LoadInvoices event, Emitter<InvoiceState> emit) async {
@@ -42,6 +43,7 @@ class InvoiceBloc extends Bloc<InvoiceEvent, InvoiceState> {
         totalAmount: event.totalAmount,
         status: event.status,
         saleIds: event.saleIds,
+        discountAmount: event.discountAmount,
       );
       emit(const InvoiceOperationSuccess('Invoice created'));
       add(const LoadInvoices());
@@ -54,6 +56,26 @@ class InvoiceBloc extends Bloc<InvoiceEvent, InvoiceState> {
     try {
       await service.addPayment(invoiceId: event.invoiceId, amount: event.amount);
       emit(const InvoiceOperationSuccess('Payment added'));
+      add(LoadInvoiceDetails(event.invoiceId));
+    } catch (e) {
+      emit(InvoicesError(e.toString()));
+    }
+  }
+
+  Future<void> _onApplyDiscount(ApplyDiscountToInvoice event, Emitter<InvoiceState> emit) async {
+    try {
+      await service.applyDiscount(invoiceId: event.invoiceId, discountAmount: event.discountAmount);
+      emit(const InvoiceOperationSuccess('Discount applied'));
+      add(LoadInvoiceDetails(event.invoiceId));
+    } catch (e) {
+      emit(InvoicesError(e.toString()));
+    }
+  }
+
+  Future<void> _onUpdateInvoiceTotal(UpdateInvoiceTotalEvent event, Emitter<InvoiceState> emit) async {
+    try {
+      await service.updateInvoiceTotal(invoiceId: event.invoiceId, newTotalAmount: event.newTotalAmount);
+      emit(const InvoiceOperationSuccess('Invoice updated'));
       add(LoadInvoiceDetails(event.invoiceId));
     } catch (e) {
       emit(InvoicesError(e.toString()));

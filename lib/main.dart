@@ -15,7 +15,6 @@ import 'package:sales_app/features/auth/logic/auth_state.dart';
 import 'package:sales_app/features/customers/services/customer_services.dart';
 import 'package:sales_app/features/customers/bloc/customer_bloc.dart';
 import 'package:sales_app/features/customers/bloc/customer_event.dart';
-import 'package:sales_app/features/dashboard/bloc/dashboard_event.dart';
 
 // Invoices
 import 'package:sales_app/features/invoices/bloc/invoice_bloc.dart';
@@ -68,46 +67,51 @@ import 'package:sales_app/network/auth_http_client.dart';
 // Purchases
 import 'package:sales_app/features/purchases/services/purchase_service.dart';
 import 'package:sales_app/features/purchases/bloc/purchase_bloc.dart';
-import 'package:sales_app/features/purchases/bloc/purchase_event.dart';
 
-// Dashboard (ADDED)
+// Dashboard
 import 'package:sales_app/features/dashboard/services/dashboard_service.dart';
 import 'package:sales_app/features/dashboard/bloc/dashboard_bloc.dart';
+
+// Settings (Currency)
+import 'package:sales_app/features/settings/services/settings_service.dart';
+import 'package:sales_app/features/settings/bloc/settings_bloc.dart';
+import 'package:sales_app/features/settings/bloc/settings_event.dart';
+
+// Expenses (NEW)
+import 'package:sales_app/features/expenses/services/expense_services.dart';
+import 'package:sales_app/features/expenses/bloc/expense_bloc.dart';
+import 'package:sales_app/features/expenses/bloc/expense_event.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final baseUrl = AppConfig.baseUrl;
-
   final httpClient = AuthHttpClient();
 
+  // Auth
   final authApiService = AuthApiService(baseUrl: baseUrl);
   final authRepository = AuthRepository(authApiService);
 
+  // Services
   final productService = ProductService(baseUrl: baseUrl);
   final stockService = StockService(baseUrl: baseUrl);
-
   final salesService = SalesService();
   final profitService = ProfitService();
-
   final customerService = CustomerService(baseUrl: baseUrl, client: httpClient);
   final supplierService = SupplierService(baseUrl: baseUrl);
-
   final invoiceService = InvoiceService(baseUrl: baseUrl, client: httpClient);
-
   final reportsService = ReportsService(baseUrl: baseUrl);
   final reportsRepository = ReportsRepository(service: reportsService);
-
   final usersApiService = UsersApiService(baseUrl: baseUrl);
   final usersRepository = UsersRepository(api: usersApiService, auth: authRepository);
-
   final purchaseService = PurchaseService();
+  final dashboardService = DashboardService(purchaseService: purchaseService, salesService: salesService);
 
-  // Dashboard service composed from existing services
-  final dashboardService = DashboardService(
-    purchaseService: purchaseService,
-    salesService: salesService,
-  );
+  // Settings
+  final settingsService = SettingsService(baseUrl: baseUrl, client: httpClient);
+
+  // Expenses (NEW)
+  final expenseService = ExpenseService(baseUrl: baseUrl, client: httpClient);
 
   runApp(
     MultiRepositoryProvider(
@@ -126,8 +130,10 @@ void main() async {
         RepositoryProvider<UsersApiService>(create: (_) => usersApiService),
         RepositoryProvider<UsersRepository>(create: (_) => usersRepository),
         RepositoryProvider<PurchaseService>(create: (_) => purchaseService),
-        // Dashboard
         RepositoryProvider<DashboardService>(create: (_) => dashboardService),
+        RepositoryProvider<SettingsService>(create: (_) => settingsService),
+        // Expenses (NEW)
+        RepositoryProvider<ExpenseService>(create: (_) => expenseService),
       ],
       child: MultiBlocProvider(
         providers: [
@@ -150,9 +156,12 @@ void main() async {
           BlocProvider<ReportsBloc>(create: (context) => ReportsBloc(repository: context.read<ReportsRepository>())),
           BlocProvider<UsersBloc>(create: (context) => UsersBloc(repository: context.read<UsersRepository>())),
           BlocProvider<ProfileBloc>(create: (context) => ProfileBloc(repository: context.read<UsersRepository>())),
-          BlocProvider<PurchaseBloc>(create: (context) => PurchaseBloc(service: context.read<PurchaseService>())..add(const LoadPurchases())),
-          // Dashboard (ADDED)
+          BlocProvider<PurchaseBloc>(create: (context) => PurchaseBloc(service: context.read<PurchaseService>())),
           BlocProvider<DashboardBloc>(create: (context) => DashboardBloc(service: context.read<DashboardService>())),
+          // SettingsBloc fixed: pass positional service argument
+          BlocProvider<SettingsBloc>(create: (context) => SettingsBloc(settingsService)),
+          // Expenses (NEW)
+          BlocProvider<ExpenseBloc>(create: (context) => ExpenseBloc(service: context.read<ExpenseService>())),
         ],
         child: BlocListener<AuthBloc, AuthState>(
           listenWhen: (prev, next) => next is AuthAuthenticated || next is AuthUnauthenticated,
@@ -166,8 +175,10 @@ void main() async {
               context.read<ProfitBloc>().add(LoadProfit(period: 'This Month', view: 'Daily'));
               context.read<ReportsBloc>().add(LoadDailyReport(DateTime.now()));
               context.read<UsersBloc>().add(LoadUsers());
-              // Load dashboard after auth
-              context.read<DashboardBloc>().add(const LoadDashboard());
+              context.read<SettingsBloc>().add(const LoadSettings());
+              context.read<SettingsBloc>().add(const LoadCurrencies());
+              // Expenses (NEW)
+              context.read<ExpenseBloc>().add(const LoadExpenses());
             }
           },
           child: const PosBusinessApp(),

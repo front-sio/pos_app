@@ -62,6 +62,7 @@ class InvoiceService {
     required double totalAmount,
     required String status,
     required List<int> saleIds,
+    double discountAmount = 0,
   }) async {
     final uri = Uri.parse('$baseUrl/invoices');
     final body = jsonEncode({
@@ -69,6 +70,7 @@ class InvoiceService {
       'total_amount': double.parse(totalAmount.toStringAsFixed(2)),
       'status': status,
       'sales': saleIds,
+      if (discountAmount > 0) 'discount_amount': double.parse(discountAmount.toStringAsFixed(2)),
     });
     final res = await _client.post(uri, headers: _jsonHeaders, body: body);
     if (res.statusCode != 201 && res.statusCode != 200) throw _err('Failed to create invoice', res);
@@ -96,5 +98,35 @@ class InvoiceService {
     if (res.statusCode != 200) throw _err('Failed to fetch invoice by sale', res);
     final decoded = jsonDecode(res.body);
     return Invoice.fromJson(decoded as Map<String, dynamic>);
+  }
+
+  Future<void> updateInvoiceTotal({required int invoiceId, required double newTotalAmount}) async {
+    final uri = Uri.parse('$baseUrl/invoices/$invoiceId');
+    final body = jsonEncode({
+      'total_amount': double.parse(newTotalAmount.toStringAsFixed(2)),
+    });
+    final res = await _client.put(uri, headers: _jsonHeaders, body: body);
+    if (res.statusCode != 200) throw _err('Failed to update invoice total', res);
+  }
+
+  Future<void> applyDiscount({required int invoiceId, required double discountAmount}) async {
+    final uri = Uri.parse('$baseUrl/invoices/$invoiceId');
+    final body = jsonEncode({
+      'discount_amount': double.parse(discountAmount.toStringAsFixed(2)),
+    });
+    final res = await _client.put(uri, headers: _jsonHeaders, body: body);
+    if (res.statusCode != 200) throw _err('Failed to apply discount', res);
+  }
+
+  // NEW: fetch sale IDs linked to an invoice
+  Future<List<int>> getInvoiceSales(int invoiceId) async {
+    final uri = Uri.parse('$baseUrl/invoices/$invoiceId/sales');
+    final res = await _client.get(uri, headers: {'Accept': 'application/json'});
+    if (res.statusCode != 200) throw _err('Failed to fetch invoice sales', res);
+    final decoded = jsonDecode(res.body);
+    if (decoded is List) {
+      return decoded.map((e) => e is int ? e : int.tryParse(e.toString()) ?? 0).where((e) => e > 0).toList();
+    }
+    return const <int>[];
   }
 }
