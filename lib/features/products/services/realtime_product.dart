@@ -1,3 +1,4 @@
+// lib/features/products/services/realtime_product.dart
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';

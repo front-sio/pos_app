@@ -1,5 +1,6 @@
-// lib/features/notitications/services/notification_socket_services.dart
 import 'dart:async';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:sales_app/config/config.dart';
 import 'package:sales_app/features/notitications/data/notification_model.dart';
@@ -15,32 +16,62 @@ class NotificationSocketService {
 
   bool get connected => _socket?.connected == true;
 
-  void connect({String? token}) {
-    if (connected) return;
+  /// Connects to the notifications Socket.IO endpoint.
+  /// This implementation mirrors the RealtimeProducts style:
+  /// - Builds origin from AppConfig.baseUrl
+  /// - Uses a dedicated Socket.IO path: /socket.io-notifications
+  /// - Sends token via auth payload and extraHeaders
+  /// - Enables reconnection with backoff
+  Future<void> connect({String? token}) async {
+    disconnect();
 
-    final base = AppConfig.socketUrl.trim().isNotEmpty
-        ? AppConfig.socketUrl.trim()
-        : AppConfig.baseUrl;
+    // Derive origin from base API URL (no separate socket url dependency)
+    final base = AppConfig.baseUrl;
     final uri = Uri.parse(base);
-    final scheme = uri.scheme.isEmpty ? 'http' : uri.scheme;
-    final port = uri.hasPort ? ':${uri.port}' : '';
-    final origin = '$scheme://${uri.host}$port';
+    final origin = '${uri.scheme}://${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
 
-    _socket = IO.io(
-      '$origin/notifications',
-      IO.OptionBuilder()
-          .setTransports(['websocket'])
-          .enableAutoConnect()
-          .enableForceNew()
-          .setQuery({'auth': token ?? ''})
-          .build(),
-    );
+    // Prefer provided token, fallback to secure storage
+    final secureToken = token ?? await const FlutterSecureStorage().read(key: 'token');
+
+    if (kDebugMode) {
+      debugPrint('[NotificationSocket] connecting to $origin via /socket.io-notifications');
+    }
+
+    final options = <String, dynamic>{
+      'transports': ['websocket', 'polling'],
+      'path': '/socket.io-notifications',
+      'autoConnect': true,
+      'reconnection': true,
+      'reconnectionAttempts': 999999,
+      'reconnectionDelay': 700,
+      // Browsers: handshake auth
+      'auth': (secureToken != null && secureToken.isNotEmpty) ? {'token': secureToken} : {},
+      // Native: attach Authorization header (ignored by web)
+      if (secureToken != null && secureToken.isNotEmpty)
+        'extraHeaders': {'Authorization': 'Bearer $secureToken'},
+    };
+
+    _socket = IO.io(origin, options);
 
     _socket!.onConnect((_) {
-      // Ask server for a current unread count + optional backlog
+      if (kDebugMode) debugPrint('[NotificationSocket] connected');
+      // Request a snapshot (unreadCount + optional backlog)
       _socket!.emit('snapshot_request');
     });
 
+    _socket!.onConnectError((err) {
+      if (kDebugMode) debugPrint('[NotificationSocket] connect_error: $err');
+    });
+
+    _socket!.onError((err) {
+      if (kDebugMode) debugPrint('[NotificationSocket] error: $err');
+    });
+
+    _socket!.onDisconnect((reason) {
+      if (kDebugMode) debugPrint('[NotificationSocket] disconnected: $reason');
+    });
+
+    // Snapshot payload: { unreadCount: number, items: [] }
     _socket!.on('snapshot', (payload) {
       try {
         final unread = int.tryParse('${payload?['unreadCount'] ?? 0}') ?? 0;
@@ -51,22 +82,28 @@ class NotificationSocketService {
             items.add(AppNotification.fromSocket(it));
           }
         }
-        _snapshotController.add(NotificationSnapshot(unreadCount: unread, items: items));
-      } catch (_) {
-        // swallow parse errors to keep stream healthy
+        if (!_snapshotController.isClosed) {
+          _snapshotController.add(NotificationSnapshot(unreadCount: unread, items: items));
+        }
+        if (kDebugMode) debugPrint('[NotificationSocket] snapshot: unread=$unread, items=${items.length}');
+      } catch (e) {
+        if (kDebugMode) debugPrint('[NotificationSocket] snapshot parse error: $e');
       }
     });
 
+    // Realtime single notification
     _socket!.on('notify', (payload) {
       try {
-        _notifController.add(AppNotification.fromSocket(payload));
-      } catch (_) {
-        // ignore malformed messages
+        final n = AppNotification.fromSocket(payload);
+        if (!_notifController.isClosed) {
+          _notifController.add(n);
+        }
+        if (kDebugMode) debugPrint('[NotificationSocket] notify: ${n.title}');
+      } catch (e) {
+        if (kDebugMode) debugPrint('[NotificationSocket] notify parse error: $e');
       }
     });
 
-    _socket!.onDisconnect((_) {});
-    _socket!.onError((_) {});
     _socket!.connect();
   }
 
@@ -75,7 +112,11 @@ class NotificationSocketService {
   }
 
   void disconnect() {
-    _socket?.dispose();
+    try {
+      _socket?.off('snapshot');
+      _socket?.off('notify');
+      _socket?.dispose();
+    } catch (_) {}
     _socket = null;
   }
 
