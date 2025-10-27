@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
 import '../data/auth_repository.dart';
+import '../data/auth_api_service.dart'; // For ApiException
 
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final AuthRepository repository;
@@ -25,10 +26,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       final username = await repository.getUsername() ?? '';
       final email = await repository.getEmail() ?? '';
 
-      // RBAC restore
-      final roles = await repository.getRoles() ?? <String>[];
-      final permissions = (await repository.getPermissions() ?? <String>[]).map((p) => p.toLowerCase()).toList();
-      final isSuperuser = await repository.getIsSuperuser() ?? false;
+      final roles = await repository.getRoles();
+      final permissions = (await repository.getPermissions()).map((p) => p.toLowerCase()).toList();
+      final isSuperuser = await repository.getIsSuperuser();
 
       emit(AuthAuthenticated(
         token: token,
@@ -60,7 +60,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       final username = user['username']?.toString() ?? '';
       final email = user['email']?.toString() ?? '';
 
-      // Normalize roles & permissions
       final roles = (user['roles'] as List?)
               ?.map((e) => e.toString().trim())
               .where((e) => e.isNotEmpty)
@@ -71,7 +70,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               .where((e) => e.isNotEmpty)
               .toList() ?? <String>[];
 
-      // Ensure superuser is properly recognized
       final isSuperuserRaw = user['is_superuser'];
       final isSuperuser = isSuperuserRaw == true ||
           (isSuperuserRaw is String && isSuperuserRaw.toLowerCase() == 'true') ||
@@ -88,12 +86,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         permissions: permissions,
         isSuperuser: isSuperuser,
       ));
-    } catch (e) {
-      emit(AuthFailure(e.toString()));
+    } on ApiException catch (e) {
+      // Friendly message from API handler
+      emit(AuthFailure(e.message));
+    } catch (_) {
+      // Fallback friendly message
+      emit(const AuthFailure('Something went wrong. Please check your connection and try again.'));
     }
   }
 
-  // Backend /auth/register returns message/id (no token). Keep user unauthenticated.
   Future<void> _onRegisterRequested(RegisterRequested event, Emitter<AuthState> emit) async {
     emit(const AuthLoading());
     try {
@@ -106,8 +107,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         event.gender,
       );
       emit(const AuthUnauthenticated());
-    } catch (e) {
-      emit(AuthFailure(e.toString()));
+    } on ApiException catch (e) {
+      emit(AuthFailure(e.message));
+    } catch (_) {
+      emit(const AuthFailure('Could not complete registration. Please try again.'));
     }
   }
 

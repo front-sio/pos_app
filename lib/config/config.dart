@@ -10,3 +10,4 @@ class AppConfig {
 
 // defaultValue: 'http://localhost:8080',
 // defaultValue: 'https://api.stebofarm.co.tz',
+// defaultValue: 'https://magasin-api.iperfee.com',
