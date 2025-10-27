@@ -1,16 +1,11 @@
-FROM flutter:3.19 AS build-stage
-
+# Build stage
+FROM cirrusci/flutter:stable AS build-stage
 WORKDIR /app
-
-COPY pubspec.yaml pubspec.yaml
-RUN flutter pub get
-
 COPY . .
+RUN flutter pub get && flutter build web --release
 
-RUN flutter build web --release
-
+# Serve stage
 FROM nginx:alpine
 COPY --from=build-stage /app/build/web /usr/share/nginx/html
-
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
