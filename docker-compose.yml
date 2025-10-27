@@ -1,6 +1,6 @@
 version: '3.9'
 services:
-  nginx: # Badilisha jina la huduma kuwa nginx
+  flutter-web:
     build:
       context: .
       dockerfile: Dockerfile
