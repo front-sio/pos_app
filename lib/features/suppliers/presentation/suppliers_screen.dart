@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -5,9 +6,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:sales_app/utils/responsive.dart';
 import 'package:sales_app/constants/sizes.dart';
 
-import 'package:sales_app/features/suppliers/bloc/supplier_bloc.dart';
-import 'package:sales_app/features/suppliers/bloc/supplier_event.dart';
-import 'package:sales_app/features/suppliers/bloc/supplier_state.dart';
+import 'package:sales_app/features/suppliers/bloc/supplier_bloc.dart' as sup_bloc;
+import 'package:sales_app/features/suppliers/bloc/supplier_event.dart' as sup_event;
+import 'package:sales_app/features/suppliers/bloc/supplier_state.dart' as sup_state;
+
 import 'package:sales_app/features/suppliers/data/supplier_model.dart';
 import 'package:sales_app/features/suppliers/presentation/supplier_overlay_screen.dart';
 
@@ -39,9 +41,9 @@ class _SuppliersScreenState extends State<SuppliersScreen> with TickerProviderSt
     _fade = CurvedAnimation(parent: _anim, curve: Curves.easeOut);
     _anim.forward();
 
-    final state = context.read<SupplierBloc>().state;
-    if (state is! SuppliersLoaded && state is! SuppliersLoading) {
-      context.read<SupplierBloc>().add(FetchSuppliersPage(1, _limit));
+    final state = context.read<sup_bloc.SupplierBloc>().state;
+    if (state is! sup_state.SuppliersLoaded && state is! sup_state.SuppliersLoading) {
+      context.read<sup_bloc.SupplierBloc>().add(sup_event.FetchSuppliersPage(1, _limit));
     }
   }
 
@@ -55,9 +57,14 @@ class _SuppliersScreenState extends State<SuppliersScreen> with TickerProviderSt
 
   void _onScroll() {
     if (!_scrollCtrl.hasClients) return;
+
+    // Stop if near end and no more pages
+    final st = context.read<sup_bloc.SupplierBloc>().state;
+    if (st is sup_state.SuppliersLoaded && !st.hasMore) return;
+
     if (_scrollCtrl.position.pixels >= _scrollCtrl.position.maxScrollExtent - 200) {
       _page++;
-      context.read<SupplierBloc>().add(FetchSuppliersPage(_page, _limit));
+      context.read<sup_bloc.SupplierBloc>().add(sup_event.FetchSuppliersPage(_page, _limit));
     }
   }
 
@@ -84,7 +91,7 @@ class _SuppliersScreenState extends State<SuppliersScreen> with TickerProviderSt
         child: SizedBox(
           height: MediaQuery.of(context).size.height * 0.9,
           child: BlocProvider.value(
-            value: context.read<SupplierBloc>(),
+            value: context.read<sup_bloc.SupplierBloc>(),
             child: SupplierOverlayScreen(
               supplier: s,
               mode: mode,
@@ -95,6 +102,33 @@ class _SuppliersScreenState extends State<SuppliersScreen> with TickerProviderSt
         ),
       ),
     );
+  }
+
+  // Map raw technical errors to user-friendly messages
+  String _friendlyError(String raw) {
+    final lower = raw.toLowerCase();
+    final codeMatch = RegExp(r'http\s+(\d{3})', caseSensitive: false).firstMatch(raw);
+    final code = codeMatch != null ? int.tryParse(codeMatch.group(1)!) : null;
+
+    if (lower.contains('socketexception') || lower.contains('failed host lookup') || lower.contains('network')) {
+      return 'Network connection problem. Please check your internet and try again.';
+    }
+    if (lower.contains('timed out') || lower.contains('timeout')) {
+      return 'The request took too long. Please try again.';
+    }
+    if (lower.contains('handshakeexception') || lower.contains('certificate') || lower.contains('tls')) {
+      return 'Secure connection could not be established. Please try again later.';
+    }
+    if (code != null) {
+      if (code == 401) return 'Your session has expired. Please sign in again.';
+      if (code == 403) return 'You do not have permission to perform this action.';
+      if (code == 404) return 'We could not find the requested resource.';
+      if (code >= 500) return 'Server error. Please try again in a moment.';
+    }
+    if (lower.contains('formatexception') || lower.contains('unexpected character')) {
+      return 'Received unexpected data. Please try again.';
+    }
+    return 'Something went wrong while loading suppliers. Please try again.';
   }
 
   @override
@@ -179,7 +213,7 @@ class _SuppliersScreenState extends State<SuppliersScreen> with TickerProviderSt
             ),
             onChanged: (q) {
               setState(() => _isSearching = q.isNotEmpty);
-              context.read<SupplierBloc>().add(SearchSuppliers(q));
+              context.read<sup_bloc.SupplierBloc>().add(sup_event.SearchSuppliers(q));
             },
             onSubmitted: (_) => HapticFeedback.lightImpact(),
           ),
@@ -192,15 +226,16 @@ class _SuppliersScreenState extends State<SuppliersScreen> with TickerProviderSt
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
-    return BlocBuilder<SupplierBloc, SupplierState>(
+    return BlocBuilder<sup_bloc.SupplierBloc, sup_state.SupplierState>(
       builder: (context, state) {
-        if (state is SuppliersLoading) {
+        if (state is sup_state.SuppliersLoading) {
           return SliverFillRemaining(
             child: Center(child: CircularProgressIndicator(color: cs.primary)),
           );
         }
 
-        if (state is SuppliersError) {
+        if (state is sup_state.SuppliersError) {
+          final userMsg = _friendlyError(state.message);
           return SliverFillRemaining(
             child: Center(
               child: Padding(
@@ -208,17 +243,55 @@ class _SuppliersScreenState extends State<SuppliersScreen> with TickerProviderSt
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.error_outline, color: cs.error, size: 56),
+                    Icon(Icons.info_outline, color: cs.primary, size: 56),
                     const SizedBox(height: 12),
-                    Text('Failed to load suppliers', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    Text(state.message, style: theme.textTheme.bodyMedium, textAlign: TextAlign.center),
-                    const SizedBox(height: 16),
-                    ElevatedButton.icon(
-                      onPressed: () => context.read<SupplierBloc>().add(FetchSuppliers()),
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Retry'),
+                    Text(
+                      'Unable to load suppliers',
+                      style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                     ),
+                    const SizedBox(height: 8),
+                    Text(
+                      userMsg,
+                      style: theme.textTheme.bodyMedium,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: () => context.read<sup_bloc.SupplierBloc>().add(sup_event.FetchSuppliers()),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Retry'),
+                        ),
+                        const SizedBox(width: 12),
+                        OutlinedButton.icon(
+                          onPressed: () => context.read<sup_bloc.SupplierBloc>().add(sup_event.FetchSuppliersPage(1, _limit)),
+                          icon: const Icon(Icons.sync),
+                          label: const Text('Reload'),
+                        ),
+                      ],
+                    ),
+                    if (kDebugMode) ...[
+                      const SizedBox(height: 16),
+                      ExpansionTile(
+                        title: const Text('Technical details (debug)'),
+                        children: [
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: cs.surfaceVariant.withOpacity(0.5),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              state.message,
+                              style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurface.withOpacity(0.8)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -226,7 +299,7 @@ class _SuppliersScreenState extends State<SuppliersScreen> with TickerProviderSt
           );
         }
 
-        if (state is SuppliersLoaded) {
+        if (state is sup_state.SuppliersLoaded) {
           final suppliers = state.suppliers;
           if (suppliers.isEmpty) {
             return SliverFillRemaining(

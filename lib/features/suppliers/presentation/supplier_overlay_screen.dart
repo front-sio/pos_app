@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+
 import 'package:sales_app/constants/sizes.dart';
-import 'package:sales_app/features/suppliers/bloc/supplier_bloc.dart';
-import 'package:sales_app/features/suppliers/bloc/supplier_event.dart';
-import 'package:sales_app/features/suppliers/data/supplier_model.dart';
 import 'package:sales_app/utils/responsive.dart';
+
+import 'package:sales_app/features/suppliers/bloc/supplier_bloc.dart' as sup_bloc;
+import 'package:sales_app/features/suppliers/bloc/supplier_event.dart' as sup_event;
+
+import 'package:sales_app/features/suppliers/data/supplier_model.dart';
 
 enum SupplierOverlayMode { create, view, edit, deleteConfirm }
 
@@ -110,7 +113,7 @@ class _SupplierOverlayScreenState extends State<SupplierOverlayScreen> {
             border: Border.all(color: cs.outlineVariant, width: 1.2),
             boxShadow: [
               if (theme.brightness == Brightness.light)
-                BoxShadow(color: Colors.black12, blurRadius: 10, offset: const Offset(0, 4)),
+                const BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4)),
             ],
           ),
           child: _buildContent(),
@@ -142,11 +145,13 @@ class _SupplierOverlayScreenState extends State<SupplierOverlayScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: cs.onSurface.withOpacity(0.7),
-                    fontWeight: FontWeight.bold,
-                  )),
+              Text(
+                label,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: cs.onSurface.withOpacity(0.7),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               const SizedBox(height: 2),
               Text(value, style: theme.textTheme.bodyLarge),
             ],
@@ -230,8 +235,10 @@ class _SupplierOverlayScreenState extends State<SupplierOverlayScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(isCreate ? 'Add Supplier' : 'Edit ${widget.supplier?.name ?? ""}',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+        Text(
+          isCreate ? 'Add Supplier' : 'Edit ${widget.supplier?.name ?? ""}',
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+        ),
         const SizedBox(height: AppSizes.largePadding),
         Form(key: _formKey, child: isDesktop ? twoCol() : oneCol()),
         const SizedBox(height: AppSizes.largePadding),
@@ -348,7 +355,7 @@ class _SupplierOverlayScreenState extends State<SupplierOverlayScreen> {
       'address': _addressCtrl.text.trim().isEmpty ? null : _addressCtrl.text.trim(),
       'description': _descriptionCtrl.text.trim().isEmpty ? null : _descriptionCtrl.text.trim(),
     };
-    context.read<SupplierBloc>().add(AddSupplier(data));
+    context.read<sup_bloc.SupplierBloc>().add(sup_event.AddSupplier(data));
     _snack('Creating supplier...');
     widget.onSaved?.call();
   }
@@ -363,14 +370,14 @@ class _SupplierOverlayScreenState extends State<SupplierOverlayScreen> {
       'address': _addressCtrl.text.trim().isEmpty ? null : _addressCtrl.text.trim(),
       'description': _descriptionCtrl.text.trim().isEmpty ? null : _descriptionCtrl.text.trim(),
     };
-    context.read<SupplierBloc>().add(UpdateSupplierEvent(id, data));
+    context.read<sup_bloc.SupplierBloc>().add(sup_event.UpdateSupplierEvent(id, data));
     _snack('Supplier updated');
     widget.onSaved?.call();
   }
 
   void _confirmDelete() {
     final id = widget.supplier!.id;
-    context.read<SupplierBloc>().add(DeleteSupplierEvent(id));
+    context.read<sup_bloc.SupplierBloc>().add(sup_event.DeleteSupplierEvent(id));
     _snack('Supplier deleted');
     widget.onSaved?.call();
   }

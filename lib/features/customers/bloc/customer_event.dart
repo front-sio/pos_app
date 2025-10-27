@@ -1,6 +1,10 @@
 abstract class CustomerEvent {}
 
-class FetchCustomers extends CustomerEvent {}
+class FetchCustomers extends CustomerEvent {
+  final int page;
+  final int limit;
+  FetchCustomers({this.page = 1, this.limit = 20});
+}
 
 class FetchCustomersPage extends CustomerEvent {
   final int page;

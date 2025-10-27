@@ -1,6 +1,10 @@
 abstract class SupplierEvent {}
 
-class FetchSuppliers extends SupplierEvent {}
+class FetchSuppliers extends SupplierEvent {
+  final int page;
+  final int limit;
+  FetchSuppliers({this.page = 1, this.limit = 20});
+}
 
 class FetchSuppliersPage extends SupplierEvent {
   final int page;

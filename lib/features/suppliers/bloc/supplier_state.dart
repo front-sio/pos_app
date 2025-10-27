@@ -11,15 +11,33 @@ class SuppliersLoading extends SupplierState {}
 class SuppliersLoaded extends SupplierState {
   final List<Supplier> suppliers;
   final String searchQuery;
+  final bool hasMore;
 
-  SuppliersLoaded(this.suppliers, {this.searchQuery = ''});
+  SuppliersLoaded(
+    this.suppliers, {
+    this.searchQuery = '',
+    this.hasMore = true,
+  });
 
   @override
-  List<Object?> get props => [suppliers, searchQuery];
+  List<Object?> get props => [suppliers, searchQuery, hasMore];
+
+  SuppliersLoaded copyWith({
+    List<Supplier>? suppliers,
+    String? searchQuery,
+    bool? hasMore,
+  }) {
+    return SuppliersLoaded(
+      suppliers ?? this.suppliers,
+      searchQuery: searchQuery ?? this.searchQuery,
+      hasMore: hasMore ?? this.hasMore,
+    );
+  }
 }
 
 class SuppliersError extends SupplierState {
   final String message;
+
   SuppliersError(this.message);
 
   @override

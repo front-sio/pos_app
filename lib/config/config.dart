@@ -6,3 +6,7 @@ class AppConfig {
     defaultValue: 'https://api.stebofarm.co.tz',
   );
 }
+
+
+// defaultValue: 'http://localhost:8080',
+// defaultValue: 'https://api.stebofarm.co.tz',

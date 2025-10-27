@@ -11,15 +11,33 @@ class CustomersLoading extends CustomerState {}
 class CustomersLoaded extends CustomerState {
   final List<Customer> customers;
   final String searchQuery;
+  final bool hasMore;
 
-  CustomersLoaded(this.customers, {this.searchQuery = ''});
+  CustomersLoaded(
+    this.customers, {
+    this.searchQuery = '',
+    this.hasMore = true,
+  });
 
   @override
-  List<Object?> get props => [customers, searchQuery];
+  List<Object?> get props => [customers, searchQuery, hasMore];
+
+  CustomersLoaded copyWith({
+    List<Customer>? customers,
+    String? searchQuery,
+    bool? hasMore,
+  }) {
+    return CustomersLoaded(
+      customers ?? this.customers,
+      searchQuery: searchQuery ?? this.searchQuery,
+      hasMore: hasMore ?? this.hasMore,
+    );
+  }
 }
 
 class CustomersError extends CustomerState {
   final String message;
+
   CustomersError(this.message);
 
   @override

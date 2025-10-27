@@ -59,7 +59,8 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
     final dateLabel = _date != null ? DateFormat.yMMMd().format(_date!) : 'Pick date';
 
     return BlocConsumer<ExpenseBloc, ExpenseState>(
-      listenWhen: (p, c) => p is ExpenseOperationSuccess || p is ExpensesError || c is ExpenseOperationSuccess || c is ExpensesError,
+      // Only respond to the current emitted state
+      listenWhen: (prev, curr) => curr is ExpenseOperationSuccess || curr is ExpensesError,
       listener: (context, state) {
         if (state is ExpenseOperationSuccess) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(state.message)));
@@ -112,7 +113,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                 ),
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
-                  onPressed: _pickDate,
+                  onPressed: submitting ? null : _pickDate,
                   icon: const Icon(Icons.date_range),
                   label: Text(dateLabel),
                 ),

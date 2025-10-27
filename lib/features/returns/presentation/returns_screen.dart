@@ -4,7 +4,6 @@ import 'package:sales_app/constants/sizes.dart';
 import 'package:sales_app/features/returns/data/return_model.dart';
 import 'package:sales_app/features/returns/services/return_service.dart';
 
-
 class ReturnsScreen extends StatefulWidget {
   const ReturnsScreen({super.key});
 
@@ -60,11 +59,17 @@ class _ReturnsScreenState extends State<ReturnsScreen> {
               separatorBuilder: (_, __) => const SizedBox(height: 8),
               itemBuilder: (context, i) {
                 final r = data[i];
+                final title = (r.productName != null && r.productName!.trim().isNotEmpty)
+                    ? r.productName!
+                    : 'Sale item #${r.saleitemId}';
                 return Card(
                   child: ListTile(
-                    leading: const Icon(Icons.undo, color: Colors.orange),
-                    title: Text('Return #${r.id} • SaleItem #${r.saleitemId}'),
-                    subtitle: Text('Qty: ${r.quantityReturned} • ${r.reason ?? "No reason"}'),
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.orange.withOpacity(0.12),
+                      child: const Icon(Icons.undo, color: Colors.orange),
+                    ),
+                    title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+                    subtitle: Text('Return #${r.id} • Qty: ${r.quantityReturned} • ${r.reason?.trim().isNotEmpty == true ? r.reason : "No reason"}'),
                     trailing: Text(
                       _format(r.returnedAt),
                       style: Theme.of(context).textTheme.bodySmall,
