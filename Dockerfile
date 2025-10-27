@@ -1,15 +1,20 @@
-# Stage 1: Build Flutter web app
-FROM dart:stable AS build
-WORKDIR /app
-COPY pubspec.* ./
-RUN dart pub get
-COPY . .
-RUN dart pub global activate flutter_tools && \
-    flutter pub get && \
-    flutter build web --release --no-tree-shake-icons
+# === Stage 1: Build ===
+FROM flutter:3.19 AS build-stage
 
-# Stage 2: Serve with Nginx (only static files)
-FROM nginx:alpine
-COPY --from=build /app/build/web /usr/share/nginx/html
+WORKDIR /app
+
+COPY pubspec.yaml pubspec.yaml
+RUN flutter pub get
+
+COPY . .
+
+RUN flutter build web --release
+
+# === Stage 2: Serve ===
+FROM nginx:alpine AS serve-stage
+WORKDIR /usr/share/nginx/html
+COPY --from=build-stage /app/build/web .
+
 EXPOSE 80
+
 CMD ["nginx", "-g", "daemon off;"]
