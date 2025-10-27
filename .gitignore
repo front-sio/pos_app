@@ -8,6 +8,9 @@
 build/
 generated_plugin_registrant.dart
 
+# Flutter web build output
+build/web/
+
 # iOS
 ios/Flutter/Flutter.podspec
 ios/Flutter/Generated.xcconfig
@@ -21,12 +24,14 @@ android/.gradle/
 android/app/build/
 android/local.properties
 android/.idea/
+android/app/google-services.json
 
 # macOS
 macos/Flutter/Generated.xcconfig
 macos/Flutter/ephemeral/
 macos/Pods/
 macos/Runner.xcworkspace
+macos/Runner/GeneratedPluginRegistrant.*
 
 # Linux
 linux/flutter/ephemeral/
@@ -34,19 +39,44 @@ linux/build/
 
 # Windows
 windows/flutter/ephemeral/
+windows/build/
 windows/runner/
+windows/Runner/GeneratedPluginRegistrant.*
 
-# Web build (you can ignore these if you don't want to version build outputs)
-# build/web/
+# Web (Flutter web)
+web/generated_plugin_registrant.dart
 
 # VS Code
 .vscode/
+.history/
 
 # IntelliJ / Android Studio
 .idea/
+*.iml
 
 # Logs
 *.log
 
+# Crashlytics/Firebase
+crashlytics-build.properties
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+
+# Coverage
+coverage/
+lcov.info
+
 # Misc
-*.iml
+*.swp
+*.swo
+.DS_Store
+*.tmproj
+*.tmp
+*.orig
+
+# Env files
+.env
+.env.*

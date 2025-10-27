@@ -5,5 +5,5 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8090:80" # Expose Flutter web at http://your-vps-ip:8090
+      - "8090:80"
     restart: unless-stopped
