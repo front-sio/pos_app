@@ -11,9 +11,10 @@ class AppSettings {
     required this.fractionDigits,
   });
 
+  // Global default: KMF / CF / sw_TZ / 0
   static const fallback = AppSettings(
-    currencyCode: 'TZS',
-    currencySymbol: 'TSh',
+    currencyCode: 'KMF',
+    currencySymbol: 'CF',
     currencyLocale: 'sw_TZ',
     fractionDigits: 0,
   );
@@ -23,20 +24,24 @@ class AppSettings {
     String? currencySymbol,
     String? currencyLocale,
     int? fractionDigits,
-  }) =>
-      AppSettings(
-        currencyCode: currencyCode ?? this.currencyCode,
-        currencySymbol: currencySymbol ?? this.currencySymbol,
-        currencyLocale: currencyLocale ?? this.currencyLocale,
-        fractionDigits: fractionDigits ?? this.fractionDigits,
-      );
+  }) {
+    return AppSettings(
+      currencyCode: currencyCode ?? this.currencyCode,
+      currencySymbol: currencySymbol ?? this.currencySymbol,
+      currencyLocale: currencyLocale ?? this.currencyLocale,
+      fractionDigits: fractionDigits ?? this.fractionDigits,
+    );
+  }
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
+    final digitsRaw = json['fraction_digits'];
+    final digits = digitsRaw is int ? digitsRaw : int.tryParse('${digitsRaw ?? 0}') ?? 0;
+
     return AppSettings(
-      currencyCode: json['currency_code'] ?? 'KMF',
-      currencySymbol: json['currency_symbol'] ?? 'TSh',
-      currencyLocale: json['currency_locale'] ?? 'sw_TZ',
-      fractionDigits: json['fraction_digits'] ?? 0,
+      currencyCode: (json['currency_code'] ?? 'KMF').toString(),
+      currencySymbol: (json['currency_symbol'] ?? 'CF').toString(),
+      currencyLocale: (json['currency_locale'] ?? 'sw_TZ').toString(),
+      fractionDigits: digits,
     );
   }
 

@@ -10,9 +10,9 @@ class SettingsService {
   final String baseUrl;
   final AuthHttpClient _client;
 
-  // Optional in-memory cache for currencies using ETag to reduce payloads
-  static String? _currenciesEtag;
-  static List<Map<String, dynamic>>? _currenciesCache;
+  // ETag per-URL ili kuepuka kuchanganya matokeo ya queries tofauti
+  static final Map<String, String> _etagByUrl = {};
+  static final Map<String, List<Map<String, dynamic>>> _cacheByUrl = {};
 
   SettingsService({
     String? baseUrl,
@@ -56,14 +56,7 @@ class SettingsService {
     return AppSettings.fromJson(data);
   }
 
-  /// Load currencies from the DB, always including the official symbol from backend.
-  /// Optional filters:
-  /// - q: search by code or name
-  /// - region: "africa" to restrict to African currencies
-  /// - active: true/false
-  /// - limit: 1..1000 (default 500)
-  ///
-  /// This method is backward-compatible with previous signature.
+  /// Orodha ya sarafu (catalog) kutoka DB
   Future<List<Map<String, dynamic>>> getCurrencies({
     String? q,
     String? region,
@@ -77,27 +70,28 @@ class SettingsService {
       'limit': limit.clamp(1, 1000).toString(),
     };
 
-    final uri = Uri.parse('$baseUrl/settings/currencies').replace(queryParameters: qp.isEmpty ? null : qp);
+    final uri = Uri.parse('$baseUrl/settings/currencies').replace(
+      queryParameters: qp.isEmpty ? null : qp,
+    );
+    final urlKey = uri.toString();
 
-    // Include ETag for conditional requests if we have cache
     final headers = {
       ..._jsonHeaders,
-      if (_currenciesEtag != null) HttpHeaders.ifNoneMatchHeader: _currenciesEtag!,
+      if (_etagByUrl[urlKey] != null)
+        HttpHeaders.ifNoneMatchHeader: _etagByUrl[urlKey]!,
     };
 
     final res = await _client.get(uri, headers: headers).timeout(const Duration(seconds: 20));
 
-    if (res.statusCode == 304 && _currenciesCache != null) {
-      // Not modified, return cache
-      return _currenciesCache!;
+    if (res.statusCode == 304 && _cacheByUrl[urlKey] != null) {
+      return _cacheByUrl[urlKey]!;
     }
 
     if (res.statusCode != 200) throw _err('Failed to load currencies', res);
 
-    // Capture ETag for caching
     final etag = res.headers[HttpHeaders.etagHeader];
     if (etag != null && etag.isNotEmpty) {
-      _currenciesEtag = etag;
+      _etagByUrl[urlKey] = etag;
     }
 
     final decoded = jsonDecode(res.body);
@@ -111,22 +105,11 @@ class SettingsService {
         .toList()
         .cast<Map<String, dynamic>>();
 
-    // Keep a cache of the last response
-    _currenciesCache = list;
+    _cacheByUrl[urlKey] = list;
     return list;
   }
 
-  /// Convenience helpers
-  Future<List<Map<String, dynamic>>> getCurrenciesAfrica({String? q, bool? active, int limit = 500}) {
-    return getCurrencies(q: q, region: 'africa', active: active, limit: limit);
-  }
-
-  Future<List<Map<String, dynamic>>> searchCurrencies(String query, {int limit = 100}) {
-    return getCurrencies(q: query, limit: limit);
-  }
-
   Map<String, dynamic> _sanitizeCurrencyMap(Map raw) {
-    // Ensure code, name, symbol, fraction_digits exist with safe defaults
     final code = (raw['code'] ?? '').toString();
     final name = (raw['name'] ?? code).toString();
     final symbol = (raw['symbol'] ?? code).toString();
@@ -137,7 +120,6 @@ class SettingsService {
       'name': name,
       'symbol': symbol,
       'fraction_digits': digits,
-      // passthrough optional fields if backend provides them
       if (raw.containsKey('numeric_code')) 'numeric_code': raw['numeric_code'],
       if (raw.containsKey('countries')) 'countries': raw['countries'],
       if (raw.containsKey('is_active')) 'is_active': raw['is_active'],
