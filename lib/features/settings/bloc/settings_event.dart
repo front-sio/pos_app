@@ -17,7 +17,6 @@ class LoadCurrencies extends SettingsEvent {
 
 class SaveSettings extends SettingsEvent {
   final AppSettings settings;
-
   const SaveSettings(this.settings);
 
   @override

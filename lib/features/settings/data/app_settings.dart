@@ -11,11 +11,11 @@ class AppSettings {
     required this.fractionDigits,
   });
 
-  // Global default: KMF / CF / sw_TZ / 0
+  // Global default: KMF / CF / fr-KM / 0
   static const fallback = AppSettings(
     currencyCode: 'KMF',
     currencySymbol: 'CF',
-    currencyLocale: 'sw_TZ',
+    currencyLocale: 'fr-KM',
     fractionDigits: 0,
   );
 
@@ -40,7 +40,7 @@ class AppSettings {
     return AppSettings(
       currencyCode: (json['currency_code'] ?? 'KMF').toString(),
       currencySymbol: (json['currency_symbol'] ?? 'CF').toString(),
-      currencyLocale: (json['currency_locale'] ?? 'sw_TZ').toString(),
+      currencyLocale: (json['currency_locale'] ?? 'fr-KM').toString(),
       fractionDigits: digits,
     );
   }

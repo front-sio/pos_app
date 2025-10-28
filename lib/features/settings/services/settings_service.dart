@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-
 import 'package:http/http.dart' as http;
 import 'package:sales_app/config/config.dart';
 import 'package:sales_app/features/settings/data/app_settings.dart';
@@ -10,7 +9,6 @@ class SettingsService {
   final String baseUrl;
   final AuthHttpClient _client;
 
-  // ETag per-URL ili kuepuka kuchanganya matokeo ya queries tofauti
   static final Map<String, String> _etagByUrl = {};
   static final Map<String, List<Map<String, dynamic>>> _cacheByUrl = {};
 
@@ -56,7 +54,6 @@ class SettingsService {
     return AppSettings.fromJson(data);
   }
 
-  /// Orodha ya sarafu (catalog) kutoka DB
   Future<List<Map<String, dynamic>>> getCurrencies({
     String? q,
     String? region,
@@ -114,12 +111,14 @@ class SettingsService {
     final name = (raw['name'] ?? code).toString();
     final symbol = (raw['symbol'] ?? code).toString();
     final digits = int.tryParse('${raw['fraction_digits'] ?? 2}') ?? 2;
+    final locale = (raw['locale'] ?? 'en-US').toString();
 
     return {
       'code': code,
       'name': name,
       'symbol': symbol,
       'fraction_digits': digits,
+      'locale': locale,
       if (raw.containsKey('numeric_code')) 'numeric_code': raw['numeric_code'],
       if (raw.containsKey('countries')) 'countries': raw['countries'],
       if (raw.containsKey('is_active')) 'is_active': raw['is_active'],

@@ -17,7 +17,6 @@ class _CurrencySettingsScreenState extends State<CurrencySettingsScreen> {
   String _selectedCode = AppSettings.fallback.currencyCode;
   final _symbolCtrl = TextEditingController();
 
-  // Hifadhi currencies za mwisho ili zitumike wakati wa SettingsSaving
   List<Map<String, dynamic>> _lastCurrencies = const [];
 
   @override
@@ -53,19 +52,15 @@ class _CurrencySettingsScreenState extends State<CurrencySettingsScreen> {
     }
   }
 
-  // Sync symbol tu pale ambapo code ya Bloc inalingana na selection ya sasa
   void _syncFromState(SettingsState state) {
     if (state is SettingsLoaded) {
       _lastCurrencies = state.currencies;
-      // endapo Loaded baada ya Save, songa local selection ili iakisi persisted value
       _selectedCode = state.settings.currencyCode.toUpperCase();
       final meta = _metaFor(state.currencies, _selectedCode);
       final dbSymbol = (meta?['symbol'] ?? state.settings.currencySymbol).toString();
       if (_symbolCtrl.text != dbSymbol) _symbolCtrl.text = dbSymbol;
-      // pia weka kwenye _editing ili Save inayofuata iwe na data ya sasa
       _editing = state.settings;
     } else if (state is SettingsSaving) {
-      // wakati Saving, huenda symbol ibadilike; weka tu symbol kutoka settings ya sasa
       if (_symbolCtrl.text != state.settings.currencySymbol) {
         _symbolCtrl.text = state.settings.currencySymbol;
       }
@@ -98,7 +93,6 @@ class _CurrencySettingsScreenState extends State<CurrencySettingsScreen> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          // Chukua currencies na settings za sasa kwa usahihi
           final List<Map<String, dynamic>> currencies;
           final AppSettings current;
 
@@ -106,17 +100,14 @@ class _CurrencySettingsScreenState extends State<CurrencySettingsScreen> {
             currencies = state.currencies;
             current = state.settings;
           } else if (state is SettingsSaving) {
-            // wakati Saving: tumia currencies za mwisho zilizohifadhiwa
             currencies = _lastCurrencies;
             current = state.settings;
           } else {
-            // fallback isiyowezekana kutokana na buildWhen, lakini salama
             currencies = _lastCurrencies;
             current = _editing;
           }
 
-          _editing = current; // endelea na editing kulingana na state
-          // Hakikisha _selectedCode ipo uppercase
+          _editing = current;
           _selectedCode = _selectedCode.toUpperCase();
 
           final meta = _metaFor(currencies, _selectedCode);
@@ -124,8 +115,8 @@ class _CurrencySettingsScreenState extends State<CurrencySettingsScreen> {
           final dbDigits =
               int.tryParse('${meta?['fraction_digits'] ?? _editing.fractionDigits}') ??
                   _editing.fractionDigits;
+          final dbLocale = (meta?['locale'] ?? _editing.currencyLocale).toString();
 
-          // value ya dropdown lazima ilingane kabisa na item value (case sensitive)
           final availableCodes = currencies
               .map((c) => (c['code']?.toString().toUpperCase() ?? ''))
               .toSet();
@@ -156,11 +147,13 @@ class _CurrencySettingsScreenState extends State<CurrencySettingsScreen> {
                     final newDigits =
                         int.tryParse('${m?['fraction_digits'] ?? _editing.fractionDigits}') ??
                             _editing.fractionDigits;
+                    final newLocale = (m?['locale'] ?? _editing.currencyLocale).toString();
                     setState(() {
                       _selectedCode = val.toUpperCase();
                       _editing = _editing.copyWith(
                         currencyCode: _selectedCode,
-                        currencySymbol: newSymbol, // symbol auto kutoka DB
+                        currencySymbol: newSymbol,
+                        currencyLocale: newLocale,
                         fractionDigits: newDigits,
                       );
                       _symbolCtrl.text = newSymbol;
@@ -176,12 +169,18 @@ class _CurrencySettingsScreenState extends State<CurrencySettingsScreen> {
                   decoration: const InputDecoration(labelText: 'Symbol (auto)'),
                 ),
                 const SizedBox(height: 12),
-                // Onyesha digits zilizotokana na DB ili mtumiaji aione (read-only hapa)
                 TextFormField(
                   key: ValueKey('digits_${_selectedCode}_$dbDigits'),
                   initialValue: '$dbDigits',
                   readOnly: true,
                   decoration: const InputDecoration(labelText: 'Fraction digits (from DB)'),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  key: ValueKey('locale_${_selectedCode}_$dbLocale'),
+                  initialValue: dbLocale,
+                  readOnly: true,
+                  decoration: const InputDecoration(labelText: 'Locale (from DB)'),
                 ),
                 const SizedBox(height: 12),
                 ElevatedButton(

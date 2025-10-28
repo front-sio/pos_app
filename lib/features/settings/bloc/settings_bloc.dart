@@ -6,7 +6,6 @@ import 'package:sales_app/features/settings/services/settings_service.dart';
 
 class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   final SettingsService service;
-
   List<Map<String, dynamic>> _currencies = [];
 
   SettingsBloc(this.service) : super(SettingsInitial()) {
@@ -14,7 +13,6 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       emit(SettingsLoading());
       try {
         final settings = await service.getSettings();
-        // Load currencies if we haven't yet
         if (_currencies.isEmpty) {
           _currencies = await service.getCurrencies();
         }
@@ -30,6 +28,8 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
         if (state is SettingsLoaded) {
           final s = (state as SettingsLoaded).settings;
           emit(SettingsLoaded(s, _currencies));
+        } else {
+          emit(SettingsLoaded(AppSettings.fallback, _currencies));
         }
       } catch (e) {
         emit(SettingsError(e.toString()));
@@ -37,14 +37,21 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     });
 
     on<SaveSettings>((event, emit) async {
-      if (state is SettingsLoaded) {
-        final currentCurrencies = (state as SettingsLoaded).currencies;
-        emit(SettingsSaving(event.settings, currentCurrencies));
-      }
+      final List<Map<String, dynamic>> currentCurrencies = _currencies.isNotEmpty ? _currencies :
+        (state is SettingsLoaded) ? (state as SettingsLoaded).currencies : <Map<String, dynamic>>[];
+
+      emit(SettingsSaving(event.settings, currentCurrencies));
       try {
-        final updated = await service.updateSettings(event.settings);
+        final Map<String, dynamic> meta = currentCurrencies.firstWhere(
+            (c) => c['code'] == event.settings.currencyCode,
+            orElse: () => <String, dynamic>{});
+        final locale = meta['locale'] ?? event.settings.currencyLocale;
+        final settingsWithCorrectLocale = event.settings.copyWith(
+          currencyLocale: locale,
+        );
+        
+        final updated = await service.updateSettings(settingsWithCorrectLocale);
         emit(SettingsSaved(updated, _currencies));
-        // Immediately back to loaded
         emit(SettingsLoaded(updated, _currencies));
       } catch (e) {
         emit(SettingsError(e.toString()));
