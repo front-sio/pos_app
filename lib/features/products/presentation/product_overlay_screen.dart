@@ -10,10 +10,16 @@ import 'package:sales_app/features/products/data/product_model.dart';
 import 'package:sales_app/features/products/services/product_service.dart';
 import 'package:sales_app/utils/platform_helper.dart';
 import 'package:sales_app/utils/responsive.dart';
+import 'package:sales_app/utils/currency.dart';
 import 'package:sales_app/widgets/barcode_scanner_screen.dart';
 
 import 'package:sales_app/features/products/presentation/unit_overlay_screen.dart';
 import 'package:sales_app/features/products/presentation/category_overlay_screen.dart';
+
+// Settings for currency-aware inputs
+import 'package:sales_app/features/settings/bloc/settings_bloc.dart';
+import 'package:sales_app/features/settings/bloc/settings_state.dart';
+import 'package:sales_app/features/settings/data/app_settings.dart';
 
 enum ProductOverlayMode { create, view, edit, deleteConfirm }
 
@@ -56,8 +62,6 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
   List<SupplierOption> _suppliers = [];
 
   bool _loadingMeta = true;
-
-  NumberFormat get _money => NumberFormat.simpleCurrency();
 
   @override
   void initState() {
@@ -218,6 +222,47 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
     );
   }
 
+  // Currency helpers for inputs and formatting
+  int _fractionDigits(BuildContext context) {
+    final st = context.read<SettingsBloc>().state;
+    if (st is SettingsLoaded) return st.settings.fractionDigits;
+    if (st is SettingsSaved) return st.settings.fractionDigits;
+    return AppSettings.fallback.fractionDigits;
+  }
+
+  String _currencySymbol(BuildContext context) {
+    final sample = CurrencyFmt.format(context, 0);
+    final parts = sample.split(' ');
+    return parts.isNotEmpty ? parts.first : '';
+  }
+
+  List<TextInputFormatter> _moneyInputFormatters(BuildContext context) {
+    final digits = _fractionDigits(context);
+    if (digits <= 0) return [FilteringTextInputFormatter.digitsOnly];
+    return [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,' + digits.toString() + r'}$'))];
+  }
+
+  String _moneyHint(BuildContext context) {
+    final d = _fractionDigits(context);
+    return d <= 0 ? '0' : '0.${'0' * d}';
+  }
+
+  InputDecoration _decor({
+    required String label,
+    required IconData icon,
+    String? hint,
+    String? prefixText,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      prefixIcon: Icon(icon, color: cs.primary),
+      prefixText: prefixText,
+      border: const OutlineInputBorder(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -324,9 +369,9 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
 
     final kpiCards = <_Kpi>[
       _Kpi(label: 'Quantity', value: p.unitName != null && p.unitName!.isNotEmpty ? '${p.quantity.toStringAsFixed(2)} ${p.unitName!.toUpperCase()}' : p.quantity.toStringAsFixed(2), icon: Icons.inventory_2_outlined),
-      _Kpi(label: 'Total Value', value: _money.format(totalValue), icon: Icons.stacked_bar_chart),
-      _Kpi(label: 'Price/Qty', value: _money.format(p.pricePerQuantity), icon: Icons.price_change_outlined),
-      _Kpi(label: 'Selling Price', value: p.price != null ? _money.format(p.price!) : 'N/A', icon: Icons.attach_money),
+      _Kpi(label: 'Total Value', value: CurrencyFmt.format(context, totalValue), icon: Icons.stacked_bar_chart),
+      _Kpi(label: 'Price/Qty', value: CurrencyFmt.format(context, p.pricePerQuantity), icon: Icons.price_change_outlined),
+      _Kpi(label: 'Selling Price', value: p.price != null ? CurrencyFmt.format(context, p.price!) : 'N/A', icon: Icons.attach_money),
     ];
 
     final details = <_Detail>[
@@ -381,6 +426,8 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
     final isDesktop = Responsive.isDesktop(context);
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final symbol = _currencySymbol(context);
+    final moneyHint = _moneyHint(context);
 
     Widget unitPicker() => Row(
           children: [
@@ -398,12 +445,31 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
           ],
         );
 
+    // Money fields (currency-aware)
+    Widget sellingPriceField() => TextFormField(
+          controller: _priceController,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: _moneyInputFormatters(context),
+          validator: _numberValidator,
+          decoration: _decor(label: 'Selling Price*', icon: Icons.attach_money, hint: moneyHint, prefixText: symbol.isNotEmpty ? '$symbol ' : null),
+          onTap: () => HapticFeedback.lightImpact(),
+        );
+
+    Widget pricePerQtyField() => TextFormField(
+          controller: _pricePerQuantityController,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: _moneyInputFormatters(context),
+          validator: _numberValidator,
+          decoration: _decor(label: 'Price per Quantity*', icon: Icons.price_change, hint: moneyHint, prefixText: symbol.isNotEmpty ? '$symbol ' : null),
+          onTap: () => HapticFeedback.lightImpact(),
+        );
+
     Widget leftCol() => Column(children: [
           _inputRequired(controller: _nameController, label: 'Product Name*', icon: Icons.label_outline, validator: _requiredValidator),
           const SizedBox(height: AppSizes.padding),
           _inputRequired(controller: _initialQuantityController, label: 'Initial Quantity*', icon: Icons.production_quantity_limits, keyboardType: TextInputType.number, validator: _numberValidator),
           const SizedBox(height: AppSizes.padding),
-          _inputRequired(controller: _priceController, label: 'Selling Price*', icon: Icons.attach_money, keyboardType: TextInputType.number, validator: _numberValidator),
+          sellingPriceField(),
           const SizedBox(height: AppSizes.padding),
           _barcodeField(),
           const SizedBox(height: AppSizes.padding),
@@ -413,7 +479,7 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
         ]);
 
     Widget rightCol() => Column(children: [
-          _inputRequired(controller: _pricePerQuantityController, label: 'Price per Quantity*', icon: Icons.price_change, keyboardType: TextInputType.number, validator: _numberValidator),
+          pricePerQtyField(),
           const SizedBox(height: AppSizes.padding),
           categoryPicker(),
           const SizedBox(height: AppSizes.padding),
@@ -441,7 +507,7 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
                   children: [
                     leftCol(),
                     const SizedBox(height: AppSizes.padding),
-                    _inputRequired(controller: _pricePerQuantityController, label: 'Price per Quantity*', icon: Icons.price_change, keyboardType: TextInputType.number, validator: _numberValidator),
+                    pricePerQtyField(),
                     const SizedBox(height: AppSizes.padding),
                     _categoryDropdown(),
                     const SizedBox(height: AppSizes.padding),
@@ -509,7 +575,7 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
     widget.onSaved?.call();
   }
 
-  // Inputs
+  // Inputs and helpers
   InputDecoration _inputDecoration(String label) => InputDecoration(labelText: label);
 
   Widget _input({
@@ -524,7 +590,7 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
       controller: controller,
       keyboardType: keyboardType,
       maxLines: maxLines,
-      decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon, color: cs.primary)),
+      decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon, color: cs.primary), border: const OutlineInputBorder()),
     );
   }
 
@@ -542,7 +608,7 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
       keyboardType: keyboardType,
       validator: validator,
       maxLines: maxLines,
-      decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon, color: cs.primary)),
+      decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon, color: cs.primary), border: const OutlineInputBorder()),
       onTap: () => HapticFeedback.lightImpact(),
       inputFormatters: keyboardType == TextInputType.number ? <TextInputFormatter>[FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))] : null,
     );
@@ -623,6 +689,7 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
       decoration: InputDecoration(
         labelText: 'Barcode',
         prefixIcon: Icon(Icons.qr_code, color: cs.primary),
+        border: const OutlineInputBorder(),
         suffixIcon: Row(
           mainAxisSize: MainAxisSize.min,
           children: [

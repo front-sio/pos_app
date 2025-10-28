@@ -10,6 +10,12 @@ class Sale {
   final List<SaleItem> items;
   final InvoiceStatus? invoiceStatus;
 
+  // New: order-level discount on the sale (parsed from multiple possible keys)
+  final double? discountAmount;
+
+  // Convenience: keep UI usage `sale.discount`
+  double get discount => discountAmount ?? 0.0;
+
   const Sale({
     required this.id,
     this.customerId,
@@ -17,6 +23,7 @@ class Sale {
     this.totalAmount,
     this.items = const [],
     this.invoiceStatus,
+    this.discountAmount,
   });
 
   static DateTime _parseDate(dynamic v) {
@@ -57,17 +64,24 @@ class Sale {
   }
 
   factory Sale.fromJson(Map<String, dynamic> json) {
+    final discountRaw =
+        json['order_discount_amount'] ??
+        json['discount_amount'] ??
+        json['discount'];
+
     return Sale(
       id: _asInt(json['id']),
       customerId: json['customer_id'] == null ? null : _asInt(json['customer_id']),
       soldAt: _parseDate(json['sold_at']),
       totalAmount: _asDoubleOrNull(json['total_amount']),
       items: (json['items'] as List<dynamic>?)
-          ?.map((e) => SaleItem.fromJson(e as Map<String, dynamic>))
-          .toList() ?? [],
+              ?.map((e) => SaleItem.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
       invoiceStatus: json['invoice'] != null
           ? InvoiceStatus.fromJson(json['invoice'] as Map<String, dynamic>)
           : null,
+      discountAmount: _asDoubleOrNull(discountRaw),
     );
   }
 
@@ -78,6 +92,7 @@ class Sale {
     double? totalAmount,
     List<SaleItem>? items,
     InvoiceStatus? invoiceStatus,
+    double? discountAmount,
   }) {
     return Sale(
       id: id ?? this.id,
@@ -86,6 +101,7 @@ class Sale {
       totalAmount: totalAmount ?? this.totalAmount,
       items: items ?? this.items,
       invoiceStatus: invoiceStatus ?? this.invoiceStatus,
+      discountAmount: discountAmount ?? this.discountAmount,
     );
   }
 
@@ -93,12 +109,13 @@ class Sale {
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
     return other is Sale &&
-           other.id == id &&
-           other.customerId == customerId &&
-           other.soldAt == soldAt &&
-           other.totalAmount == totalAmount &&
-           listEquals(other.items, items) &&
-           other.invoiceStatus == invoiceStatus;
+        other.id == id &&
+        other.customerId == customerId &&
+        other.soldAt == soldAt &&
+        other.totalAmount == totalAmount &&
+        listEquals(other.items, items) &&
+        other.invoiceStatus == invoiceStatus &&
+        other.discountAmount == discountAmount;
   }
 
   @override
@@ -110,6 +127,7 @@ class Sale {
       totalAmount,
       Object.hashAll(items),
       invoiceStatus,
+      discountAmount,
     );
   }
 }
@@ -133,7 +151,7 @@ class InvoiceStatus {
 
   factory InvoiceStatus.fromJson(Map<String, dynamic> json) {
     return InvoiceStatus(
-      invoiceId: json['invoice_id'] as int,
+      invoiceId: (json['invoice_id'] as num).toInt(),
       status: json['status'] as String,
       totalAmount: (json['total_amount'] as num).toDouble(),
       paidAmount: (json['paid_amount'] as num).toDouble(),

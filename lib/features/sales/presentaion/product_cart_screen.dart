@@ -4,25 +4,37 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+
 import 'package:sales_app/constants/colors.dart';
 import 'package:sales_app/constants/sizes.dart';
+
 import 'package:sales_app/features/customers/data/customer_model.dart';
 import 'package:sales_app/features/customers/services/customer_services.dart';
+
 import 'package:sales_app/features/products/bloc/products_bloc.dart';
 import 'package:sales_app/features/products/bloc/products_state.dart';
 import 'package:sales_app/features/products/data/product_model.dart';
+
 import 'package:sales_app/features/sales/bloc/sales_bloc.dart';
 import 'package:sales_app/features/sales/bloc/sales_event.dart';
 import 'package:sales_app/features/sales/bloc/sales_state.dart';
 import 'package:sales_app/features/sales/models/line_edit.dart';
+
 import 'package:sales_app/features/sales/presentaion/widgets/buttom_summary_overlay.dart';
 import 'package:sales_app/features/sales/presentaion/widgets/cart_item_card.dart';
 import 'package:sales_app/features/sales/presentaion/widgets/customer_seletor.dart';
 import 'package:sales_app/features/sales/presentaion/widgets/empty_cart_view.dart';
+
 import 'package:sales_app/utils/platform_helper.dart';
 import 'package:sales_app/config/config.dart';
 import 'package:sales_app/widgets/scanner_overlay.dart';
 import 'package:sales_app/utils/interaction_lock.dart';
+
+// Currency settings
+import 'package:sales_app/utils/currency.dart';
+import 'package:sales_app/features/settings/bloc/settings_bloc.dart';
+import 'package:sales_app/features/settings/bloc/settings_state.dart';
+import 'package:sales_app/features/settings/data/app_settings.dart';
 
 class ProductCartScreen extends StatefulWidget {
   final VoidCallback? onCheckout;
@@ -91,7 +103,44 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
     super.dispose();
   }
 
-  // Data loading
+  /* ------------------------------ Currency helpers ------------------------------ */
+
+  int _fractionDigits() {
+    final st = context.read<SettingsBloc>().state;
+    if (st is SettingsLoaded) return st.settings.fractionDigits;
+    if (st is SettingsSaved) return st.settings.fractionDigits;
+    return AppSettings.fallback.fractionDigits;
+  }
+
+  String _currencySymbol() {
+    // Take the first token returned by CurrencyFmt.format as the symbol
+    final sample = CurrencyFmt.format(context, 0);
+    final parts = sample.split(' ');
+    return parts.isNotEmpty ? parts.first : '';
+  }
+
+  // Parse user-entered money safely (accepts "CF 1,234.50", "1 234,50", "1234.5", etc.)
+  double _parseAmount(String raw) {
+    if (raw.isEmpty) return 0.0;
+    final sym = _currencySymbol();
+    var v = raw.trim();
+    if (sym.isNotEmpty) v = v.replaceAll(sym, '');
+    // Remove spaces and thousand separators, normalize comma to dot if it's the only decimal separator
+    v = v.replaceAll(RegExp(r'\s'), '');
+    // If string has both '.' and ',', assume ',' is thousands and '.' is decimal; remove commas.
+    if (v.contains('.') && v.contains(',')) {
+      v = v.replaceAll(',', '');
+    } else if (v.contains(',') && !v.contains('.')) {
+      // Assume comma as decimal separator
+      v = v.replaceAll(',', '.');
+    }
+    // Remove any character that's not digit, dot, or minus.
+    v = v.replaceAll(RegExp(r'[^0-9\.\-]'), '');
+    return double.tryParse(v) ?? 0.0;
+  }
+
+  /* -------------------------------- Data loading -------------------------------- */
+
   Future<void> _loadCustomers() async {
     setState(() => _loadingCustomers = true);
     try {
@@ -128,7 +177,8 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
     }
   }
 
-  // Cart and checkout
+  /* ----------------------------- Cart and checkout ----------------------------- */
+
   void _handleBarcode(String barcode) {
     final value = barcode.trim();
     if (value.isEmpty) return;
@@ -222,6 +272,8 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
     );
   }
 
+  /* ------------------------------------ UI ------------------------------------ */
+
   @override
   Widget build(BuildContext context) {
     // When scanning, present scanner screen
@@ -247,6 +299,7 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
       bottomNavigationBar: BottomSummaryBar(
         paidAmountCtrl: _paidAmountCtrl,
         discountCtrl: _discountCtrl,
+        // IMPORTANT: pass our currency-aware parser so the bar can accept "CF 1,000" etc.
         computeParseAmount: _parseAmount,
         computeSubtotalCallback: () {
           final salesState = context.read<SalesBloc>().state;
@@ -255,6 +308,8 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
         },
         onCancel: _onCancel,
         onCheckout: _onCheckout,
+        // If your BottomSummaryBar supports showing formatted totals internally,
+        // it can call CurrencyFmt.format(context, ...) on the subtotal it computes via the callback above.
       ),
       body: _buildBody(),
     );
@@ -481,12 +536,11 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
     );
   }
 
-  // Helpers
+  /* ---------------------------------- Helpers --------------------------------- */
+
   void _requestRebuild() {
     if (mounted) setState(() {});
   }
-
-  double _parseAmount(String v) => double.tryParse(v.trim()) ?? 0.0;
 
   double _computeSubtotal(Map<Product, int> cart) {
     double total = 0;
@@ -512,6 +566,8 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
       _lineEdits.remove(k);
     }
 
+    final digits = _fractionDigits();
+
     for (final entry in cart.entries) {
       final p = entry.key;
       final qty = entry.value;
@@ -519,7 +575,7 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
       final le = _lineEdits[p.id]!;
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        final defaultPrice = (p.price ?? 0.0).toStringAsFixed(2);
+        final defaultPrice = (p.price ?? 0.0).toStringAsFixed(digits);
         if (le.unitPriceCtrl.text.isEmpty) {
           le.unitPriceCtrl.text = defaultPrice;
         }

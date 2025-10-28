@@ -4,16 +4,21 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:sales_app/constants/colors.dart';
 import 'package:sales_app/constants/sizes.dart';
+import 'package:sales_app/utils/currency.dart';
 
 import 'package:sales_app/features/products/bloc/products_bloc.dart';
 import 'package:sales_app/features/products/bloc/products_state.dart';
 import 'package:sales_app/features/products/data/product_model.dart';
-// Import SupplierOption from ProductService (remove local duplicate definition)
 import 'package:sales_app/features/products/services/product_service.dart';
 
 import 'package:sales_app/features/purchases/bloc/purchase_bloc.dart';
 import 'package:sales_app/features/purchases/bloc/purchase_event.dart';
 import 'package:sales_app/features/purchases/bloc/purchase_state.dart';
+
+// Settings (to infer fraction digits for money inputs)
+import 'package:sales_app/features/settings/bloc/settings_bloc.dart';
+import 'package:sales_app/features/settings/bloc/settings_state.dart';
+import 'package:sales_app/features/settings/data/app_settings.dart';
 
 class NewPurchaseScreen extends StatefulWidget {
   final VoidCallback? onSaved;
@@ -45,13 +50,12 @@ class _NewPurchaseScreenState extends State<NewPurchaseScreen> {
   final _formKey = GlobalKey<FormState>();
   final List<_LineItemVM> _lines = [_LineItemVM()];
 
-  // Supplier + status
   final _supplierSearchCtrl = TextEditingController();
   List<SupplierOption> _supplierOptions = [];
   SupplierOption? _selectedSupplier;
   bool _loadingSuppliers = false;
 
-  String _status = 'unpaid'; // paid | unpaid | credited
+  String _status = 'unpaid';
   final _paidAmountCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
 
@@ -78,7 +82,7 @@ class _NewPurchaseScreenState extends State<NewPurchaseScreen> {
     setState(() => _loadingSuppliers = true);
     try {
       final ps = context.read<ProductService>();
-      final list = await ps.getSuppliers(); // <- returns List<SupplierOption> from ProductService
+      final list = await ps.getSuppliers();
       setState(() => _supplierOptions = list);
     } catch (_) {
       // ignore
@@ -140,24 +144,55 @@ class _NewPurchaseScreenState extends State<NewPurchaseScreen> {
         );
   }
 
+  int _fractionDigits(BuildContext context) {
+    final st = context.read<SettingsBloc>().state;
+    if (st is SettingsLoaded) return st.settings.fractionDigits;
+    if (st is SettingsSaved) return st.settings.fractionDigits;
+    return AppSettings.fallback.fractionDigits;
+  }
+
+  List<TextInputFormatter> _moneyInputFormatters(BuildContext context) {
+    final digits = _fractionDigits(context);
+    if (digits <= 0) return [FilteringTextInputFormatter.digitsOnly];
+    return [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,' + digits.toString() + r'}$'))];
+  }
+
+  String _moneyHint(BuildContext context) {
+    final d = _fractionDigits(context);
+    return d <= 0 ? '0' : '0.${'0' * d}';
+  }
+
+  String _currencySymbol(BuildContext context) {
+    final sample = CurrencyFmt.format(context, 0);
+    final parts = sample.split(' ');
+    return parts.isNotEmpty ? parts.first : '';
+  }
+
   InputDecoration _inputDecoration({
     required String label,
     required IconData icon,
     String? hint,
+    String? prefixText,
+    bool dense = false,
   }) {
     return InputDecoration(
       labelText: label,
       hintText: hint,
-      isDense: false,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      isDense: dense,
+      contentPadding: dense
+          ? const EdgeInsets.symmetric(horizontal: 12, vertical: 10)
+          : const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       border: const OutlineInputBorder(),
       prefixIcon: Icon(icon, size: 20),
+      prefixText: prefixText,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final isSmall = MediaQuery.of(context).size.width < AppSizes.mobileBreakpoint;
+    final symbol = _currencySymbol(context);
+    final amountHint = _moneyHint(context);
 
     return Scaffold(
       backgroundColor: AppColors.kBackground,
@@ -219,13 +254,13 @@ class _NewPurchaseScreenState extends State<NewPurchaseScreen> {
                       const SizedBox(height: AppSizes.padding),
                       LayoutBuilder(
                         builder: (ctx, c) {
-                          final vertical = c.maxWidth < 420;
+                          final vertical = c.maxWidth < 560; // make this a bit wider to avoid cramped fields
                           if (vertical) {
                             return Column(
                               children: [
                                 _buildStatusDropdown(),
                                 const SizedBox(height: AppSizes.smallPadding),
-                                _buildPaidAmount(),
+                                _buildPaidAmount(symbol, amountHint),
                               ],
                             );
                           }
@@ -233,7 +268,7 @@ class _NewPurchaseScreenState extends State<NewPurchaseScreen> {
                             children: [
                               Expanded(child: _buildStatusDropdown()),
                               const SizedBox(width: AppSizes.smallPadding),
-                              Expanded(child: _buildPaidAmount()),
+                              Expanded(child: _buildPaidAmount(symbol, amountHint)),
                             ],
                           );
                         },
@@ -247,7 +282,7 @@ class _NewPurchaseScreenState extends State<NewPurchaseScreen> {
                           style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
                       const SizedBox(height: AppSizes.smallPadding),
 
-                      ..._lines.asMap().entries.map((e) => _buildLineItemResponsive(e.key, e.value)),
+                      ..._lines.asMap().entries.map((e) => _buildLineItemResponsive(e.key, e.value, symbol, amountHint)),
 
                       const SizedBox(height: AppSizes.smallPadding),
                       Align(
@@ -264,8 +299,8 @@ class _NewPurchaseScreenState extends State<NewPurchaseScreen> {
 
                       const SizedBox(height: AppSizes.padding),
                       _buildTotals(),
-
                       const SizedBox(height: AppSizes.padding * 1.5),
+
                       LayoutBuilder(
                         builder: (ctx, c) {
                           final vertical = c.maxWidth < 420;
@@ -405,12 +440,17 @@ class _NewPurchaseScreenState extends State<NewPurchaseScreen> {
     );
   }
 
-  Widget _buildPaidAmount() {
+  Widget _buildPaidAmount(String symbol, String amountHint) {
     return TextFormField(
       controller: _paidAmountCtrl,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}$'))],
-      decoration: _inputDecoration(label: 'Paid Amount (optional)', icon: Icons.payments_outlined, hint: '0.00'),
+      inputFormatters: _moneyInputFormatters(context),
+      decoration: _inputDecoration(
+        label: 'Paid Amount (optional)',
+        icon: Icons.payments_outlined,
+        hint: amountHint,
+        prefixText: symbol.isNotEmpty ? '$symbol ' : null,
+      ),
       validator: (v) {
         if (v == null || v.isEmpty) return null;
         final d = double.tryParse(v);
@@ -428,13 +468,13 @@ class _NewPurchaseScreenState extends State<NewPurchaseScreen> {
     );
   }
 
-  // Mobile-first line item row
-  Widget _buildLineItemResponsive(int index, _LineItemVM vm) {
+  // Line item row - mobile-first, prevents overflow on small widths
+  Widget _buildLineItemResponsive(int index, _LineItemVM vm, String symbol, String amountHint) {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSizes.smallPadding),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final narrow = constraints.maxWidth < 420;
+          final narrow = constraints.maxWidth < 560; // widen breakpoint to reduce cramped UI
           if (narrow) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -443,11 +483,14 @@ class _NewPurchaseScreenState extends State<NewPurchaseScreen> {
                 const SizedBox(height: AppSizes.smallPadding),
                 Row(
                   children: [
-                    Expanded(child: _qtyField(vm)),
+                    Expanded(child: _qtyField(vm, dense: true)),
                     const SizedBox(width: AppSizes.smallPadding),
-                    Expanded(child: _priceField(vm)),
+                    Expanded(child: _priceField(vm, symbol, amountHint, dense: true)),
                     const SizedBox(width: AppSizes.smallPadding),
-                    _removeBtn(index),
+                    SizedBox(
+                      width: 40,
+                      child: _removeBtn(index),
+                    ),
                   ],
                 ),
               ],
@@ -456,13 +499,16 @@ class _NewPurchaseScreenState extends State<NewPurchaseScreen> {
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(flex: 4, child: _buildProductDropdown(vm)),
+              Expanded(flex: 5, child: _buildProductDropdown(vm)),
               const SizedBox(width: AppSizes.smallPadding),
-              Expanded(flex: 2, child: _qtyField(vm)),
+              Expanded(flex: 2, child: _qtyField(vm, dense: true)),
               const SizedBox(width: AppSizes.smallPadding),
-              Expanded(flex: 3, child: _priceField(vm)),
+              Expanded(flex: 3, child: _priceField(vm, symbol, amountHint, dense: true)),
               const SizedBox(width: AppSizes.smallPadding),
-              _removeBtn(index),
+              SizedBox(
+                width: 44,
+                child: _removeBtn(index),
+              ),
             ],
           );
         },
@@ -470,12 +516,12 @@ class _NewPurchaseScreenState extends State<NewPurchaseScreen> {
     );
   }
 
-  Widget _qtyField(_LineItemVM vm) {
+  Widget _qtyField(_LineItemVM vm, {bool dense = false}) {
     return TextFormField(
       controller: vm.qtyCtrl,
       keyboardType: TextInputType.number,
       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-      decoration: _inputDecoration(label: 'Qty', icon: Icons.format_list_numbered, hint: '0'),
+      decoration: _inputDecoration(label: 'Qty', icon: Icons.format_list_numbered, hint: '0', dense: dense),
       validator: (v) {
         final n = int.tryParse(v ?? '');
         if (n == null || n <= 0) return 'Qty';
@@ -483,15 +529,22 @@ class _NewPurchaseScreenState extends State<NewPurchaseScreen> {
       },
       onChanged: (_) => setState(() {}),
       textInputAction: TextInputAction.next,
+      textAlign: TextAlign.center,
     );
   }
 
-  Widget _priceField(_LineItemVM vm) {
+  Widget _priceField(_LineItemVM vm, String symbol, String amountHint, {bool dense = false}) {
     return TextFormField(
       controller: vm.priceCtrl,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}$'))],
-      decoration: _inputDecoration(label: 'Unit Price', icon: Icons.attach_money, hint: '0.00'),
+      inputFormatters: _moneyInputFormatters(context),
+      decoration: _inputDecoration(
+        label: 'Unit Price',
+        icon: Icons.attach_money,
+        hint: amountHint,
+        prefixText: symbol.isNotEmpty ? '$symbol ' : null,
+        dense: dense,
+      ),
       validator: (v) {
         final d = double.tryParse(v ?? '');
         if (d == null || d <= 0) return 'Price';
@@ -499,6 +552,7 @@ class _NewPurchaseScreenState extends State<NewPurchaseScreen> {
       },
       onChanged: (_) => setState(() {}),
       textInputAction: TextInputAction.next,
+      textAlign: TextAlign.center,
     );
   }
 
@@ -507,8 +561,9 @@ class _NewPurchaseScreenState extends State<NewPurchaseScreen> {
       icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent),
       onPressed: () => _removeLine(index),
       tooltip: 'Remove',
-      padding: const EdgeInsets.all(10),
-      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+      padding: const EdgeInsets.all(8),
+      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+      visualDensity: VisualDensity.compact,
     );
   }
 
@@ -524,6 +579,7 @@ class _NewPurchaseScreenState extends State<NewPurchaseScreen> {
         if (pState is ProductsLoaded) {
           return DropdownButtonFormField<Product>(
             value: vm.product,
+            isExpanded: true,
             items: pState.products
                 .map((p) => DropdownMenuItem<Product>(value: p, child: Text(p.name, overflow: TextOverflow.ellipsis)))
                 .toList(),
@@ -578,9 +634,11 @@ class _NewPurchaseScreenState extends State<NewPurchaseScreen> {
                 child: const Icon(Icons.shopping_bag_outlined, color: Colors.blueGrey),
               ),
               title: Text(l.product?.name ?? '-', overflow: TextOverflow.ellipsis),
-              subtitle: Text('Qty: ${l.qty}  •  Unit: ${l.price.toStringAsFixed(2)}'),
-              trailing: Text('\$${l.lineTotal.toStringAsFixed(2)}',
-                  style: const TextStyle(fontWeight: FontWeight.w700)),
+              subtitle: Text('Qty: ${l.qty}  •  Unit: ${CurrencyFmt.format(context, l.price)}'),
+              trailing: Text(
+                CurrencyFmt.format(context, l.lineTotal),
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
             );
           },
         ),
@@ -594,7 +652,7 @@ class _NewPurchaseScreenState extends State<NewPurchaseScreen> {
       children: [
         Expanded(
           child: Text(
-            'Subtotal: \$${subtotal.toStringAsFixed(2)}',
+            'Subtotal: ${CurrencyFmt.format(context, subtotal)}',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
           ),
         ),

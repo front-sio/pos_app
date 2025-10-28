@@ -12,8 +12,14 @@ import 'package:sales_app/features/products/services/product_service.dart';
 import 'package:sales_app/features/stocks/bloc/stock_bloc.dart';
 import 'package:sales_app/features/stocks/bloc/stock_event.dart';
 import 'package:sales_app/features/stocks/data/stock_transaction_model.dart';
+import 'package:sales_app/utils/currency.dart';
 import 'package:sales_app/utils/responsive.dart';
 import 'package:sales_app/widgets/custom_field.dart';
+
+// Settings for currency-aware inputs
+import 'package:sales_app/features/settings/bloc/settings_bloc.dart';
+import 'package:sales_app/features/settings/bloc/settings_state.dart';
+import 'package:sales_app/features/settings/data/app_settings.dart';
 
 enum StockOverlayMode { view, addStock, edit, deleteConfirm }
 
@@ -67,14 +73,12 @@ class _StockOverlayScreenState extends State<StockOverlayScreen> {
   final _editAmountController = TextEditingController();
   final _editPricePerUnitController = TextEditingController();
 
-  final NumberFormat _money = NumberFormat.simpleCurrency();
-
   @override
   void initState() {
     super.initState();
     if (widget.mode == StockOverlayMode.edit && widget.transaction != null) {
       _editAmountController.text = widget.transaction!.amountAdded.toString();
-      _editPricePerUnitController.text = widget.transaction!.pricePerUnit.toString();
+      _editPricePerUnitController.text = widget.transaction!.pricePerUnit.toStringAsFixed(2);
     }
 
     if (widget.mode == StockOverlayMode.addStock) {
@@ -180,6 +184,48 @@ class _StockOverlayScreenState extends State<StockOverlayScreen> {
     );
   }
 
+  // -------- Currency helpers for inputs ----------
+  int _fractionDigits(BuildContext context) {
+    final st = context.read<SettingsBloc>().state;
+    if (st is SettingsLoaded) return st.settings.fractionDigits;
+    if (st is SettingsSaved) return st.settings.fractionDigits;
+    return AppSettings.fallback.fractionDigits;
+  }
+
+  String _currencySymbol(BuildContext context) {
+    final sample = CurrencyFmt.format(context, 0);
+    final parts = sample.split(' ');
+    return parts.isNotEmpty ? parts.first : '';
+  }
+
+  List<TextInputFormatter> _moneyInputFormatters(BuildContext context) {
+    final digits = _fractionDigits(context);
+    if (digits <= 0) return [FilteringTextInputFormatter.digitsOnly];
+    return [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,' + digits.toString() + r'}$'))];
+  }
+
+  String _moneyHint(BuildContext context) {
+    final d = _fractionDigits(context);
+    return d <= 0 ? '0' : '0.${'0' * d}';
+  }
+
+  InputDecoration _decor({
+    required String label,
+    required IconData icon,
+    String? hint,
+    String? prefixText,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      isDense: false,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      border: const OutlineInputBorder(),
+      prefixIcon: Icon(icon, size: 20),
+      prefixText: prefixText,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -259,14 +305,12 @@ class _StockOverlayScreenState extends State<StockOverlayScreen> {
     final cs = theme.colorScheme;
 
     final createdAt = DateFormat.yMMMd().add_jm().format(t.date);
-    final supplierText = _loadingViewSupplierName
-        ? 'Loading...'
-        : (_viewSupplierName ?? t.supplierName ?? 'N/A');
+    final supplierText = _loadingViewSupplierName ? 'Loading...' : (_viewSupplierName ?? t.supplierName ?? 'N/A');
 
     final kpis = <_Kpi>[
       _Kpi(label: 'Quantity Added', value: t.amountAdded.toStringAsFixed(2), icon: Icons.add_chart),
-      _Kpi(label: 'Price/Unit', value: _money.format(t.pricePerUnit), icon: Icons.price_change_outlined),
-      _Kpi(label: 'Total Cost', value: _money.format(t.totalCost), icon: Icons.account_balance_wallet_outlined),
+      _Kpi(label: 'Price/Unit', value: CurrencyFmt.format(context, t.pricePerUnit), icon: Icons.price_change_outlined),
+      _Kpi(label: 'Total Cost', value: CurrencyFmt.format(context, t.totalCost), icon: Icons.account_balance_wallet_outlined),
       _Kpi(label: 'Date', value: createdAt, icon: Icons.event),
     ];
 
@@ -312,6 +356,9 @@ class _StockOverlayScreenState extends State<StockOverlayScreen> {
   Widget _buildAddStockMobileFirst() {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+
+    final symbol = _currencySymbol(context);
+    final moneyHint = _moneyHint(context);
 
     Widget productSelector() {
       final hasSelection = _selectedProduct != null;
@@ -400,11 +447,12 @@ class _StockOverlayScreenState extends State<StockOverlayScreen> {
           key: _addFormKey,
           child: Column(
             children: [
-              CustomInput(
+              // Amount (unitless)
+              TextFormField(
                 controller: _addAmountController,
                 keyboardType: TextInputType.number,
-                label: 'Amount to Add',
-                prefixIcon: Icons.add_box,
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,4}$'))],
+                decoration: _decor(label: 'Amount to Add', icon: Icons.add_box, hint: '0'),
                 validator: (value) {
                   if (value == null || value.isEmpty) return 'Amount cannot be empty';
                   final v = double.tryParse(value);
@@ -413,11 +461,17 @@ class _StockOverlayScreenState extends State<StockOverlayScreen> {
                 },
               ),
               const SizedBox(height: AppSizes.padding),
-              CustomInput(
+              // Cost price per unit (currency aware)
+              TextFormField(
                 controller: _addPricePerUnitController,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                label: 'Cost Price per Unit',
-                prefixIcon: Icons.attach_money,
+                inputFormatters: _moneyInputFormatters(context),
+                decoration: _decor(
+                  label: 'Cost Price per Unit',
+                  icon: Icons.attach_money,
+                  hint: moneyHint,
+                  prefixText: symbol.isNotEmpty ? '$symbol ' : null,
+                ),
                 validator: (value) {
                   if (value == null || value.isEmpty) return 'Cost price cannot be empty';
                   final v = double.tryParse(value);
@@ -492,6 +546,8 @@ class _StockOverlayScreenState extends State<StockOverlayScreen> {
   Widget _buildTxnEditMobileFirst() {
     final t = widget.transaction!;
     final theme = Theme.of(context);
+    final symbol = _currencySymbol(context);
+    final moneyHint = _moneyHint(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -508,19 +564,24 @@ class _StockOverlayScreenState extends State<StockOverlayScreen> {
           key: _editTxnFormKey,
           child: Column(
             children: [
-              CustomInput(
+              TextFormField(
                 controller: _editAmountController,
-                label: 'Amount Added',
-                prefixIcon: Icons.add,
+                decoration: _decor(label: 'Amount Added', icon: Icons.add, hint: '0'),
                 keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,4}$'))],
                 validator: (v) => _positiveValidator(v, 'Amount'),
               ),
               const SizedBox(height: AppSizes.padding),
-              CustomInput(
+              TextFormField(
                 controller: _editPricePerUnitController,
-                label: 'Price per Unit',
-                prefixIcon: Icons.attach_money,
+                decoration: _decor(
+                  label: 'Price per Unit',
+                  icon: Icons.attach_money,
+                  hint: moneyHint,
+                  prefixText: symbol.isNotEmpty ? '$symbol ' : null,
+                ),
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: _moneyInputFormatters(context),
                 validator: (v) => _positiveValidator(v, 'Price per unit'),
               ),
             ],

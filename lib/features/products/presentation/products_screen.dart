@@ -3,17 +3,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+
 import 'package:sales_app/features/products/services/realtime_product.dart';
 
 import 'package:sales_app/utils/responsive.dart';
 import 'package:sales_app/utils/interaction_lock.dart';
+import 'package:sales_app/utils/currency.dart';
 
 import 'package:sales_app/features/products/bloc/products_bloc.dart';
 import 'package:sales_app/features/products/bloc/products_event.dart';
 import 'package:sales_app/features/products/bloc/products_state.dart';
 import 'package:sales_app/features/products/data/product_model.dart';
 import 'package:sales_app/features/products/services/product_service.dart';
-
 
 import 'package:sales_app/features/products/presentation/product_overlay_screen.dart';
 import 'package:sales_app/features/products/presentation/category_overlay_screen.dart';
@@ -51,8 +52,6 @@ class _ProductsScreenState extends State<ProductsScreen> with TickerProviderStat
   static const Duration _refreshCooldown = Duration(milliseconds: 900);
   Timer? _safetyPoller;
   static const Duration _safetyPollEvery = Duration(seconds: 30);
-
-  NumberFormat get _money => NumberFormat.simpleCurrency();
 
   @override
   void initState() {
@@ -98,7 +97,6 @@ class _ProductsScreenState extends State<ProductsScreen> with TickerProviderStat
 
     _rt.connect();
     _rtSub = _rt.events.listen((type) {
-      // Any change on products triggers throttled refresh
       _scheduleThrottledRefresh();
     });
 
@@ -244,11 +242,11 @@ class _ProductsScreenState extends State<ProductsScreen> with TickerProviderStat
             }
           },
           itemBuilder: (context) => const [
-            PopupMenuItem(value: 'grid', child: Row(children: [Icon(Icons.grid_view, size: 20), SizedBox(width: 12), Text('Toggle View')],)),
-            PopupMenuItem(value: 'export', child: Row(children: [Icon(Icons.download, size: 20), SizedBox(width: 12), Text('Export')],)),
-            PopupMenuItem(value: 'settings', child: Row(children: [Icon(Icons.settings, size: 20), SizedBox(width: 12), Text('Settings')],)),
-            PopupMenuItem(value: 'add_category', child: Row(children: [Icon(Icons.category_outlined, size: 20), SizedBox(width: 12), Text('Add Category')],)),
-            PopupMenuItem(value: 'add_unit', child: Row(children: [Icon(Icons.straighten, size: 20), SizedBox(width: 12), Text('Add Unit')],)),
+            PopupMenuItem(value: 'grid', child: Row(children: [Icon(Icons.grid_view, size: 20), SizedBox(width: 12), Text('Toggle View')])),
+            PopupMenuItem(value: 'export', child: Row(children: [Icon(Icons.download, size: 20), SizedBox(width: 12), Text('Export')])),
+            PopupMenuItem(value: 'settings', child: Row(children: [Icon(Icons.settings, size: 20), SizedBox(width: 12), Text('Settings')])),
+            PopupMenuItem(value: 'add_category', child: Row(children: [Icon(Icons.category_outlined, size: 20), SizedBox(width: 12), Text('Add Category')])),
+            PopupMenuItem(value: 'add_unit', child: Row(children: [Icon(Icons.straighten, size: 20), SizedBox(width: 12), Text('Add Unit')])),
           ],
         ),
         const SizedBox(width: 8),
@@ -558,14 +556,20 @@ class _ProductsScreenState extends State<ProductsScreen> with TickerProviderStat
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(color: cs.primary.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
-                    child: Text(_money.format(totalValue), style: theme.textTheme.labelMedium?.copyWith(color: cs.primary, fontWeight: FontWeight.w700)),
+                    child: Text(
+                      CurrencyFmt.format(context, totalValue),
+                      style: theme.textTheme.labelMedium?.copyWith(color: cs.primary, fontWeight: FontWeight.w700),
+                    ),
                   ),
                 ],
               ),
             ]),
           ),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text(_money.format(product.price ?? 0.0), style: theme.textTheme.titleLarge?.copyWith(color: cs.primary, fontWeight: FontWeight.bold)),
+            Text(
+              CurrencyFmt.format(context, product.price ?? 0.0),
+              style: theme.textTheme.titleLarge?.copyWith(color: cs.primary, fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 8),
             trailingMenu,
           ]),
@@ -593,13 +597,19 @@ class _ProductsScreenState extends State<ProductsScreen> with TickerProviderStat
         Expanded(child: Text(product.description ?? 'No description', style: theme.textTheme.bodySmall, maxLines: 3, overflow: TextOverflow.ellipsis)),
         const SizedBox(height: 12),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text(_money.format(product.price ?? 0.0), style: theme.textTheme.titleMedium?.copyWith(color: cs.primary, fontWeight: FontWeight.bold)),
+          Text(
+            CurrencyFmt.format(context, product.price ?? 0.0),
+            style: theme.textTheme.titleMedium?.copyWith(color: cs.primary, fontWeight: FontWeight.bold),
+          ),
           Row(
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(color: cs.primary.withOpacity(0.08), borderRadius: BorderRadius.circular(6)),
-                child: Text(_money.format(totalValue), style: theme.textTheme.labelSmall?.copyWith(color: cs.primary, fontWeight: FontWeight.w700)),
+                child: Text(
+                  CurrencyFmt.format(context, totalValue),
+                  style: theme.textTheme.labelSmall?.copyWith(color: cs.primary, fontWeight: FontWeight.w700),
+                ),
               ),
               const SizedBox(width: 8),
               Container(

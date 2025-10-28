@@ -33,7 +33,7 @@ class AppSettings {
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
     return AppSettings(
-      currencyCode: json['currency_code'] ?? 'TZS',
+      currencyCode: json['currency_code'] ?? 'KMF',
       currencySymbol: json['currency_symbol'] ?? 'TSh',
       currencyLocale: json['currency_locale'] ?? 'sw_TZ',
       fractionDigits: json['fraction_digits'] ?? 0,

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:intl/intl.dart';
 
 import 'package:sales_app/constants/colors.dart';
 import 'package:sales_app/constants/sizes.dart';
@@ -10,8 +9,10 @@ import 'package:sales_app/features/stocks/bloc/stock_event.dart';
 import 'package:sales_app/features/stocks/bloc/stock_state.dart';
 import 'package:sales_app/features/stocks/data/stock_transaction_model.dart';
 import 'package:sales_app/features/stocks/presentation/stock_overlay_screen.dart';
+import 'package:sales_app/utils/currency.dart';
 import 'package:sales_app/widgets/animated_card.dart';
 import 'package:sales_app/widgets/custom_field.dart';
+import 'package:intl/intl.dart';
 
 class StockScreen extends StatefulWidget {
   // For transactions (view) this screen will open its own bottom sheet overlay.
@@ -26,7 +27,6 @@ class StockScreen extends StatefulWidget {
 class _StockScreenState extends State<StockScreen> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  final NumberFormat _money = NumberFormat.simpleCurrency();
 
   @override
   void initState() {
@@ -72,10 +72,10 @@ class _StockScreenState extends State<StockScreen> {
     );
   }
 
-
-
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Stock Management'),
@@ -133,16 +133,16 @@ class _StockScreenState extends State<StockScreen> {
                             ),
                             leading: CircleAvatar(
                               backgroundColor: AppColors.kPrimary.withValues(alpha: 0.1),
-                              child:  Icon(Icons.inventory_2, color: AppColors.kPrimary),
+                              child: Icon(Icons.inventory_2, color: AppColors.kPrimary),
                             ),
                             title: Text(
                               name,
-                              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
+                              style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
                               overflow: TextOverflow.ellipsis,
                             ),
                             subtitle: Text(
-                              'Transactions: ${list.length} • Total: ${_money.format(totalCost)}',
-                              style: Theme.of(context).textTheme.bodySmall,
+                              'Transactions: ${list.length} • Total: ${CurrencyFmt.format(context, totalCost)}',
+                              style: theme.textTheme.bodySmall,
                             ),
                             children: [
                               ...list.map((txn) {
@@ -150,11 +150,11 @@ class _StockScreenState extends State<StockScreen> {
                                   contentPadding: EdgeInsets.zero,
                                   title: Text(
                                     'Quantity: ${txn.amountAdded.toStringAsFixed(2)} ${txn.unitName ?? ''}',
-                                    style: Theme.of(context).textTheme.bodyLarge,
+                                    style: theme.textTheme.bodyLarge,
                                   ),
                                   subtitle: Text(
-                                    '${_money.format(txn.totalCost)} • ${DateFormat.yMMMd().add_jm().format(txn.date)}',
-                                    style: Theme.of(context).textTheme.bodySmall,
+                                    '${CurrencyFmt.format(context, txn.totalCost)} • ${DateFormat.yMMMd().add_jm().format(txn.date)}',
+                                    style: theme.textTheme.bodySmall,
                                   ),
                                   trailing: PopupMenuButton<String>(
                                     onSelected: (String value) {

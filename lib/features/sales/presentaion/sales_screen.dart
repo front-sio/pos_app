@@ -123,12 +123,14 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
       _refreshDebounce = Timer(kRefreshCooldown - since, () {
         _lastRefresh = DateTime.now();
         _tileFutures.clear(); // invalidate cached per-tile futures
+        _returnedQtyBySale.clear(); // keep cache clean; returns are displayed only in sheet
         context.read<SalesBloc>().add(LoadSales());
       });
       return;
     }
     _lastRefresh = now;
     _tileFutures.clear();
+    _returnedQtyBySale.clear();
     context.read<SalesBloc>().add(LoadSales());
   }
 
@@ -142,7 +144,6 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
 
     _rtInvoices.connect();
     _rtInvSub = _rtInvoices.events.listen((type) {
-      // invoice changes should reflect on Sales status/due quickly
       _scheduleThrottledRefresh();
     });
 
@@ -198,16 +199,14 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
       }
     }
 
-    // Returns sum qty (cache)
-    int returnedQty = _returnedQtyBySale[sale.id] ?? 0;
-    if (!_returnedQtyBySale.containsKey(sale.id)) {
-      try {
-        final returns = await salesService.getReturnsBySaleId(sale.id);
-        returnedQty = returns.fold<int>(0, (sum, r) => sum + r.quantityReturned);
-        _returnedQtyBySale[sale.id] = returnedQty;
-      } catch (_) {
-        // ignore
-      }
+    // Returns are only needed in details sheet; still fetch and cache quietly
+    int returnedQty = 0;
+    try {
+      final returns = await salesService.getReturnsBySaleId(sale.id);
+      returnedQty = returns.fold<int>(0, (sum, r) => sum + r.quantityReturned);
+      _returnedQtyBySale[sale.id] = returnedQty;
+    } catch (_) {
+      returnedQty = _returnedQtyBySale[sale.id] ?? 0;
     }
 
     // Items quantity sum (prefer existing list; if empty, fetch full sale)
@@ -252,13 +251,10 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
 
   Widget _buildSummary(List<Sale> sales) {
     double totalItemsQty = 0;
-    int totalReturned = 0;
     int paid = 0, credited = 0, unpaid = 0;
 
     for (final s in sales) {
       totalItemsQty += _sumItemsQtyLocal(s.items);
-      final rid = _returnedQtyBySale[s.id];
-      if (rid != null) totalReturned += rid;
 
       final inv = _invoiceBySale[s.id];
       if (inv != null) {
@@ -280,7 +276,6 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
       child: _StatWrap(children: [
         _StatChip(label: 'Sales', value: '${sales.length}', color: Colors.indigo),
         _StatChip(label: 'Items', value: totalItemsQty.toStringAsFixed(2), color: Colors.teal),
-        _StatChip(label: 'Returned', value: '$totalReturned', color: Colors.orange),
         _StatChip(label: 'Paid', value: '$paid', color: Colors.green),
         _StatChip(label: 'Credited', value: '$credited', color: Colors.amber.shade700),
         _StatChip(label: 'Unpaid', value: '$unpaid', color: Colors.red),
@@ -345,7 +340,6 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
                       builder: (context, snap) {
                         final data = snap.data;
                         final invoice = data?.invoice;
-                        final returnedQty = data?.returnedQty ?? (_returnedQtyBySale[sale.id] ?? 0);
                         final customerName = data?.customerName ?? (sale.customerId?.toString() ?? 'Unknown');
                         final itemsQty = data?.itemsQty ?? _sumItemsQtyLocal(sale.items);
 
@@ -431,20 +425,6 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
                                                   Icon(Icons.inventory_2_outlined, size: 16, color: Colors.grey.shade600),
                                                   const SizedBox(width: 6),
                                                   Text('Items: ${itemsQty.toStringAsFixed(2)}', style: theme.textTheme.bodySmall),
-                                                ],
-                                              ),
-                                              const Text('•'),
-                                              Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(Icons.undo, size: 16, color: Colors.grey.shade600),
-                                                  const SizedBox(width: 6),
-                                                  Text(
-                                                    'Returned: $returnedQty',
-                                                    style: theme.textTheme.bodySmall?.copyWith(
-                                                      color: returnedQty > 0 ? Colors.orange.shade700 : Colors.grey.shade700,
-                                                    ),
-                                                  ),
                                                 ],
                                               ),
                                             ],

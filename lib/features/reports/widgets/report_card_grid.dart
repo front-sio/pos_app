@@ -26,16 +26,12 @@ class ReportCardGrid extends StatelessWidget {
   IconData _iconFromDynamic(dynamic icon) {
     if (icon == null) return Icons.insert_chart_outlined;
     if (icon is IconData) return icon;
-    // optionally allow string names in future; fallback to default
     return Icons.insert_chart_outlined;
   }
 
   Color _colorFromDynamic(dynamic c, BuildContext context) {
-    if (c == null) {
-      return Theme.of(context).colorScheme.primary;
-    }
+    if (c == null) return Theme.of(context).colorScheme.primary;
     if (c is Color) return c;
-    // allow hex int or string like '#FF00FF'
     if (c is int) return Color(c);
     if (c is String) {
       try {
@@ -76,7 +72,7 @@ class ReportCardGrid extends StatelessWidget {
         crossAxisCount: cols,
         crossAxisSpacing: spacing,
         mainAxisSpacing: runSpacing,
-        childAspectRatio: 3.4,
+        childAspectRatio: constraints.maxWidth < 500 ? 3.0 : 3.4,
         children: cards,
       );
     });
@@ -98,8 +94,10 @@ class _ReportCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle titleStyle = Theme.of(context).textTheme.bodySmall!.copyWith(color: Theme.of(context).textTheme.bodySmall!.color?.withOpacity(0.8));
-    final TextStyle valueStyle = Theme.of(context).textTheme.titleMedium!.copyWith(fontWeight: FontWeight.bold);
+    final titleStyle = Theme.of(context).textTheme.bodySmall!.copyWith(
+          color: Theme.of(context).textTheme.bodySmall!.color?.withOpacity(0.8),
+        );
+    final valueStyle = Theme.of(context).textTheme.titleMedium!.copyWith(fontWeight: FontWeight.bold);
     return Card(
       elevation: 1,
       clipBehavior: Clip.antiAlias,

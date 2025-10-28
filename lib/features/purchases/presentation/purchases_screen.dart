@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:intl/intl.dart';
 
 import 'package:sales_app/constants/colors.dart';
 import 'package:sales_app/constants/sizes.dart';
+import 'package:sales_app/utils/currency.dart';
 import 'package:sales_app/widgets/animated_card.dart';
 import 'package:sales_app/widgets/responsive_grid.dart';
 
@@ -72,8 +72,8 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
                       _lastKnownPurchases = purchases;
                     }
 
-                    // Sort: Newest first
-                    final baseSorted = [...purchases]..sort((a, b) {
+                    final baseSorted = [...purchases]
+                      ..sort((a, b) {
                         final byDate = b.date.compareTo(a.date);
                         if (byDate != 0) return byDate;
                         return b.id.compareTo(a.id);
@@ -177,9 +177,27 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
       spacing: AppSizes.padding,
       runSpacing: AppSizes.padding,
       children: [
-        _statCard('Total Spend', '\$${totalSpend.toStringAsFixed(2)}', Icons.payments, AppColors.kPrimary, '$totalOrders orders'),
-        _statCard('Paid', '\$${paidSpend.toStringAsFixed(2)}', Icons.check_circle, AppColors.kSuccess, 'Settled'),
-        _statCard('Outstanding', '\$${due.toStringAsFixed(2)}', Icons.warning_amber_rounded, AppColors.kSecondary, 'Due/credit'),
+        _statCard(
+          'Total Spend',
+          CurrencyFmt.format(context, totalSpend),
+          Icons.payments,
+          AppColors.kPrimary,
+          '$totalOrders orders',
+        ),
+        _statCard(
+          'Paid',
+          CurrencyFmt.format(context, paidSpend),
+          Icons.check_circle,
+          AppColors.kSuccess,
+          'Settled',
+        ),
+        _statCard(
+          'Outstanding',
+          CurrencyFmt.format(context, due),
+          Icons.warning_amber_rounded,
+          AppColors.kSecondary,
+          'Due/credit',
+        ),
       ],
     );
   }
@@ -296,9 +314,9 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _amountKV('Total', p.total, Theme.of(context), AppColors.kPrimary),
-                  _amountKV('Paid', p.paidAmount, Theme.of(context), Colors.green),
-                  _amountKV('Due', p.dueAmount, Theme.of(context), meta.color),
+                  _amountKV(context, 'Total', p.total, AppColors.kPrimary),
+                  _amountKV(context, 'Paid', p.paidAmount, Colors.green),
+                  _amountKV(context, 'Due', p.dueAmount, meta.color),
                 ],
               ),
 
@@ -402,11 +420,9 @@ _StatusMeta _statusMeta(String status, double paid, double total) {
   if (s == 'credited') {
     return _StatusMeta(label: 'CREDITED', color: Colors.orange.shade700, icon: Icons.credit_card);
   }
-  // Infer unpaid if unknown and no payment
   if (paid <= 0) {
     return _StatusMeta(label: 'UNPAID', color: Colors.red.shade700, icon: Icons.highlight_off);
   }
-  // Fallback: partial payment → credited color
   return _StatusMeta(label: 'CREDITED', color: Colors.orange.shade700, icon: Icons.credit_card);
 }
 
@@ -460,15 +476,15 @@ class _PaymentProgressBar extends StatelessWidget {
 
 /* ------------------------------ UI utilities ------------------------------- */
 
-Widget _amountKV(String label, double value, ThemeData theme, Color color) {
-  final money = NumberFormat.simpleCurrency();
+Widget _amountKV(BuildContext context, String label, double value, Color color) {
+  final theme = Theme.of(context);
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Text(label, style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey[600], fontWeight: FontWeight.w600)),
       const SizedBox(height: 2),
       Text(
-        money.format(value),
+        CurrencyFmt.format(context, value),
         style: theme.textTheme.titleMedium?.copyWith(color: color, fontWeight: FontWeight.bold),
       ),
     ],
@@ -499,7 +515,6 @@ class _PaymentSheetState extends State<_PaymentSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final money = NumberFormat.simpleCurrency();
     final p = widget.purchase;
     final due = (p.total - p.paidAmount).clamp(0, double.infinity);
     final meta = _statusMeta(p.status, p.paidAmount, p.total);
@@ -546,9 +561,9 @@ class _PaymentSheetState extends State<_PaymentSheet> {
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      Expanded(child: _kv('Total', money.format(p.total), theme)),
-                      Expanded(child: _kv('Paid', money.format(p.paidAmount), theme)),
-                      Expanded(child: _kv('Due', money.format(due), theme)),
+                      Expanded(child: _kv('Total', CurrencyFmt.format(context, p.total), theme)),
+                      Expanded(child: _kv('Paid', CurrencyFmt.format(context, p.paidAmount), theme)),
+                      Expanded(child: _kv('Due', CurrencyFmt.format(context, due), theme)),
                     ],
                   ),
                   const SizedBox(height: 12),
