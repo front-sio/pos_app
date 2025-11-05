@@ -62,6 +62,9 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
   final Map<int, int> _returnedQtyBySale = {}; // saleId -> sum returned qty
   final Map<int, Future<_TileData>> _tileFutures = {}; // cache futures per tile
 
+  // NEW: items quantity cache to make the statistics accurate
+  final Map<int, double> _itemsQtyBySale = {}; // saleId -> total items qty
+
   // Realtime
   final RealtimeSales _rtSales = RealtimeSales(debounce: const Duration(milliseconds: 500));
   final RealtimeInvoices _rtInvoices = RealtimeInvoices(debounce: const Duration(milliseconds: 500));
@@ -77,7 +80,7 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
   Timer? _safetyPoller;
   static const Duration kSafetyPollEvery = Duration(seconds: 30);
 
-  // Preserve last-known list to avoid spinner flicker
+  // Preserve last-known list to avoid spinner/empty flicker across non-list states
   List<Sale> _latestSales = const [];
 
   static const Duration kNewSaleWindow = Duration(minutes: 2);
@@ -122,16 +125,20 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
       _refreshDebounce?.cancel();
       _refreshDebounce = Timer(kRefreshCooldown - since, () {
         _lastRefresh = DateTime.now();
-        _tileFutures.clear(); // invalidate cached per-tile futures
-        _returnedQtyBySale.clear(); // keep cache clean; returns are displayed only in sheet
+        _invalidateTileCaches();
         context.read<SalesBloc>().add(LoadSales());
       });
       return;
     }
     _lastRefresh = now;
+    _invalidateTileCaches();
+    context.read<SalesBloc>().add(LoadSales());
+  }
+
+  void _invalidateTileCaches() {
     _tileFutures.clear();
     _returnedQtyBySale.clear();
-    context.read<SalesBloc>().add(LoadSales());
+    // keep _itemsQtyBySale to still show a recent summary while new fetches arrive
   }
 
   void _startRealtime() {
@@ -167,6 +174,13 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
 
     _rtSales.dispose();
     _rtInvoices.dispose();
+  }
+
+  // Prefetch tile data to make statistics accurate quickly
+  void _prefetchTiles(List<Sale> sales) {
+    for (final sale in sales) {
+      _tileFutures.putIfAbsent(sale.id, () => _loadTileData(sale));
+    }
   }
 
   Future<_TileData> _loadTileData(Sale sale) async {
@@ -222,6 +236,10 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
       }
     }
 
+    // Update cache used by the statistics row; trigger rebuild
+    _itemsQtyBySale[sale.id] = itemsQty;
+    if (mounted) setState(() {});
+
     return _TileData(
       customerName: customerName,
       invoice: invoice,
@@ -249,12 +267,16 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
     );
   }
 
+  // Uses cached per-sale quantities for accuracy; falls back to local data as needed.
   Widget _buildSummary(List<Sale> sales) {
     double totalItemsQty = 0;
     int paid = 0, credited = 0, unpaid = 0;
 
     for (final s in sales) {
-      totalItemsQty += _sumItemsQtyLocal(s.items);
+      // Prefer cached accurate totals populated by _loadTileData (or prefetch)
+      final cachedQty = _itemsQtyBySale[s.id];
+      final qty = cachedQty ?? _sumItemsQtyLocal(s.items);
+      totalItemsQty += qty;
 
       final inv = _invoiceBySale[s.id];
       if (inv != null) {
@@ -292,19 +314,23 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
         listener: (context, state) {
           if (state is SalesLoaded) {
             _latestSales = [...state.sales];
+            // Preload per-tile data so the statistics row becomes accurate ASAP
+            _prefetchTiles(_latestSales);
           }
         },
         child: BlocBuilder<SalesBloc, SalesState>(
           builder: (context, state) {
+            // Always prefer last known list for any non-list state to avoid wiping the UI
             List<Sale> sales;
             if (state is SalesLoaded) {
               sales = [...state.sales];
-            } else if (state is SalesLoading && _latestSales.isNotEmpty) {
-              sales = [..._latestSales];
+            } else if (state is SalesLoading) {
+              sales = _latestSales;
             } else if (state is SalesError) {
               return Center(child: Text(state.message, style: TextStyle(color: AppColors.kError)));
             } else {
-              sales = const [];
+              // IMPORTANT: preserve previously loaded sales while other states (CartUpdated, OperationSuccess, etc.) are active
+              sales = _latestSales;
             }
 
             if (sales.isEmpty) {
@@ -341,7 +367,7 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
                         final data = snap.data;
                         final invoice = data?.invoice;
                         final customerName = data?.customerName ?? (sale.customerId?.toString() ?? 'Unknown');
-                        final itemsQty = data?.itemsQty ?? _sumItemsQtyLocal(sale.items);
+                        final itemsQty = data?.itemsQty ?? _itemsQtyBySale[sale.id] ?? _sumItemsQtyLocal(sale.items);
 
                         final statusChip = invoice != null ? _statusChip(invoice) : const SizedBox.shrink();
 
