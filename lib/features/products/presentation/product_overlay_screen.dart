@@ -8,7 +8,6 @@ import 'package:sales_app/features/products/bloc/products_bloc.dart';
 import 'package:sales_app/features/products/bloc/products_event.dart';
 import 'package:sales_app/features/products/data/product_model.dart';
 import 'package:sales_app/features/products/services/product_service.dart';
-import 'package:sales_app/utils/platform_helper.dart';
 import 'package:sales_app/utils/responsive.dart';
 import 'package:sales_app/utils/currency.dart';
 import 'package:sales_app/widgets/barcode_scanner_screen.dart';
@@ -80,6 +79,10 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
       _selectedCategoryId = p.categoryId;
       _selectedSupplierName = p.supplier;
     }
+    // Rebuild to show/hide clear icon reactively
+    _barcodeController.addListener(() {
+      if (mounted) setState(() {});
+    });
     _loadMeta();
   }
 
@@ -240,6 +243,7 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
     final digits = _fractionDigits(context);
     if (digits <= 0) return [FilteringTextInputFormatter.digitsOnly];
     return [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,' + digits.toString() + r'}$'))];
+    // Alternative: use a more advanced formatter if needed later
   }
 
   String _moneyHint(BuildContext context) {
@@ -361,14 +365,19 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
     final p = widget.product!;
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final isDesktop = Responsive.isDesktop(context);
 
     final totalValue = p.totalValue ?? (p.quantity * p.pricePerQuantity);
-    final created = p.createdAt != null ? DateFormat.yMMMd().format(p.createdAt) : '—';
-    final updated = p.updatedAt != null ? DateFormat.yMMMd().format(p.updatedAt) : '—';
+    final created = DateFormat.yMMMd().format(p.createdAt);
+    final updated = DateFormat.yMMMd().format(p.updatedAt);
 
     final kpiCards = <_Kpi>[
-      _Kpi(label: 'Quantity', value: p.unitName != null && p.unitName!.isNotEmpty ? '${p.quantity.toStringAsFixed(2)} ${p.unitName!.toUpperCase()}' : p.quantity.toStringAsFixed(2), icon: Icons.inventory_2_outlined),
+      _Kpi(
+        label: 'Quantity',
+        value: p.unitName != null && p.unitName!.isNotEmpty
+            ? '${p.quantity.toStringAsFixed(2)} ${p.unitName!.toUpperCase()}'
+            : p.quantity.toStringAsFixed(2),
+        icon: Icons.inventory_2_outlined,
+      ),
       _Kpi(label: 'Total Value', value: CurrencyFmt.format(context, totalValue), icon: Icons.stacked_bar_chart),
       _Kpi(label: 'Price/Qty', value: CurrencyFmt.format(context, p.pricePerQuantity), icon: Icons.price_change_outlined),
       _Kpi(label: 'Selling Price', value: p.price != null ? CurrencyFmt.format(context, p.price!) : 'N/A', icon: Icons.attach_money),
@@ -395,8 +404,6 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
           subtitle: p.description?.isNotEmpty == true ? p.description! : null,
         ),
         const SizedBox(height: AppSizes.padding),
-
-        // Chips row
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -407,16 +414,9 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
           ],
         ),
         const SizedBox(height: AppSizes.largePadding),
-
-        // KPI cards
         _KpiGrid(items: kpiCards),
-
         const SizedBox(height: AppSizes.largePadding),
-
-        // Other details grid
         _DetailsGrid(items: details),
-
-        if (isDesktop) const SizedBox(height: AppSizes.largePadding),
       ],
     );
   }
@@ -445,7 +445,6 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
           ],
         );
 
-    // Money fields (currency-aware)
     Widget sellingPriceField() => TextFormField(
           controller: _priceController,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -471,7 +470,7 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
           const SizedBox(height: AppSizes.padding),
           sellingPriceField(),
           const SizedBox(height: AppSizes.padding),
-          _barcodeField(),
+          _barcodeField(), // updated to always allow scanning
           const SizedBox(height: AppSizes.padding),
           unitPicker(),
           const SizedBox(height: AppSizes.padding),
@@ -699,12 +698,12 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
                 icon: const Icon(Icons.clear),
                 onPressed: () => setState(() => _barcodeController.clear()),
               ),
-            if (PlatformHelper.isMobile)
-              IconButton(
-                tooltip: 'Scan',
-                icon: const Icon(Icons.qr_code_scanner_outlined),
-                onPressed: _scanBarcode,
-              ),
+            // Always allow scanning (mobile, web, or desktop with camera)
+            IconButton(
+              tooltip: 'Scan',
+              icon: const Icon(Icons.qr_code_scanner_outlined),
+              onPressed: _scanBarcode,
+            ),
           ],
         ),
       ),
@@ -826,7 +825,7 @@ class _TagChip extends StatelessWidget {
     return Chip(
       label: Text(label),
       labelStyle: TextStyle(color: cs.primary),
-      side: BorderSide(color: cs.primary.withValues(alpha: (0.4))),
+      side: BorderSide(color: cs.primary.withValues(alpha: 0.4)),
       backgroundColor: cs.primary.withValues(alpha: .08),
       visualDensity: VisualDensity.compact,
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,

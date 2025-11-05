@@ -1,40 +1,86 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:sales_app/widgets/scanner_overlay.dart';
 
-class ScannerOverlay extends StatelessWidget {
-  const ScannerOverlay({super.key});
+class BarcodeScannerScreen extends StatefulWidget {
+  final String title;
+  const BarcodeScannerScreen({super.key, this.title = 'Scan Barcode'});
+
+  @override
+  State<BarcodeScannerScreen> createState() => _BarcodeScannerScreenState();
+}
+
+class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
+  final MobileScannerController _controller = MobileScannerController(
+    detectionSpeed: DetectionSpeed.noDuplicates,
+    torchEnabled: false,
+    facing: CameraFacing.back,
+    formats: const [BarcodeFormat.all],
+  );
+
+  bool _handled = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onDetect(BarcodeCapture capture) {
+    if (_handled) return;
+    final codes = capture.barcodes;
+    if (codes.isEmpty) return;
+    final raw = codes.first.rawValue;
+    if (raw == null || raw.isEmpty) return;
+
+    _handled = true;
+    Navigator.of(context).pop(raw);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _ScannerOverlayPainter(),
-      child: const SizedBox.expand(),
-    );
-  }
-}
-
-class _ScannerOverlayPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.black54
-      ..style = PaintingStyle.fill;
-      
-    final hole = RRect.fromRectAndRadius(
-      Rect.fromCenter(
-        center: Offset(size.width / 2, size.height / 2),
-        width: 250,
-        height: 250
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: Text(widget.title),
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            tooltip: 'Switch Camera',
+            icon: const Icon(Icons.cameraswitch),
+            onPressed: () => _controller.switchCamera(),
+          ),
+          IconButton(
+            tooltip: 'Toggle Torch',
+            icon: const Icon(Icons.flash_on),
+            onPressed: () => _controller.toggleTorch(),
+          ),
+        ],
       ),
-      const Radius.circular(12),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          MobileScanner(
+            controller: _controller,
+            onDetect: _onDetect,
+            // Use 2-arg errorBuilder signature compatible with mobile_scanner >=6
+            errorBuilder: (context, error) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'Camera error: $error\nPlease check permissions or camera availability.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
+              );
+            },
+          ),
+          const ScannerOverlay(),
+        ],
+      ),
     );
-
-    final outer = Path()..addRect(Offset.zero & size);
-    final inner = Path()..addRRect(hole);
-    final mask = Path.combine(PathOperation.difference, outer, inner);
-
-    canvas.drawPath(mask, paint);
   }
-
-  @override
-  bool shouldRepaint(CustomPainter oldDelegate) => false;
 }
