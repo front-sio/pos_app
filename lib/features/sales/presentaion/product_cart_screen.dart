@@ -10,6 +10,8 @@ import 'package:sales_app/constants/sizes.dart';
 import 'package:sales_app/features/customers/data/customer_model.dart';
 import 'package:sales_app/features/customers/services/customer_services.dart';
 
+import 'package:sales_app/features/products/bloc/products_bloc.dart';
+import 'package:sales_app/features/products/bloc/products_state.dart';
 import 'package:sales_app/features/products/data/product_model.dart';
 
 import 'package:sales_app/features/sales/bloc/sales_bloc.dart';
@@ -69,6 +71,10 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
   final Map<int, LineEdit> _lineEdits = {};
   bool _scanLocked = false;
   int _manualAddCount = 0;
+
+  // Last scanned code and fallback dedupe
+  String? _lastScanned;
+  final Set<String> _fallbackTried = {};
 
   @override
   void initState() {
@@ -171,17 +177,51 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
     }
   }
 
+  /* ----------------------------- Barcode helpers ----------------------------- */
+
+  // Remove invisible chars and trim. Keep content intact (no numeric parsing) to preserve leading zeros.
+  String _sanitizeBarcode(String raw) {
+    final invisible = RegExp(r'[\u200B-\u200D\uFEFF]');
+    return raw.replaceAll(invisible, '').trim();
+  }
+
+  // Generate comparison variants for lenient matching
+  List<String> _barcodeVariants(String s) {
+    final base = _sanitizeBarcode(s);
+    final noSpaces = base.replaceAll(RegExp(r'\s'), '');
+    final noDashes = noSpaces.replaceAll('-', '');
+    final nonAlnumRemoved = noDashes.replaceAll(RegExp(r'[^A-Za-z0-9]'), '');
+    final digitsOnly = nonAlnumRemoved.replaceAll(RegExp(r'[^0-9]'), '');
+    final leftTrimZeros = digitsOnly.replaceFirst(RegExp(r'^0+'), '');
+    final seen = <String>{};
+    final variants = <String>[];
+    for (final v in [base, noSpaces, noDashes, nonAlnumRemoved, digitsOnly, leftTrimZeros]) {
+      if (v.isNotEmpty && seen.add(v)) variants.add(v);
+    }
+    return variants;
+  }
+
+  // Normalize a product barcode for comparison
+  String _norm(String? v) {
+    if (v == null) return '';
+    final s = _sanitizeBarcode(v);
+    return s.replaceAll(RegExp(r'[\s\-]'), '');
+  }
+
   /* ----------------------------- Cart and checkout ----------------------------- */
 
   void _handleBarcode(String barcode) {
-    final value = barcode.trim();
-    if (value.isEmpty) return;
+    final sanitized = _sanitizeBarcode(barcode);
+    if (sanitized.isEmpty) return;
+
+    _lastScanned = sanitized;
+    _fallbackTried.remove(sanitized);
 
     _scanDebouncer?.cancel();
     _scanDebouncer = Timer(const Duration(milliseconds: 250), () {
       setState(() => _barcodeError = null);
       try {
-        context.read<SalesBloc>().add(AddItemFromBarcode(value));
+        context.read<SalesBloc>().add(AddItemFromBarcode(sanitized));
       } catch (e, st) {
         _logAndToastError('AddItemFromBarcode', e, st);
       }
@@ -360,7 +400,6 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
               _handleBarcode(raw);
               setState(() => _showScanner = false);
             },
-            // NOTE: Your current mobile_scanner version expects a 2-arg errorBuilder.
             errorBuilder: (context, error) {
               return Center(
                 child: Padding(
@@ -382,10 +421,27 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
 
   Widget _buildBody() {
     return BlocConsumer<SalesBloc, SalesState>(
-      listener: (context, state) {
+      listener: (context, state) async {
         if (state is SalesError) {
+          // Fallback: if backend says no product found for barcode, try local products list with lenient matching
+          final msg = state.message.toLowerCase();
+          if (_lastScanned != null &&
+              !_fallbackTried.contains(_lastScanned!) &&
+              (msg.contains('no product') || msg.contains('not found')) &&
+              msg.contains('barcode')) {
+            _fallbackTried.add(_lastScanned!);
+            final fallbackAdded = _tryAddFromLocalProducts(_lastScanned!);
+            if (fallbackAdded) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Added item matched by barcode: $_lastScanned'), backgroundColor: AppColors.kSuccess),
+              );
+              return; // don't show error toast
+            }
+          }
+
           _logAndToastError('SalesBloc', state.message);
         }
+
         if (state is SalesOperationSuccess) {
           _closeAnyDialogSafely();
           ScaffoldMessenger.of(context).clearSnackBars();
@@ -435,6 +491,57 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
         );
       },
     );
+  }
+
+  // Try to match scanned barcode against locally loaded products and add to cart.
+  bool _tryAddFromLocalProducts(String scanned) {
+    final productsState = context.read<ProductsBloc>().state;
+    if (productsState is! ProductsLoaded) return false;
+
+    final variants = _barcodeVariants(scanned).map((e) => e.toLowerCase()).toList();
+
+    bool matches(Product p) {
+      final pb = _norm(p.barcode).toLowerCase();
+      if (pb.isEmpty) return false;
+
+      // Direct compare against each variant
+      if (variants.contains(pb)) return true;
+
+      // Also compare after trimming leading zeros on either side
+      String trimZeros(String s) => s.replaceFirst(RegExp(r'^0+'), '');
+      final pbTrim = trimZeros(pb);
+      return variants.contains(pbTrim) || variants.contains(pb) || variants.any((v) => trimZeros(v) == pbTrim);
+    }
+
+    final found = productsState.products.firstWhere(
+      (p) => matches(p),
+      orElse: () => Product(
+        id: -1,
+        name: '',
+        description: null,
+        initialQuantity: 0,
+        quantity: 0,
+        pricePerQuantity: 0,
+        price: null,
+        barcode: null,
+        unitId: null,
+        unitName: null,
+        categoryId: null,
+        categoryName: null,
+        location: null,
+        reorderLevel: 0,
+        supplier: null,
+        createdAt: DateTime.fromMillisecondsSinceEpoch(0),
+        updatedAt: DateTime.fromMillisecondsSinceEpoch(0),
+        totalValue: 0,
+      ),
+    );
+
+    if (found.id != -1) {
+      context.read<SalesBloc>().add(AddItemToCart(found));
+      return true;
+    }
+    return false;
   }
 
   Widget _buildHeader(Map<Product, int> cart) {
