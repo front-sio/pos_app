@@ -46,7 +46,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
       final svc = context.read<CustomerService>();
       final list = await svc.getCustomers(page: 1, limit: 1000);
       for (final c in list) {
-        if (c.id != null) _customers[c.id!] = c;
+        _customers[c.id] = c;
       }
       if (mounted) setState(() {});
     } finally {
@@ -179,8 +179,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
         filtered.sort((a, b) {
           final ad = a.createdAt;
           final bd = b.createdAt;
-          if (ad != null && bd != null) return bd.compareTo(ad);
-          return b.id.compareTo(a.id);
+          return bd.compareTo(ad);
         });
 
         final unpaidOrCredited = filtered.where((i) => i.status.toLowerCase() != 'paid').toList();
@@ -272,8 +271,8 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                   final inv = list[i];
                   final statusColor = _statusColor(inv.status);
                   final statusIcon = _statusIcon(inv.status);
-                  final created = inv.createdAt?.toLocal();
-                  final createdText = created != null ? _timeAgo(created) : '—';
+                  final created = inv.createdAt.toLocal();
+                  final createdText = _timeAgo(created);
 
                   // Status-based progress (1.0 if paid, else 0.0). Can extend to real paid/due later.
                   final double ratio = inv.status.toLowerCase() == 'paid' ? 1.0 : 0.0;

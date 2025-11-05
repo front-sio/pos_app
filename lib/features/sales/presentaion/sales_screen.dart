@@ -71,7 +71,7 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
   // Refresh throttling
   DateTime _lastRefresh = DateTime.fromMillisecondsSinceEpoch(0);
   Timer? _refreshDebounce;
-  static const Duration kRefreshCooldown = Duration(milliseconds: 900);
+  static const Duration kRefreshCooldown = Duration(milliseconds: 100);
 
   // Safety poll to self-heal if socket misses events (rare)
   Timer? _safetyPoller;
@@ -80,7 +80,7 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
   // Preserve last-known list to avoid spinner flicker
   List<Sale> _latestSales = const [];
 
-  static const Duration kNewSaleWindow = Duration(minutes: 10);
+  static const Duration kNewSaleWindow = Duration(minutes: 2);
 
   @override
   void initState() {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:sales_app/constants/colors.dart';
 import 'package:sales_app/constants/sizes.dart';
+import 'package:sales_app/utils/currency.dart';
 
 class BottomSummaryBar extends StatelessWidget {
   final TextEditingController paidAmountCtrl;
@@ -11,6 +12,9 @@ class BottomSummaryBar extends StatelessWidget {
   final VoidCallback onCancel;
   final VoidCallback onCheckout;
 
+  // Optional extra rows to render above the action buttons (e.g., taxes, fees)
+  final List<Widget> extraRows;
+
   const BottomSummaryBar({
     super.key,
     required this.paidAmountCtrl,
@@ -19,6 +23,7 @@ class BottomSummaryBar extends StatelessWidget {
     required this.computeSubtotalCallback,
     required this.onCancel,
     required this.onCheckout,
+    this.extraRows = const <Widget>[],
   });
 
   @override
@@ -29,6 +34,8 @@ class BottomSummaryBar extends StatelessWidget {
     final paidAmount = computeParseAmount(paidAmountCtrl.text);
     final due = (total - paidAmount).clamp(0, double.infinity);
 
+    String fmt(num v) => CurrencyFmt.format(context, v);
+
     return SafeArea(
       top: false,
       child: Container(
@@ -37,7 +44,7 @@ class BottomSummaryBar extends StatelessWidget {
           color: Colors.white,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 5,
               offset: const Offset(0, -2),
             ),
@@ -82,9 +89,9 @@ class BottomSummaryBar extends StatelessWidget {
                 ),
               ],
             ),
-            
+
             const SizedBox(height: AppSizes.padding),
-            
+
             // Summary
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -99,10 +106,10 @@ class BottomSummaryBar extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '\$${subtotal.toStringAsFixed(2)}',
+                        fmt(subtotal),
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: Colors.black87,
-                        ),
+                              color: Colors.black87,
+                            ),
                       ),
                     ],
                   ),
@@ -117,10 +124,10 @@ class BottomSummaryBar extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '-\$${discount.toStringAsFixed(2)}',
+                        '-${fmt(discount)}',
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: Colors.purple,
-                        ),
+                              color: Colors.purple,
+                            ),
                       ),
                     ],
                   ),
@@ -135,11 +142,11 @@ class BottomSummaryBar extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '\$${total.toStringAsFixed(2)}',
+                        fmt(total),
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: AppColors.kPrimary,
-                          fontWeight: FontWeight.bold,
-                        ),
+                              color: AppColors.kPrimary,
+                              fontWeight: FontWeight.bold,
+                            ),
                       ),
                     ],
                   ),
@@ -147,8 +154,14 @@ class BottomSummaryBar extends StatelessWidget {
               ],
             ),
 
+            // Any extra rows such as tax, fees, etc.
+            if (extraRows.isNotEmpty) ...[
+              const SizedBox(height: AppSizes.padding),
+              ...extraRows,
+            ],
+
             const SizedBox(height: AppSizes.padding),
-            
+
             // Actions
             Row(
               children: [
@@ -176,7 +189,10 @@ class BottomSummaryBar extends StatelessWidget {
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                    child: const Text('Complete Sale'),
+                    child: Text(
+                      due <= 0 ? 'Complete Sale' : 'Complete Sale (${CurrencyFmt.format(context, due)})',
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ),
               ],

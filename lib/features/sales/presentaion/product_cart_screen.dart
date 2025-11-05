@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -11,8 +10,6 @@ import 'package:sales_app/constants/sizes.dart';
 import 'package:sales_app/features/customers/data/customer_model.dart';
 import 'package:sales_app/features/customers/services/customer_services.dart';
 
-import 'package:sales_app/features/products/bloc/products_bloc.dart';
-import 'package:sales_app/features/products/bloc/products_state.dart';
 import 'package:sales_app/features/products/data/product_model.dart';
 
 import 'package:sales_app/features/sales/bloc/sales_bloc.dart';
@@ -24,6 +21,7 @@ import 'package:sales_app/features/sales/presentaion/widgets/buttom_summary_over
 import 'package:sales_app/features/sales/presentaion/widgets/cart_item_card.dart';
 import 'package:sales_app/features/sales/presentaion/widgets/customer_seletor.dart';
 import 'package:sales_app/features/sales/presentaion/widgets/empty_cart_view.dart';
+import 'package:sales_app/features/sales/presentaion/widgets/product_selector_sheet.dart';
 
 import 'package:sales_app/utils/platform_helper.dart';
 import 'package:sales_app/config/config.dart';
@@ -67,14 +65,14 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
   bool _isSubmitting = false;
   String? _barcodeError;
   String? _customerError;
-  Product? _selectedProduct;
   Timer? _scanDebouncer;
   final Map<int, LineEdit> _lineEdits = {};
+  bool _scanLocked = false;
+  int _manualAddCount = 0;
 
   @override
   void initState() {
     super.initState();
-    // Prevent background refreshes while the cart overlay is active
     InteractionLock.instance.isInteracting.value = true;
 
     if (PlatformHelper.isDesktop) {
@@ -87,7 +85,6 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
 
   @override
   void dispose() {
-    // Clear interacting flag
     InteractionLock.instance.isInteracting.value = false;
 
     _barcodeController.dispose();
@@ -113,28 +110,22 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
   }
 
   String _currencySymbol() {
-    // Take the first token returned by CurrencyFmt.format as the symbol
     final sample = CurrencyFmt.format(context, 0);
     final parts = sample.split(' ');
     return parts.isNotEmpty ? parts.first : '';
   }
 
-  // Parse user-entered money safely (accepts "CF 1,234.50", "1 234,50", "1234.5", etc.)
   double _parseAmount(String raw) {
     if (raw.isEmpty) return 0.0;
     final sym = _currencySymbol();
     var v = raw.trim();
     if (sym.isNotEmpty) v = v.replaceAll(sym, '');
-    // Remove spaces and thousand separators, normalize comma to dot if it's the only decimal separator
     v = v.replaceAll(RegExp(r'\s'), '');
-    // If string has both '.' and ',', assume ',' is thousands and '.' is decimal; remove commas.
     if (v.contains('.') && v.contains(',')) {
       v = v.replaceAll(',', '');
     } else if (v.contains(',') && !v.contains('.')) {
-      // Assume comma as decimal separator
       v = v.replaceAll(',', '.');
     }
-    // Remove any character that's not digit, dot, or minus.
     v = v.replaceAll(RegExp(r'[^0-9\.\-]'), '');
     return double.tryParse(v) ?? 0.0;
   }
@@ -146,6 +137,7 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
     try {
       final svc = CustomerService(baseUrl: AppConfig.baseUrl);
       final list = await svc.getCustomers(page: 1, limit: 500);
+      if (!mounted) return;
       setState(() => _customers = list);
     } catch (e) {
       debugPrint('[ProductCartScreen][_loadCustomers] $e');
@@ -174,6 +166,8 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
         _selectedCustomer = selected;
         _customerError = null;
       });
+      // Reload in background (ignore result)
+      unawaited(_loadCustomers());
     }
   }
 
@@ -193,6 +187,14 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
       }
       _barcodeController.clear();
       HapticFeedback.mediumImpact();
+      _scanLocked = false; // allow next scan
+    });
+  }
+
+  void _openScanner() {
+    setState(() {
+      _scanLocked = false;
+      _showScanner = true;
     });
   }
 
@@ -213,6 +215,7 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
 
     final overrides = <LineOverride>[];
     final salesBloc = context.read<SalesBloc>();
+
     Map<Product, int> cart = {};
     final st = salesBloc.state;
     if (st is CartUpdated) cart = st.cart;
@@ -235,7 +238,9 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
 
     try {
       await Future.delayed(const Duration(milliseconds: 120));
-      context.read<SalesBloc>().add(AddSale(
+      if (!mounted) return;
+      // Use captured salesBloc to avoid context after await
+      salesBloc.add(AddSale(
         customerId: customerId,
         paidAmount: paidAmount,
         orderDiscountAmount: orderDiscountAmount,
@@ -272,12 +277,28 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
     );
   }
 
+  Future<void> _openProductSelector() async {
+    final product = await showModalBottomSheet<Product>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => const ProductSelectorSheet(),
+    );
+    if (!mounted) return;
+    if (product != null) {
+      context.read<SalesBloc>().add(AddItemToCart(product));
+      setState(() => _manualAddCount += 1);
+    }
+  }
+
   /* ------------------------------------ UI ------------------------------------ */
 
   @override
   Widget build(BuildContext context) {
-    // When scanning, present scanner screen
-    if (_showScanner && PlatformHelper.isMobile) {
+    if (_showScanner) {
       return _buildScannerScreen();
     }
 
@@ -299,7 +320,6 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
       bottomNavigationBar: BottomSummaryBar(
         paidAmountCtrl: _paidAmountCtrl,
         discountCtrl: _discountCtrl,
-        // IMPORTANT: pass our currency-aware parser so the bar can accept "CF 1,000" etc.
         computeParseAmount: _parseAmount,
         computeSubtotalCallback: () {
           final salesState = context.read<SalesBloc>().state;
@@ -308,14 +328,12 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
         },
         onCancel: _onCancel,
         onCheckout: _onCheckout,
-        // If your BottomSummaryBar supports showing formatted totals internally,
-        // it can call CurrencyFmt.format(context, ...) on the subtotal it computes via the callback above.
+        extraRows: const <Widget>[],
       ),
       body: _buildBody(),
     );
   }
 
-  // Scanner screen
   Widget _buildScannerScreen() {
     return Scaffold(
       appBar: AppBar(
@@ -331,15 +349,29 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
           MobileScanner(
             controller: _mobileScannerController,
             onDetect: (capture) {
-              try {
-                final barcode = capture.barcodes.first.rawValue;
-                if (barcode != null && barcode.isNotEmpty) {
-                  _handleBarcode(barcode);
-                  setState(() => _showScanner = false);
-                }
-              } catch (e, st) {
-                _logAndToastError('ScannerDetect', e, st);
-              }
+              if (_scanLocked) return;
+              final candidates = capture.barcodes
+                  .where((b) => b.rawValue != null && b.rawValue!.isNotEmpty)
+                  .toList();
+              if (candidates.isEmpty) return;
+
+              _scanLocked = true;
+              final raw = candidates.first.rawValue!;
+              _handleBarcode(raw);
+              setState(() => _showScanner = false);
+            },
+            // NOTE: Your current mobile_scanner version expects a 2-arg errorBuilder.
+            errorBuilder: (context, error) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSizes.padding),
+                  child: Text(
+                    'Camera error: $error\nPlease check permissions or camera availability.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  ),
+                ),
+              );
             },
           ),
           const ScannerOverlay(),
@@ -348,7 +380,6 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
     );
   }
 
-  // Body
   Widget _buildBody() {
     return BlocConsumer<SalesBloc, SalesState>(
       listener: (context, state) {
@@ -415,7 +446,7 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5, offset: const Offset(0, 2)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 5, offset: const Offset(0, 2)),
         ],
       ),
       child: Column(
@@ -449,7 +480,7 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
               padding: const EdgeInsets.only(top: 8),
               child: InputChip(
                 avatar: CircleAvatar(
-                  backgroundColor: AppColors.kPrimary.withOpacity(0.1),
+                  backgroundColor: AppColors.kPrimary.withValues(alpha: 0.1),
                   child: Text(_selectedCustomer!.name[0].toUpperCase()),
                 ),
                 label: Text(_selectedCustomer!.name),
@@ -463,10 +494,10 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
           Row(
             children: [
               Expanded(
-                child: RawKeyboardListener(
+                child: KeyboardListener(
                   focusNode: _focusNode,
-                  onKey: (event) {
-                    if (event is RawKeyDownEvent && event.logicalKey == LogicalKeyboardKey.enter) {
+                  onKeyEvent: (KeyEvent event) {
+                    if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.enter) {
                       _handleBarcode(_barcodeController.text);
                     }
                   },
@@ -482,54 +513,25 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
                   ),
                 ),
               ),
-              if (PlatformHelper.isMobile) ...[
-                const SizedBox(width: AppSizes.padding),
-                FilledButton.icon(
-                  onPressed: () => setState(() => _showScanner = true),
-                  icon: const Icon(Icons.qr_code_scanner),
-                  label: const Text('Scan'),
-                ),
-              ],
+              const SizedBox(width: AppSizes.padding),
+              FilledButton.icon(
+                onPressed: _openScanner,
+                icon: const Icon(Icons.qr_code_scanner),
+                label: const Text('Scan'),
+              ),
             ],
           ),
 
           const SizedBox(height: AppSizes.padding),
 
-          // Manual Product Selection
-          BlocBuilder<ProductsBloc, ProductsState>(
-            builder: (context, state) {
-              if (state is ProductsLoading) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (state is ProductsLoaded) {
-                return DropdownButtonFormField<Product>(
-                  value: _selectedProduct,
-                  isExpanded: true,
-                  menuMaxHeight: 300,
-                  decoration: const InputDecoration(
-                    labelText: 'Add product manually',
-                    prefixIcon: Icon(Icons.add_shopping_cart),
-                    border: OutlineInputBorder(),
-                  ),
-                  items: state.products
-                      .map((p) => DropdownMenuItem<Product>(
-                            value: p,
-                            child: Text(p.name, overflow: TextOverflow.ellipsis),
-                          ))
-                      .toList(),
-                  onChanged: (product) {
-                    if (product != null) {
-                      context.read<SalesBloc>().add(AddItemToCart(product));
-                      setState(() => _selectedProduct = null);
-                    }
-                  },
-                );
-              }
-              if (state is ProductsError) {
-                return Text(state.message, style: const TextStyle(color: AppColors.kError));
-              }
-              return const SizedBox();
-            },
+          // Add item button (replaces dropdown)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton.icon(
+              onPressed: _openProductSelector,
+              icon: const Icon(Icons.add_circle_outline),
+              label: Text(_manualAddCount > 0 ? 'Add another item' : 'Add item'),
+            ),
           ),
         ],
       ),
