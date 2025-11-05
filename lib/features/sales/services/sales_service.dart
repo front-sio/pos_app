@@ -84,20 +84,38 @@ class SalesService {
     throw Exception('Failed to fetch invoice for sale #$saleId (${res.statusCode})');
   }
 
+  // Robust parsing + fallback route; filtering is done by the caller.
   Future<List<SaleReturn>> getReturnsBySaleId(int saleId) async {
-    final url = Uri.parse('$baseUrl/returns/by-sale/$saleId');
-    final res = await http.get(url, headers: {'Accept': 'application/json'});
-    if (res.statusCode == 200) {
-      final decoded = jsonDecode(res.body);
-      if (decoded is List) {
-        return decoded.map((e) => SaleReturn.fromJson(e as Map<String, dynamic>)).toList();
+    final primary = Uri.parse('$baseUrl/returns/by-sale/$saleId');
+    final fallback = Uri.parse('$baseUrl/returns?sale_id=$saleId');
+
+    Future<List<SaleReturn>> _parse(http.Response res) async {
+      if (res.statusCode == 200) {
+        final decoded = jsonDecode(res.body);
+        if (decoded is List) {
+          return decoded.map((e) => SaleReturn.fromJson(e as Map<String, dynamic>)).toList();
+        }
+        if (decoded is Map) {
+          final data = decoded['data'];
+          if (data is List) {
+            return data.map((e) => SaleReturn.fromJson(e as Map<String, dynamic>)).toList();
+          }
+        }
+        debugPrint('[SalesService][getReturnsBySaleId] Unexpected body shape: ${decoded.runtimeType}');
+        return [];
       }
-      debugPrint('[SalesService][getReturnsBySaleId] Expected list, got ${decoded.runtimeType}');
-      return [];
-    } else if (res.statusCode == 404) {
-      return [];
+      if (res.statusCode == 404) return [];
+      throw Exception('Failed returns for sale #$saleId (${res.statusCode}): ${res.body}');
     }
-    throw Exception('Failed to load returns for sale #$saleId (${res.statusCode}): ${res.body}');
+
+    try {
+      final res = await http.get(primary, headers: {'Accept': 'application/json'});
+      return _parse(res);
+    } catch (e) {
+      // try fallback route
+      final res = await http.get(fallback, headers: {'Accept': 'application/json'});
+      return _parse(res);
+    }
   }
 
   Future<void> createReturn({
@@ -118,7 +136,7 @@ class SalesService {
       body: payload,
     );
 
-    if (res.statusCode != 201) {
+    if (res.statusCode != 201 && res.statusCode != 200) {
       throw _asMeaningfulException('Create return failed', res);
     }
   }

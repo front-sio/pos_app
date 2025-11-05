@@ -70,29 +70,46 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
       final invoiceService = context.read<InvoiceService>();
       final salesService = context.read<SalesService>();
 
+      // All sales linked to this invoice
       final saleIds = await invoiceService.getInvoiceSales(widget.invoiceId);
       final List<_ReturnLine> lines = [];
+      final Set<String> seen = {}; // for defensive de-duplication
 
       for (final saleId in saleIds) {
-        // Fetch sale with items to resolve product names and saleitem ids
+        // Fetch sale with items to know the exact saleitem IDs that belong to this sale
         final sale = await salesService.getSaleById(saleId);
         final itemsById = <int, SaleItem>{};
+        final saleItemIds = <int>{};
         if (sale != null) {
           for (final it in sale.items) {
-            if (it.id != null) itemsById[it.id!] = it;
+            if (it.id != null) {
+              itemsById[it.id!] = it;
+              saleItemIds.add(it.id!);
+            }
           }
         }
 
-        // Fetch returns for this sale
+        // Fetch returns (backend may not filter correctly), so we filter by saleItemIds strictly
         final returns = await salesService.getReturnsBySaleId(saleId);
+
         for (final r in returns) {
+          if (!saleItemIds.contains(r.saleItemId)) {
+            // Not part of this sale; skip to avoid leaking other sales' returns
+            continue;
+          }
+
           final saleItem = itemsById[r.saleItemId];
           final productName = saleItem != null ? 'Product #${saleItem.productId}' : 'Item #${r.saleItemId}';
-          lines.add(_ReturnLine(
-            productName: productName,
-            quantity: r.quantityReturned,
-            returnedAt: r.returnedAt,
-          ));
+
+          // De-duplicate defensively in case backend returns duplicates
+          final key = '$saleId:${r.saleItemId}:${r.returnedAt.toIso8601String()}:${r.quantityReturned}';
+          if (seen.add(key)) {
+            lines.add(_ReturnLine(
+              productName: productName,
+              quantity: r.quantityReturned,
+              returnedAt: r.returnedAt,
+            ));
+          }
         }
       }
 

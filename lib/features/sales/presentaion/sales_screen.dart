@@ -56,31 +56,25 @@ class SalesScreen extends StatefulWidget {
 }
 
 class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
-  // Caches
-  final Map<int, String> _customerNames = {}; // saleId -> customer name
-  final Map<int, InvoiceStatus?> _invoiceBySale = {}; // saleId -> invoice
-  final Map<int, int> _returnedQtyBySale = {}; // saleId -> sum returned qty
-  final Map<int, Future<_TileData>> _tileFutures = {}; // cache futures per tile
+  final Map<int, String> _customerNames = {};
+  final Map<int, InvoiceStatus?> _invoiceBySale = {};
+  final Map<int, int> _returnedQtyBySale = {};
+  final Map<int, Future<_TileData>> _tileFutures = {};
 
-  // NEW: items quantity cache to make the statistics accurate
-  final Map<int, double> _itemsQtyBySale = {}; // saleId -> total items qty
+  final Map<int, double> _itemsQtyBySale = {};
 
-  // Realtime
   final RealtimeSales _rtSales = RealtimeSales(debounce: const Duration(milliseconds: 500));
   final RealtimeInvoices _rtInvoices = RealtimeInvoices(debounce: const Duration(milliseconds: 500));
   StreamSubscription<String>? _rtSalesSub;
   StreamSubscription<String>? _rtInvSub;
 
-  // Refresh throttling
   DateTime _lastRefresh = DateTime.fromMillisecondsSinceEpoch(0);
   Timer? _refreshDebounce;
   static const Duration kRefreshCooldown = Duration(milliseconds: 100);
 
-  // Safety poll to self-heal if socket misses events (rare)
   Timer? _safetyPoller;
   static const Duration kSafetyPollEvery = Duration(seconds: 30);
 
-  // Preserve last-known list to avoid spinner/empty flicker across non-list states
   List<Sale> _latestSales = const [];
 
   static const Duration kNewSaleWindow = Duration(minutes: 2);
@@ -176,7 +170,6 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
     _rtInvoices.dispose();
   }
 
-  // Prefetch tile data to make statistics accurate quickly
   void _prefetchTiles(List<Sale> sales) {
     for (final sale in sales) {
       _tileFutures.putIfAbsent(sale.id, () => _loadTileData(sale));
@@ -187,7 +180,7 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
     final salesService = context.read<SalesService>();
     final customerService = context.read<CustomerService>();
 
-    // Customer name (cache by sale id)
+    // Customer name
     String customerName = _customerNames[sale.id] ?? (sale.customerId != null ? 'Customer #${sale.customerId}' : 'Unknown');
     if (!_customerNames.containsKey(sale.id) && sale.customerId != null && sale.customerId! > 0) {
       try {
@@ -197,10 +190,37 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
           customerName = found.first.name;
           _customerNames[sale.id] = customerName;
         }
-      } catch (_) {
-        // keep fallback
-      }
+      } catch (_) {}
     }
+
+    // Ensure we have items (for accurate returns filtering and items qty)
+    var saleRef = sale;
+    if (saleRef.items.isEmpty) {
+      try {
+        final full = await salesService.getSaleById(sale.id);
+        if (full != null) saleRef = full;
+      } catch (_) {}
+    }
+
+    // Items qty
+    double itemsQty = _sumItemsQtyLocal(saleRef.items);
+    _itemsQtyBySale[sale.id] = itemsQty;
+
+    // Returns (filter strictly to this sale's item ids)
+    int returnedQty = 0;
+    try {
+      final returns = await salesService.getReturnsBySaleId(sale.id);
+      if (returns.isNotEmpty) {
+        final saleItemIds = saleRef.items.map((it) => it.id).whereType<int>().toSet();
+        final filtered = returns.where((r) => saleItemIds.contains(r.saleItemId));
+        returnedQty = filtered.fold<int>(0, (sum, r) => sum + r.quantityReturned);
+      }
+      _returnedQtyBySale[sale.id] = returnedQty;
+    } catch (_) {
+      _returnedQtyBySale[sale.id] = 0;
+    }
+
+    if (mounted) setState(() {});
 
     // Invoice (cache)
     InvoiceStatus? invoice = _invoiceBySale[sale.id];
@@ -208,37 +228,8 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
       try {
         invoice = sale.invoiceStatus ?? await salesService.getInvoiceBySaleId(sale.id);
         _invoiceBySale[sale.id] = invoice;
-      } catch (_) {
-        // ignore
-      }
+      } catch (_) {}
     }
-
-    // Returns are only needed in details sheet; still fetch and cache quietly
-    int returnedQty = 0;
-    try {
-      final returns = await salesService.getReturnsBySaleId(sale.id);
-      returnedQty = returns.fold<int>(0, (sum, r) => sum + r.quantityReturned);
-      _returnedQtyBySale[sale.id] = returnedQty;
-    } catch (_) {
-      returnedQty = _returnedQtyBySale[sale.id] ?? 0;
-    }
-
-    // Items quantity sum (prefer existing list; if empty, fetch full sale)
-    double itemsQty = _sumItemsQtyLocal(sale.items);
-    if (itemsQty == 0.0) {
-      try {
-        final full = await salesService.getSaleById(sale.id);
-        if (full != null) {
-          itemsQty = _sumItemsQtyLocal(full.items);
-        }
-      } catch (_) {
-        // ignore and keep 0.0
-      }
-    }
-
-    // Update cache used by the statistics row; trigger rebuild
-    _itemsQtyBySale[sale.id] = itemsQty;
-    if (mounted) setState(() {});
 
     return _TileData(
       customerName: customerName,
@@ -252,7 +243,7 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
     if (items.isEmpty) return 0.0;
     double sum = 0.0;
     for (final it in items) {
-      sum += (it.quantitySold);
+      sum += it.quantitySold;
     }
     return sum;
   }
@@ -267,15 +258,12 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
     );
   }
 
-  // Uses cached per-sale quantities for accuracy; falls back to local data as needed.
   Widget _buildSummary(List<Sale> sales) {
     double totalItemsQty = 0;
     int paid = 0, credited = 0, unpaid = 0;
 
     for (final s in sales) {
-      // Prefer cached accurate totals populated by _loadTileData (or prefetch)
-      final cachedQty = _itemsQtyBySale[s.id];
-      final qty = cachedQty ?? _sumItemsQtyLocal(s.items);
+      final qty = _itemsQtyBySale[s.id] ?? _sumItemsQtyLocal(s.items);
       totalItemsQty += qty;
 
       final inv = _invoiceBySale[s.id];
@@ -314,13 +302,11 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
         listener: (context, state) {
           if (state is SalesLoaded) {
             _latestSales = [...state.sales];
-            // Preload per-tile data so the statistics row becomes accurate ASAP
             _prefetchTiles(_latestSales);
           }
         },
         child: BlocBuilder<SalesBloc, SalesState>(
           builder: (context, state) {
-            // Always prefer last known list for any non-list state to avoid wiping the UI
             List<Sale> sales;
             if (state is SalesLoaded) {
               sales = [...state.sales];
@@ -329,7 +315,6 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
             } else if (state is SalesError) {
               return Center(child: Text(state.message, style: TextStyle(color: AppColors.kError)));
             } else {
-              // IMPORTANT: preserve previously loaded sales while other states (CartUpdated, OperationSuccess, etc.) are active
               sales = _latestSales;
             }
 
@@ -652,7 +637,9 @@ class _SaleDetailsSheetState extends State<_SaleDetailsSheet> {
 
       _returnedByItem.clear();
       final returns = await salesService.getReturnsBySaleId(_sale.id);
+      final saleItemIds = _sale.items.map((it) => it.id).whereType<int>().toSet();
       for (final r in returns) {
+        if (!saleItemIds.contains(r.saleItemId)) continue; // STRICT filter to this sale
         _returnedByItem[r.saleItemId] = (_returnedByItem[r.saleItemId] ?? 0) + r.quantityReturned;
       }
     } catch (e, st) {

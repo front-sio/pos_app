@@ -129,7 +129,11 @@ class _SummaryGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isSmall = MediaQuery.of(context).size.width < 600;
+    final width = MediaQuery.of(context).size.width;
+    final isSmall = width < 600;
+
+    // Give a bit more height on phones so the title can sit above and value below (no ellipsis)
+    final aspect = isSmall ? 1.15 : 1.4;
 
     return GridView.count(
       shrinkWrap: true,
@@ -137,7 +141,7 @@ class _SummaryGrid extends StatelessWidget {
       crossAxisCount: isSmall ? 2 : 3,
       crossAxisSpacing: AppSizes.padding,
       mainAxisSpacing: AppSizes.padding,
-      childAspectRatio: isSmall ? 1.5 : 1.8,
+      childAspectRatio: aspect,
       children: [
         _SummaryCard(
           title: "Today's Sales",
@@ -178,6 +182,9 @@ class _SummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isSmall = MediaQuery.of(context).size.width < 600;
+
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.borderRadius)),
@@ -186,40 +193,60 @@ class _SummaryCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(AppSizes.borderRadius),
-          border: Border.all(color: color.withValues(alpha: 0.1)),
+          border: Border.all(color: color.withOpacity(0.1)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon, color: color, size: 24),
-              ),
-            ]),
-            const Spacer(),
+            // TOP ROW: Icon + Title (title juu; icon pembeni yake)
             Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Flexible(
-                  child: Text(
-                    value,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: AppColors.kText, fontWeight: FontWeight.bold),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
                   ),
+                  child: Icon(icon, color: color, size: 20),
                 ),
-                const SizedBox(width: 6),
-                Flexible(
+                const SizedBox(width: 10),
+                Expanded(
                   child: Text(
                     title,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.kTextSecondary),
+                    maxLines: 1,
+                    overflow: TextOverflow.fade,
+                    softWrap: false,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: AppColors.kTextSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ],
+            ),
+
+            const SizedBox(height: 10),
+
+            // VALUE: show full amount without ellipsis
+            // Use FittedBox so it scales down to fit instead of truncating
+            Expanded(
+              child: Align(
+                alignment: Alignment.bottomLeft,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.bottomLeft,
+                  child: Text(
+                    value,
+                    // no maxLines/ellipsis to allow FittedBox to keep full text
+                    style: (isSmall ? theme.textTheme.headlineSmall : theme.textTheme.headlineMedium)?.copyWith(
+                      color: AppColors.kText,
+                      fontWeight: FontWeight.bold,
+                      height: 1.1,
+                    ),
+                  ),
+                ),
+              ),
             ),
           ],
         ),
@@ -277,9 +304,16 @@ class _ActivityTile extends StatelessWidget {
         ),
         title: Text(item.subtitle, style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w500)),
         subtitle: Text(_timeAgo(item.timestamp), style: Theme.of(context).textTheme.bodySmall),
-        trailing: Text(
-          CurrencyFmt.format(context, item.amount),
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(color: item.type == ActivityType.sale ? AppColors.kSuccess : AppColors.kPrimary, fontWeight: FontWeight.bold),
+        trailing: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerRight,
+          child: Text(
+            CurrencyFmt.format(context, item.amount),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: item.type == ActivityType.sale ? AppColors.kSuccess : AppColors.kPrimary,
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
         ),
       ),
     );
@@ -293,12 +327,12 @@ class _LoadingBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      const _Shimmer(height: 120),
-      const SizedBox(height: AppSizes.padding),
-      const _Shimmer(height: 120),
-      const SizedBox(height: AppSizes.padding),
-      const _Shimmer(height: 240),
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: const [
+      _Shimmer(height: 120),
+      SizedBox(height: AppSizes.padding),
+      _Shimmer(height: 120),
+      SizedBox(height: AppSizes.padding),
+      _Shimmer(height: 240),
     ]);
   }
 }
