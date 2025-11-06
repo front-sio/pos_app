@@ -5,11 +5,9 @@ import 'package:sales_app/constants/colors.dart';
 import 'package:sales_app/constants/sizes.dart';
 import 'package:sales_app/utils/currency.dart';
 
-// Customers
 import 'package:sales_app/features/customers/services/customer_services.dart';
 import 'package:sales_app/features/customers/data/customer_model.dart';
 
-// Invoices
 import 'package:sales_app/features/invoices/bloc/invoice_bloc.dart';
 import 'package:sales_app/features/invoices/bloc/invoice_event.dart';
 import 'package:sales_app/features/invoices/bloc/invoice_state.dart';
@@ -25,19 +23,27 @@ class InvoicesScreen extends StatefulWidget {
   State<InvoicesScreen> createState() => _InvoicesScreenState();
 }
 
-class _InvoicesScreenState extends State<InvoicesScreen> {
+class _InvoicesScreenState extends State<InvoicesScreen> with SingleTickerProviderStateMixin {
   final _searchCtrl = TextEditingController();
   final Map<int, Customer> _customers = {};
 
-  // Cache last known list to avoid full-screen loader during refresh
   List<Invoice> _lastKnown = const <Invoice>[];
   bool _loadingCustomers = false;
+  late AnimationController _fadeIn;
 
   @override
   void initState() {
     super.initState();
+    _fadeIn = AnimationController(vsync: this, duration: const Duration(milliseconds: 400))..forward();
     context.read<InvoiceBloc>().add(const LoadInvoices());
     _loadCustomers();
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    _fadeIn.dispose();
+    super.dispose();
   }
 
   Future<void> _loadCustomers() async {
@@ -93,12 +99,11 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
   }
 
   void _openOverlayWithScopedBloc(Invoice inv) {
-    // If a parent handler exists, use it
     if (widget.onOpenOverlay != null) {
       widget.onOpenOverlay!(inv);
       return;
     }
-    // IMPORTANT: Use a scoped bloc so overlay loading/errors don’t affect the list
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -111,7 +116,6 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
           child: InvoiceOverlayScreen(
             invoiceId: inv.id,
             onClose: () => Navigator.of(modalCtx).pop(),
-            // Only refresh the parent list after a successful payment
             onCommitted: () => context.read<InvoiceBloc>().add(const LoadInvoices()),
           ),
         );
@@ -121,6 +125,8 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isWide = MediaQuery.of(context).size.width >= 900;
+
     return BlocConsumer<InvoiceBloc, InvoiceState>(
       listenWhen: (a, b) => b is InvoiceOperationSuccess || b is InvoicesError,
       listener: (context, state) {
@@ -135,10 +141,8 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
           );
         }
       },
-      // Include error states so UI never gets stuck on a spinner
       buildWhen: (a, b) => b is InvoicesLoading || b is InvoicesLoaded || b is InvoicesError,
       builder: (context, state) {
-        // Determine the data source and whether to show a lightweight refresh bar
         List<Invoice> source = _lastKnown;
         bool showRefreshingBar = false;
 
@@ -146,14 +150,11 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
           source = state.invoices;
           _lastKnown = source;
         } else if (state is InvoicesLoading) {
-          // If we have no cache yet, show a blocking loader
           if (_lastKnown.isEmpty) {
             return const Center(child: CircularProgressIndicator());
           }
-          // Else: keep showing cached list and a top thin progress bar
           showRefreshingBar = true;
         } else if (state is InvoicesError) {
-          // If we have cache, show it with an error banner; else show error with retry button
           if (_lastKnown.isEmpty) {
             return _TopLevelError(message: state.message, onRetry: _refresh);
           } else {
@@ -166,7 +167,6 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
           }
         }
 
-        // Apply search
         final q = _searchCtrl.text.trim().toLowerCase();
         final filtered = q.isEmpty
             ? [...source]
@@ -175,12 +175,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
                 return name.contains(q) || i.id.toString().contains(q);
               }).toList();
 
-        // Sort newest first by createdAt if available
-        filtered.sort((a, b) {
-          final ad = a.createdAt;
-          final bd = b.createdAt;
-          return bd.compareTo(ad);
-        });
+        filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
         final unpaidOrCredited = filtered.where((i) => i.status.toLowerCase() != 'paid').toList();
         final paid = filtered.where((i) => i.status.toLowerCase() == 'paid').toList();
@@ -190,51 +185,165 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
             RefreshIndicator(
               onRefresh: _refresh,
               color: AppColors.kPrimary,
-              child: Padding(
-                padding: const EdgeInsets.all(AppSizes.padding),
-                child: Column(
-                  children: [
-                    Row(
+              child: FadeTransition(
+                opacity: CurvedAnimation(parent: _fadeIn, curve: Curves.easeInOut),
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: Padding(
+                    padding: EdgeInsets.all(isWide ? 24 : AppSizes.padding),
+                    child: Column(
                       children: [
-                        Expanded(
+                        // Header
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Invoices',
+                                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 0.3,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Manage and track all your invoices',
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: AppColors.kPrimary.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: AppColors.kPrimary.withValues(alpha: 0.2)),
+                                ),
+                                child: Text(
+                                  '${filtered.length} ${filtered.length == 1 ? 'Invoice' : 'Invoices'}',
+                                  style: TextStyle(
+                                    color: AppColors.kPrimary,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // Search Bar
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: Colors.grey.shade200),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.04),
+                                blurRadius: 12,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
                           child: TextField(
                             controller: _searchCtrl,
                             decoration: InputDecoration(
-                              hintText: 'Search invoices by customer or invoice #',
-                              prefixIcon: const Icon(Icons.search),
+                              hintText: 'Search by customer name or invoice #...',
+                              hintStyle: TextStyle(color: Colors.grey.shade500),
+                              prefixIcon: Icon(Icons.search, color: Colors.grey.shade500),
                               suffixIcon: _searchCtrl.text.isNotEmpty
                                   ? IconButton(
-                                      icon: const Icon(Icons.clear),
+                                      icon: Icon(Icons.clear, color: Colors.grey.shade500),
                                       onPressed: () => setState(() => _searchCtrl.clear()),
                                     )
                                   : null,
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(vertical: 14),
                             ),
                             onChanged: (_) => setState(() {}),
                           ),
                         ),
+
+                        if (_loadingCustomers)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: LinearProgressIndicator(
+                              minHeight: 2,
+                              backgroundColor: Colors.grey.shade200,
+                              valueColor: AlwaysStoppedAnimation<Color>(AppColors.kPrimary),
+                            ),
+                          ),
+
+                        const SizedBox(height: 24),
+
+                        // Sections
+                        if (isWide)
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: _section(
+                                  context,
+                                  'Pending Payment',
+                                  unpaidOrCredited,
+                                  _openOverlayWithScopedBloc,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: _section(
+                                  context,
+                                  'Completed',
+                                  paid,
+                                  _openOverlayWithScopedBloc,
+                                ),
+                              ),
+                            ],
+                          )
+                        else
+                          Column(
+                            children: [
+                              _section(
+                                context,
+                                'Pending Payment',
+                                unpaidOrCredited,
+                                _openOverlayWithScopedBloc,
+                              ),
+                              const SizedBox(height: 16),
+                              _section(
+                                context,
+                                'Completed',
+                                paid,
+                                _openOverlayWithScopedBloc,
+                              ),
+                            ],
+                          ),
+
+                        const SizedBox(height: 16),
                       ],
                     ),
-                    if (_loadingCustomers) const LinearProgressIndicator(minHeight: 2),
-                    const SizedBox(height: AppSizes.padding),
-                    Expanded(
-                      child: ListView(
-                        children: [
-                          _section(context, 'Unpaid / Credited', unpaidOrCredited),
-                          const SizedBox(height: AppSizes.padding),
-                          _section(context, 'Paid', paid),
-                        ],
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
             if (showRefreshingBar)
-              const Positioned(
+              Positioned(
                 top: 0,
                 left: 0,
                 right: 0,
-                child: LinearProgressIndicator(minHeight: 2),
+                child: LinearProgressIndicator(
+                  minHeight: 2,
+                  backgroundColor: Colors.transparent,
+                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.kPrimary),
+                ),
               ),
           ],
         );
@@ -242,137 +351,279 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
     );
   }
 
-  Widget _section(BuildContext context, String title, List<Invoice> list) {
+  Widget _section(
+    BuildContext context,
+    String title,
+    List<Invoice> list,
+    void Function(Invoice) onTap,
+  ) {
     final theme = Theme.of(context);
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.borderRadius)),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSizes.padding),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              Text('$title (${list.length})', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-            ]),
-            const SizedBox(height: AppSizes.smallPadding),
-            if (list.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
-                child: Center(child: Text('No invoices')),
-              )
-            else
-              ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: list.length,
-                separatorBuilder: (_, __) => Divider(height: 1, color: Colors.grey.withValues(alpha: 0.12)),
-                itemBuilder: (_, i) {
-                  final inv = list[i];
-                  final statusColor = _statusColor(inv.status);
-                  final statusIcon = _statusIcon(inv.status);
-                  final created = inv.createdAt.toLocal();
-                  final createdText = _timeAgo(created);
 
-                  // Status-based progress (1.0 if paid, else 0.0). Can extend to real paid/due later.
-                  final double ratio = inv.status.toLowerCase() == 'paid' ? 1.0 : 0.0;
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppColors.kPrimary.withValues(alpha: 0.08),
+                  AppColors.kPrimary.withValues(alpha: 0.03),
+                ],
+              ),
+              border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: Colors.grey.shade900,
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: AppColors.kPrimary.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    list.length.toString(),
+                    style: TextStyle(
+                      color: AppColors.kPrimary,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (list.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 32),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.inbox_outlined, size: 40, color: Colors.grey.shade300),
+                    const SizedBox(height: 10),
+                    Text(
+                      'No invoices',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: list.length,
+              separatorBuilder: (_, __) => Divider(
+                height: 1,
+                color: Colors.grey.withValues(alpha: 0.1),
+                indent: 56,
+              ),
+              itemBuilder: (_, i) => _InvoiceCard(
+                invoice: list[i],
+                customerName: _customerName(list[i].customerId),
+                timeAgo: _timeAgo(list[i].createdAt.toLocal()),
+                statusColor: _statusColor(list[i].status),
+                statusIcon: _statusIcon(list[i].status),
+                onTap: () => onTap(list[i]),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
 
-                  return InkWell(
-                    onTap: () => _openOverlayWithScopedBloc(inv),
-                    borderRadius: BorderRadius.circular(10),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+class _InvoiceCard extends StatefulWidget {
+  final Invoice invoice;
+  final String customerName;
+  final String timeAgo;
+  final Color statusColor;
+  final IconData statusIcon;
+  final VoidCallback onTap;
+
+  const _InvoiceCard({
+    required this.invoice,
+    required this.customerName,
+    required this.timeAgo,
+    required this.statusColor,
+    required this.statusIcon,
+    required this.onTap,
+  });
+
+  @override
+  State<_InvoiceCard> createState() => _InvoiceCardState();
+}
+
+class _InvoiceCardState extends State<_InvoiceCard> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final ratio = widget.invoice.status.toLowerCase() == 'paid' ? 1.0 : 0.0;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+        decoration: BoxDecoration(
+          color: _hovered ? Colors.grey.shade50 : Colors.white,
+        ),
+        child: InkWell(
+          onTap: widget.onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: widget.statusColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: widget.statusColor.withValues(alpha: 0.2),
+                    ),
+                  ),
+                  child: Icon(widget.statusIcon, color: widget.statusColor, size: 24),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
                         children: [
-                          Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: statusColor.withValues(alpha: 0.10),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Icon(statusIcon, color: statusColor),
-                          ),
-                          const SizedBox(width: 12),
                           Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                            child: Text(
+                              'Invoice #${widget.invoice.id}',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: widget.statusColor.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: widget.statusColor.withValues(alpha: 0.2),
+                              ),
+                            ),
+                            child: Text(
+                              widget.invoice.status.toUpperCase(),
+                              style: TextStyle(
+                                color: widget.statusColor,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 11,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        widget.customerName,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: Colors.grey.shade700,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        'Invoice #${inv.id} • ${_customerName(inv.customerId)}',
-                                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
+                                Icon(Icons.attach_money, size: 16, color: Colors.grey.shade600),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    CurrencyFmt.format(context, widget.invoice.totalAmount),
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade800,
                                     ),
-                                    const SizedBox(width: 8),
-                                    Chip(
-                                      label: Text(inv.status.toUpperCase()),
-                                      backgroundColor: statusColor.withValues(alpha: 0.12),
-                                      labelStyle: TextStyle(color: statusColor, fontWeight: FontWeight.bold),
-                                      visualDensity: VisualDensity.compact,
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Wrap(
-                                  spacing: 10,
-                                  runSpacing: 6,
-                                  crossAxisAlignment: WrapCrossAlignment.center,
-                                  children: [
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Icon(Icons.payments, size: 16, color: Colors.grey),
-                                        const SizedBox(width: 6),
-                                        Text(
-                                          'Total: ${CurrencyFmt.format(context, inv.totalAmount)}',
-                                          style: theme.textTheme.bodyMedium,
-                                        ),
-                                      ],
-                                    ),
-                                    const Text('•'),
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Icon(Icons.schedule, size: 16, color: Colors.grey),
-                                        const SizedBox(width: 6),
-                                        Text(createdText, style: theme.textTheme.bodyMedium),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(999),
-                                  child: SizedBox(
-                                    height: 8,
-                                    child: Stack(
-                                      fit: StackFit.expand,
-                                      children: [
-                                        Container(color: Colors.grey.withValues(alpha: 0.14)),
-                                        FractionallySizedBox(
-                                          widthFactor: ratio,
-                                          alignment: Alignment.centerLeft,
-                                          child: Container(color: statusColor),
-                                        ),
-                                      ],
-                                    ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                               ],
                             ),
                           ),
+                          const SizedBox(width: 12),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.schedule, size: 16, color: Colors.grey.shade600),
+                              const SizedBox(width: 6),
+                              Text(
+                                widget.timeAgo,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: Colors.grey.shade700,
+                                ),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
-                    ),
-                  );
-                },
-              ),
-          ],
+                      const SizedBox(height: 8),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(999),
+                        child: SizedBox(
+                          height: 6,
+                          child: LinearProgressIndicator(
+                            value: ratio,
+                            backgroundColor: Colors.grey.shade200,
+                            valueColor: AlwaysStoppedAnimation<Color>(widget.statusColor),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                if (_hovered)
+                  Icon(Icons.arrow_forward, color: Colors.grey.shade400, size: 20),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -382,22 +633,45 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
 class _TopLevelError extends StatelessWidget {
   final String message;
   final Future<void> Function() onRetry;
+
   const _TopLevelError({required this.message, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(AppSizes.padding),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline, size: 36, color: cs.error),
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: cs.error.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(Icons.error_outline, size: 32, color: cs.error),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Oops! Something went wrong',
+              style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            ),
             const SizedBox(height: 8),
-            Text(message, textAlign: TextAlign.center),
-            const SizedBox(height: 12),
-            FilledButton(onPressed: onRetry, child: const Text('Retry')),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey.shade700),
+            ),
+            const SizedBox(height: 20),
+            FilledButton(
+              onPressed: onRetry,
+              child: const Text('Try Again'),
+            ),
           ],
         ),
       ),
