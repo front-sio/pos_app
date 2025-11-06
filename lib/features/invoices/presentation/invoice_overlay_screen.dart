@@ -17,6 +17,14 @@ import 'package:sales_app/features/invoices/services/invoice_services.dart';
 import 'package:sales_app/features/sales/services/sales_service.dart';
 import 'package:sales_app/features/sales/data/sale_item.dart';
 
+// Products for resolving product names
+import 'package:sales_app/features/products/bloc/products_bloc.dart';
+import 'package:sales_app/features/products/bloc/products_state.dart';
+
+// Export (the invoice PDF builder lives here)
+import 'package:sales_app/features/invoices/services/export_service.dart' as inv_export;
+import 'package:sales_app/features/customers/services/customer_services.dart';
+
 class InvoiceOverlayScreen extends StatefulWidget {
   final int invoiceId;
   final VoidCallback? onClose;
@@ -43,12 +51,16 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
   String _returnsError = '';
   List<_ReturnLine> _returns = const [];
 
+  // Cached customer name for export
+  String? _customerNameCache;
+
   @override
   void initState() {
     super.initState();
     _fadeIn = AnimationController(vsync: this, duration: const Duration(milliseconds: 350))..forward();
     context.read<InvoiceBloc>().add(LoadInvoiceDetails(widget.invoiceId));
     _loadReturns();
+    _primeCustomerName();
   }
 
   @override
@@ -57,6 +69,30 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
     _discountCtrl.dispose();
     _fadeIn.dispose();
     super.dispose();
+  }
+
+  Future<void> _primeCustomerName() async {
+    try {
+      int? cid;
+      final s = context.read<InvoiceBloc>().state;
+      if (s is InvoiceDetailsLoaded) {
+        cid = s.invoice.customerId;
+      } else {
+        final inv = await context.read<InvoiceService>().getInvoice(widget.invoiceId);
+        cid = inv.customerId;
+      }
+      if (cid != null && cid > 0) {
+        final svc = context.read<CustomerService>();
+        final list = await svc.getCustomers(page: 1, limit: 1000);
+        if (!mounted) return;
+        final found = list.where((e) => e.id == cid).toList();
+        if (found.isNotEmpty) {
+          setState(() => _customerNameCache = found.first.name);
+        }
+      }
+    } catch (_) {
+      // ignore and keep fallback
+    }
   }
 
   Future<void> _loadReturns() async {
@@ -73,7 +109,7 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
       // All sales linked to this invoice
       final saleIds = await invoiceService.getInvoiceSales(widget.invoiceId);
       final List<_ReturnLine> lines = [];
-      final Set<String> seen = {}; // for defensive de-duplication
+      final Set<String> seen = {}; // defensive de-dup
 
       for (final saleId in saleIds) {
         // Fetch sale with items to know the exact saleitem IDs that belong to this sale
@@ -82,9 +118,10 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
         final saleItemIds = <int>{};
         if (sale != null) {
           for (final it in sale.items) {
-            if (it.id != null) {
-              itemsById[it.id!] = it;
-              saleItemIds.add(it.id!);
+            final sid = it.id;
+            if (sid != null) {
+              itemsById[sid] = it;
+              saleItemIds.add(sid);
             }
           }
         }
@@ -93,15 +130,11 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
         final returns = await salesService.getReturnsBySaleId(saleId);
 
         for (final r in returns) {
-          if (!saleItemIds.contains(r.saleItemId)) {
-            // Not part of this sale; skip to avoid leaking other sales' returns
-            continue;
-          }
+          if (!saleItemIds.contains(r.saleItemId)) continue;
 
           final saleItem = itemsById[r.saleItemId];
-          final productName = saleItem != null ? 'Product #${saleItem.productId}' : 'Item #${r.saleItemId}';
+          final productName = saleItem != null ? _productNameForId(saleItem.productId) : 'Item #${r.saleItemId}';
 
-          // De-duplicate defensively in case backend returns duplicates
           final key = '$saleId:${r.saleItemId}:${r.returnedAt.toIso8601String()}:${r.quantityReturned}';
           if (seen.add(key)) {
             lines.add(_ReturnLine(
@@ -120,6 +153,15 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
     } finally {
       if (mounted) setState(() => _loadingReturns = false);
     }
+  }
+
+  String _productNameForId(int productId) {
+    final st = context.read<ProductsBloc>().state;
+    if (st is ProductsLoaded) {
+      final match = st.products.where((x) => x.id == productId);
+      if (match.isNotEmpty) return match.first.name;
+    }
+    return 'Product #$productId';
   }
 
   void _addPayment(double? quickAmount, double due) {
@@ -148,6 +190,72 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
     _discountCtrl.clear();
   }
 
+  Future<void> _exportInvoicePdf(Invoice inv, List<Payment> payments) async {
+    final invoiceService = context.read<InvoiceService>();
+    final salesService = context.read<SalesService>();
+
+    // Resolve sales linked to invoice
+    final saleIds = await invoiceService.getInvoiceSales(inv.id);
+
+    final sections = <inv_export.InvoiceSaleSection>[];
+
+    for (final saleId in saleIds) {
+      final sale = await salesService.getSaleById(saleId);
+      if (sale == null) continue;
+
+      // Map returned qty per sale item
+      final returns = await salesService.getReturnsBySaleId(saleId);
+      final saleItemIds = sale.items.map((e) => e.id).whereType<int>().toSet();
+      final returnedByItem = <int, double>{};
+      for (final r in returns) {
+        if (!saleItemIds.contains(r.saleItemId)) continue;
+        returnedByItem[r.saleItemId] = (returnedByItem[r.saleItemId] ?? 0) + r.quantityReturned.toDouble();
+      }
+
+      // Build lines
+      final lines = <inv_export.InvoiceLineData>[];
+      for (final it in sale.items) {
+        final sid = it.id;
+        if (sid == null) continue;
+        final unitPrice = _safeUnitPrice(it);
+        final returnedQty = returnedByItem[sid] ?? 0.0;
+        final name = _productNameForId(it.productId);
+
+        lines.add(inv_export.InvoiceLineData(
+          product: name,
+          soldQty: it.quantitySold,
+          returnedQty: returnedQty,
+          unitPrice: unitPrice,
+        ));
+      }
+
+      sections.add(inv_export.InvoiceSaleSection(
+        saleId: sale.id,
+        soldAt: sale.soldAt,
+        lines: lines,
+      ));
+    }
+
+    final paid = payments.fold<double>(0.0, (s, p) => s + p.amount);
+    final due = ((inv.totalAmount - paid).clamp(0, double.infinity)).toDouble();
+    final statusLabel = _computeStatus(inv.totalAmount, paid).label;
+    final status = statusLabel == 'PAID' ? 'Paid' : (statusLabel == 'CREDITED' ? 'Credited' : 'Unpaid');
+
+    final customerName = _customerNameCache ?? 'Customer #${inv.customerId}';
+
+    await inv_export.ExportService.exportInvoicePdf(
+      fileName: 'invoice_${inv.id}.pdf',
+      invoiceId: inv.id,
+      customerName: customerName,
+      createdAt: inv.createdAt.toLocal(),
+      statusText: status,
+      sections: sections,
+      amountPaid: paid,
+      amountDue: due,
+      fmtCurrency: (n) => CurrencyFmt.format(context, n),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -160,7 +268,6 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
             SnackBar(content: Text(state.message), backgroundColor: AppColors.kSuccess),
           );
           widget.onCommitted?.call();
-          // reload returns in case totals changed due to returns discount logic
           _loadReturns();
         }
         if (state is InvoicesError) {
@@ -187,7 +294,7 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
 
         final Invoice inv = state.invoice;
         final payments = state.payments;
-        final paid = payments.fold<double>(0, (s, p) => s + p.amount);
+        final paid = payments.fold<double>(0.0, (s, p) => s + p.amount);
         final double due = ((inv.totalAmount - paid).clamp(0, double.infinity)).toDouble();
         final status = _computeStatus(inv.totalAmount, paid);
 
@@ -210,6 +317,12 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
                   ),
                 ),
                 _StatusChip(text: status.label, color: status.color),
+                const SizedBox(width: 8),
+                IconButton(
+                  tooltip: 'Download PDF',
+                  icon: const Icon(Icons.picture_as_pdf),
+                  onPressed: () => _exportInvoicePdf(inv, payments),
+                ),
                 const SizedBox(width: 8),
                 IconButton(
                   tooltip: 'Close',
@@ -273,7 +386,7 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
                                                 runSpacing: 6,
                                                 children: [
                                                   _MetaPill(icon: Icons.confirmation_number, label: 'Invoice #${inv.id}'),
-                                                  _MetaPill(icon: Icons.person, label: 'Customer #${inv.customerId}'),
+                                                  _MetaPill(icon: Icons.person, label: _customerNameCache != null ? _customerNameCache! : 'Customer #${inv.customerId}'),
                                                 ],
                                               ),
                                             ],
@@ -439,6 +552,19 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
       return _Status('PAID', Colors.green.shade700);
     }
     return _Status('CREDITED', Colors.orange.shade700);
+  }
+
+  double _safeUnitPrice(SaleItem item) {
+    if (item.salePricePerQuantity != 0) return item.salePricePerQuantity;
+    final q = item.quantitySold;
+    if (q > 0) return _safeLineTotal(item, allowRecurse: false) / q;
+    return 0.0;
+  }
+
+  double _safeLineTotal(SaleItem item, {bool allowRecurse = true}) {
+    if (item.totalSalePrice != 0) return item.totalSalePrice;
+    if (allowRecurse) return _safeUnitPrice(item) * item.quantitySold;
+    return 0.0;
   }
 }
 
