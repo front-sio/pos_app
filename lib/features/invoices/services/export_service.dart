@@ -116,11 +116,12 @@ class ExportService {
             if (subtitle != null && subtitle.isNotEmpty)
               pw.Padding(
                 padding: const pw.EdgeInsets.only(top: 2),
-                child: pw.Text(subtitle, style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+                child: pw.Text(subtitle, style: pw.TextStyle(fontSize: 10, color: PdfColors.grey)),
               ),
             pw.SizedBox(height: 10),
           ],
         ),
+        footer: (ctx) => _footer(ctx),
         build: (ctx) => [
           if (extraTopWidgets.isNotEmpty) ...extraTopWidgets,
           pw.TableHelper.fromTextArray(
@@ -176,48 +177,46 @@ class ExportService {
     }
     final adjustedTotal = originalTotal - returnedValue;
 
-    // Status badge color
-    final lower = statusText.toLowerCase();
-    final badgeColor = lower.contains('paid')
-        ? PdfColors.green
-        : (lower.contains('credit') ? PdfColors.orange : PdfColors.red);
+    // Status palette
+    final palette = _statusPalette(statusText);
 
-    // Build a simple badge without alpha blending (avoids PdfColor channel getters)
     pw.Widget statusBadge(String label) => pw.Container(
-          padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: pw.BoxDecoration(
-            color: PdfColors.white,
+            color: palette.bg,
             borderRadius: pw.BorderRadius.circular(999),
-            border: pw.Border.all(color: badgeColor, width: 0.8),
+            border: pw.Border.all(color: palette.border, width: 0.8),
           ),
           child: pw.Text(
             label.toUpperCase(),
-            style: pw.TextStyle(color: badgeColor, fontWeight: pw.FontWeight.bold),
+            style: pw.TextStyle(color: palette.fg, fontWeight: pw.FontWeight.bold),
           ),
         );
 
-    pw.Widget invoiceHeader() => pw.Row(
-          crossAxisAlignment: pw.CrossAxisAlignment.center,
-          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-          children: [
-            pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Text('Invoice #$invoiceId', style: pw.TextStyle(fontSize: 26, fontWeight: pw.FontWeight.bold)),
-                pw.SizedBox(height: 6),
-                pw.Text('Customer: $customerName', style: pw.TextStyle(fontSize: 12)),
-                pw.SizedBox(height: 2),
-                pw.Text('Status: $statusText', style: pw.TextStyle(fontSize: 12)),
-                pw.SizedBox(height: 2),
-                pw.Text('Invoice Created At: ${_fmtDateTime(createdAt)}', style: pw.TextStyle(fontSize: 12)),
-              ],
-            ),
-            statusBadge(statusText),
-          ],
+    pw.Widget masthead() => pw.Container(
+          padding: const pw.EdgeInsets.only(bottom: 10),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            children: [
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text('Invoice #$invoiceId', style: pw.TextStyle(fontSize: 26, fontWeight: pw.FontWeight.bold)),
+                  pw.SizedBox(height: 4),
+                  pw.Text('Customer: $customerName', style: pw.TextStyle(fontSize: 12, color: PdfColors.grey800)),
+                  pw.SizedBox(height: 2),
+                  pw.Text('Status: $statusText', style: pw.TextStyle(fontSize: 12, color: PdfColors.grey800)),
+                  pw.SizedBox(height: 2),
+                  pw.Text('Invoice Created At: ${_fmtDateTime(createdAt)}', style: pw.TextStyle(fontSize: 12, color: PdfColors.grey800)),
+                ],
+              ),
+              statusBadge(statusText),
+            ],
+          ),
         );
 
     pw.Widget saleTable(InvoiceSaleSection sec) {
-      // Build rows
       final rows = <List<String>>[];
       num subtotalNet = 0;
 
@@ -279,18 +278,26 @@ class ExportService {
 
     pw.Widget thickDivider() => pw.Container(height: 2, color: PdfColors.black);
 
-    pw.Widget invoiceSummary() => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Text('Invoice Summary', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
-            pw.SizedBox(height: 8),
-            _kv('Original Total Amount:', fmtCurrency(originalTotal)),
-            _kv('Returned Value:', fmtCurrency(returnedValue)),
-            _kv('Adjusted Total:', fmtCurrency(adjustedTotal)),
-            _kv('Amount Paid:', fmtCurrency(amountPaid)),
-            _kv('Amount Due:', fmtCurrency(amountDue)),
-            _kv('Status:', statusText),
-          ],
+    pw.Widget invoiceSummary() => pw.Container(
+          padding: const pw.EdgeInsets.all(12),
+          decoration: pw.BoxDecoration(
+            color: PdfColors.white,
+            borderRadius: pw.BorderRadius.circular(8),
+            border: pw.Border.all(color: PdfColors.grey300),
+          ),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text('Invoice Summary', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+              pw.SizedBox(height: 8),
+              _kv('Original Total Amount:', fmtCurrency(originalTotal)),
+              _kv('Returned Value:', fmtCurrency(returnedValue)),
+              _kv('Adjusted Total:', fmtCurrency(adjustedTotal)),
+              _kv('Amount Paid:', fmtCurrency(amountPaid)),
+              _kv('Amount Due:', fmtCurrency(amountDue)),
+              _kv('Status:', statusText),
+            ],
+          ),
         );
 
     doc.addPage(
@@ -298,20 +305,25 @@ class ExportService {
         theme: theme,
         margin: const pw.EdgeInsets.fromLTRB(24, 36, 24, 32),
         pageFormat: PdfPageFormat.a4,
+        header: (ctx) => pw.Column(children: [
+          pw.Container(height: 3, color: PdfColors.black),
+          pw.SizedBox(height: 8),
+        ]),
+        footer: (ctx) => _footer(ctx),
         build: (ctx) => [
-          invoiceHeader(),
-          pw.SizedBox(height: 18),
+          masthead(),
+          pw.SizedBox(height: 14),
           pw.Text('Sales Details', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 10),
           ..._intersperse<pw.Widget>(
             sections.map((s) => saleTable(s)).toList(),
             pw.Column(children: [
               pw.SizedBox(height: 10),
-              pw.Divider(color: PdfColors.grey700),
+              pw.Divider(color: PdfColors.grey),
               pw.SizedBox(height: 10),
             ]),
           ),
-          pw.SizedBox(height: 8),
+          pw.SizedBox(height: 12),
           thickDivider(),
           pw.SizedBox(height: 14),
           invoiceSummary(),
@@ -392,4 +404,43 @@ class ExportService {
     }
     return result;
   }
+
+  static _StatusColors _statusPalette(String statusText) {
+    final s = statusText.toLowerCase();
+    if (s.contains('paid')) {
+      return _StatusColors(
+        bg: PdfColor(0.90, 0.98, 0.92), // light green
+        fg: PdfColors.green,
+        border: PdfColors.green,
+      );
+    }
+    if (s.contains('credit')) {
+      return _StatusColors(
+        bg: PdfColor(1.00, 0.96, 0.90), // light orange
+        fg: PdfColors.orange,
+        border: PdfColors.orange,
+      );
+    }
+    return _StatusColors(
+      bg: PdfColor(1.00, 0.92, 0.92), // light red
+      fg: PdfColors.red,
+      border: PdfColors.red,
+    );
+    }
+
+  static pw.Widget _footer(pw.Context ctx) => pw.Container(
+        padding: const pw.EdgeInsets.only(top: 8),
+        alignment: pw.Alignment.centerRight,
+        child: pw.Text(
+          'Page ${ctx.pageNumber} of ${ctx.pagesCount}',
+          style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
+        ),
+      );
+}
+
+class _StatusColors {
+  final PdfColor bg;
+  final PdfColor fg;
+  final PdfColor border;
+  const _StatusColors({required this.bg, required this.fg, required this.border});
 }
