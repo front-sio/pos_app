@@ -6,7 +6,6 @@ import 'package:file_saver/file_saver.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
-/// Lightweight data model for invoice export
 class InvoiceLineData {
   final String product;
   final double soldQty;
@@ -33,7 +32,6 @@ class InvoiceSaleSection {
   });
 }
 
-/// Party information (Company/Seller or Customer)
 class PartyInfo {
   final String name;
   final String? address;
@@ -58,16 +56,23 @@ class PartyInfo {
       (email == null || email!.trim().isEmpty);
 }
 
-class ExportService {
-  // Brand colors
-  static const PdfColor _brandPrimary = PdfColor(0.0, 0.65, 0.67); // teal
-  static const PdfColor _brandAccent = PdfColor(0.13, 0.59, 0.95); // light blue
-  static const PdfColor _headerBg = PdfColor(0.15, 0.15, 0.15); // dark grey
-  static const PdfColor _successGreen = PdfColor(0.15, 0.68, 0.38);
-  static const PdfColor _warningOrange = PdfColor(0.96, 0.49, 0.00);
-  static const PdfColor _dangerRed = PdfColor(0.95, 0.30, 0.25);
+class _StatusColors {
+  final PdfColor bg;
+  final PdfColor fg;
+  final PdfColor border;
+  const _StatusColors({required this.bg, required this.fg, required this.border});
+}
 
-  // CSV -----------------------------------------------------------------------
+class ExportService {
+  static const PdfColor brandPrimary = PdfColor(0.0, 0.65, 0.67);
+  static const PdfColor brandAccent = PdfColor(0.13, 0.59, 0.95);
+  static const PdfColor headerBg = PdfColor(0.15, 0.15, 0.15);
+  static const PdfColor successGreen = PdfColor(0.15, 0.68, 0.38);
+  static const PdfColor warningOrange = PdfColor(0.96, 0.49, 0.00);
+  static const PdfColor dangerRed = PdfColor(0.95, 0.30, 0.25);
+  static const PdfColor lightGrey = PdfColor(0.97, 0.97, 0.97);
+  static const PdfColor accentGrey = PdfColor(0.93, 0.93, 0.93);
+
   static Future<void> exportToCsv(
     List<Map<String, dynamic>> rows, {
     String fileName = 'report.csv',
@@ -89,7 +94,6 @@ class ExportService {
     await _saveBytes(fileName, bytes, extOverride: 'csv', mime: MimeType.csv);
   }
 
-  // Excel ---------------------------------------------------------------------
   static Future<void> exportToExcel(
     List<Map<String, dynamic>> rows, {
     String fileName = 'report.xlsx',
@@ -121,7 +125,6 @@ class ExportService {
     await _saveBytes(fileName, bytes, extOverride: 'xlsx', mime: MimeType.microsoftExcel);
   }
 
-  // PDF (generic table) -------------------------------------------------------
   static Future<void> exportToPdf({
     required String title,
     required List<String> headers,
@@ -131,7 +134,6 @@ class ExportService {
     List<pw.Widget> extraTopWidgets = const [],
   }) async {
     final doc = pw.Document();
-
     final theme = pw.ThemeData.withFont(
       base: pw.Font.helvetica(),
       bold: pw.Font.helveticaBold(),
@@ -145,7 +147,7 @@ class ExportService {
         header: (ctx) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            pw.Text(title, style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: _headerBg)),
+            pw.Text(title, style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: headerBg)),
             if (subtitle != null && subtitle.isNotEmpty)
               pw.Padding(
                 padding: const pw.EdgeInsets.only(top: 2),
@@ -154,7 +156,7 @@ class ExportService {
             pw.SizedBox(height: 10),
           ],
         ),
-        footer: (ctx) => _footer(ctx),
+        footer: (ctx) => _buildFooter(ctx),
         build: (ctx) => [
           if (extraTopWidgets.isNotEmpty) ...extraTopWidgets,
           pw.TableHelper.fromTextArray(
@@ -165,7 +167,7 @@ class ExportService {
                 .toList(),
             border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
             headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 11),
-            headerDecoration: const pw.BoxDecoration(color: _headerBg),
+            headerDecoration: const pw.BoxDecoration(color: headerBg),
             cellStyle: const pw.TextStyle(fontSize: 10),
             headerAlignment: pw.Alignment.center,
             cellAlignment: pw.Alignment.centerLeft,
@@ -179,18 +181,16 @@ class ExportService {
     await _saveBytes(fileName, Uint8List.fromList(bytes), extOverride: 'pdf', mime: MimeType.pdf);
   }
 
-  // PDF (Professional Invoice) -----------------------------------------------
   static Future<void> exportInvoicePdf({
     required String fileName,
     required int invoiceId,
     required String customerName,
     required DateTime createdAt,
-    required String statusText, // Paid | Credited | Unpaid
+    required String statusText,
     required List<InvoiceSaleSection> sections,
     required num amountPaid,
     required num amountDue,
     required String Function(num) fmtCurrency,
-
     PartyInfo? seller,
     PartyInfo? customer,
     Uint8List? companyLogoBytes,
@@ -204,7 +204,6 @@ class ExportService {
       bold: pw.Font.helveticaBold(),
     );
 
-    // Totals
     num originalTotal = 0;
     num returnedValue = 0;
     for (final s in sections) {
@@ -223,7 +222,7 @@ class ExportService {
         margin: const pw.EdgeInsets.only(bottom: 20),
         decoration: pw.BoxDecoration(
           gradient: pw.LinearGradient(
-            colors: [_brandPrimary, _brandAccent],
+            colors: [brandPrimary, brandAccent],
             begin: pw.Alignment.topLeft,
             end: pw.Alignment.bottomRight,
           ),
@@ -315,7 +314,7 @@ class ExportService {
     }
 
     pw.Widget headerInfo() {
-      final left = _infoCard(
+      final left = _buildInfoCard(
         title: 'BILL TO',
         lines: [
           _kvInline('Name', (customer?.name.isNotEmpty ?? false) ? customer!.name : customerName, bold: true),
@@ -326,7 +325,7 @@ class ExportService {
         ],
       );
 
-      final right = _infoCard(
+      final right = _buildInfoCard(
         title: 'PAYMENT INFO',
         lines: [
           _kvColoredInline('Status', statusText, palette.fg, bold: true),
@@ -373,20 +372,38 @@ class ExportService {
         crossAxisAlignment: pw.CrossAxisAlignment.stretch,
         children: [
           pw.Container(
-            padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+            padding: const pw.EdgeInsets.symmetric(vertical: 10, horizontal: 14),
             decoration: pw.BoxDecoration(
-              color: PdfColors.grey100,
+              gradient: pw.LinearGradient(
+                colors: [_darkenColor(brandPrimary, 0.1), _darkenColor(brandAccent, 0.1)],
+              ),
               borderRadius: pw.BorderRadius.only(
                 topLeft: pw.Radius.circular(6),
                 topRight: pw.Radius.circular(6),
               ),
             ),
-            child: pw.Text(
-              'Sale ID: ${sec.saleId} • Date: ${_fmtDateTime(sec.soldAt)}',
-              style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11),
+            child: pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text(
+                  'Sale ID: ${sec.saleId}',
+                  style: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    fontSize: 11,
+                    color: PdfColors.white,
+                  ),
+                ),
+                pw.Text(
+                  'Date: ${_fmtDateTime(sec.soldAt)}',
+                  style: pw.TextStyle(
+                    fontSize: 10,
+                    color: PdfColors.white,
+                  ),
+                ),
+              ],
             ),
           ),
-          pw.TableHelper.fromTextArray(
+          buildModernItemTable(
             headers: const [
               'Product',
               'Sold',
@@ -397,28 +414,37 @@ class ExportService {
               'Returned Value',
               'Net Total',
             ],
-            data: rows,
-            border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.7),
-            headerDecoration: const pw.BoxDecoration(color: _headerBg),
-            headerStyle: pw.TextStyle(
-              color: PdfColors.white,
-              fontWeight: pw.FontWeight.bold,
-              fontSize: 10,
-            ),
-            cellStyle: const pw.TextStyle(fontSize: 9),
-            cellAlignment: pw.Alignment.centerLeft,
-            headerAlignment: pw.Alignment.center,
-            cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+            rows: rows,
           ),
-          pw.SizedBox(height: 8),
-          pw.Align(
-            alignment: pw.Alignment.centerRight,
-            child: pw.RichText(
-              text: pw.TextSpan(
-                children: [
-                  pw.TextSpan(text: 'Subtotal: ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                  pw.TextSpan(text: fmtCurrency(subtotalNet)),
-                ],
+          pw.SizedBox(height: 10),
+          pw.Container(
+            padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: pw.BoxDecoration(
+              color: accentGrey,
+              borderRadius: pw.BorderRadius.only(
+                bottomLeft: pw.Radius.circular(6),
+                bottomRight: pw.Radius.circular(6),
+              ),
+            ),
+            child: pw.Align(
+              alignment: pw.Alignment.centerRight,
+              child: pw.RichText(
+                text: pw.TextSpan(
+                  children: [
+                    pw.TextSpan(
+                      text: 'Section Subtotal: ',
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11),
+                    ),
+                    pw.TextSpan(
+                      text: fmtCurrency(subtotalNet),
+                      style: pw.TextStyle(
+                        fontSize: 12,
+                        fontWeight: pw.FontWeight.bold,
+                        color: brandPrimary,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -427,50 +453,61 @@ class ExportService {
     }
 
     pw.Widget totalsPanel() {
-      final profit = adjustedTotal - amountPaid;
-
       return pw.Container(
         padding: const pw.EdgeInsets.all(16),
         decoration: pw.BoxDecoration(
-          borderRadius: pw.BorderRadius.circular(8),
-          border: pw.Border.all(color: PdfColors.grey300, width: 1.5),
-          color: PdfColors.grey50,
+          borderRadius: pw.BorderRadius.circular(10),
+          border: pw.Border.all(color: accentGrey, width: 2),
+          color: lightGrey,
         ),
-        child: pw.Row(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
+        child: pw.Column(
           children: [
-            pw.Expanded(
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  _kvLarge('Original Total', fmtCurrency(originalTotal)),
-                  _kvLarge('Less: Returns', fmtCurrency(returnedValue), color: _dangerRed),
-                  pw.SizedBox(height: 4),
-                  pw.Container(
-                    height: 1,
-                    color: PdfColors.grey400,
-                    margin: const pw.EdgeInsets.symmetric(vertical: 4),
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Expanded(
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.SizedBox(height: 2),
+                      kvLargeModern('Original Total', fmtCurrency(originalTotal), color: headerBg),
+                      pw.SizedBox(height: 6),
+                      kvLargeModern('Less: Returns', fmtCurrency(returnedValue), color: dangerRed),
+                      pw.SizedBox(height: 8),
+                      pw.Container(
+                        height: 1.5,
+                        color: brandPrimary,
+                        margin: const pw.EdgeInsets.symmetric(vertical: 6),
+                      ),
+                      kvLargeModern('Adjusted Total', fmtCurrency(adjustedTotal), bold: true, color: brandPrimary, fontSize: 13),
+                    ],
                   ),
-                  _kvLarge('Adjusted Total', fmtCurrency(adjustedTotal), bold: true, color: _headerBg),
-                ],
-              ),
-            ),
-            pw.SizedBox(width: 20),
-            pw.Expanded(
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  _kvLarge('Amount Paid', fmtCurrency(amountPaid), color: _successGreen, bold: true),
-                  _kvLarge('Outstanding', fmtCurrency(amountDue), color: amountDue > 0 ? _warningOrange : _successGreen, bold: true),
-                  pw.SizedBox(height: 4),
-                  pw.Container(
-                    height: 1,
-                    color: PdfColors.grey400,
-                    margin: const pw.EdgeInsets.symmetric(vertical: 4),
+                ),
+                pw.SizedBox(width: 24),
+                pw.Expanded(
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.SizedBox(height: 2),
+                      kvLargeModern('Amount Paid', fmtCurrency(amountPaid), color: successGreen, bold: true),
+                      pw.SizedBox(height: 6),
+                      kvLargeModern(
+                        'Outstanding',
+                        fmtCurrency(amountDue),
+                        color: amountDue > 0 ? warningOrange : successGreen,
+                        bold: true,
+                      ),
+                      pw.SizedBox(height: 8),
+                      pw.Container(
+                        height: 1.5,
+                        color: palette.fg,
+                        margin: const pw.EdgeInsets.symmetric(vertical: 6),
+                      ),
+                      kvLargeModern('Status', statusText.toUpperCase(), color: palette.fg, bold: true, fontSize: 13),
+                    ],
                   ),
-                  _kvLarge('Status', statusText.toUpperCase(), color: palette.fg, bold: true),
-                ],
-              ),
+                ),
+              ],
             ),
           ],
         ),
@@ -484,15 +521,16 @@ class ExportService {
           pw.SizedBox(height: 12),
           pw.Text(
             'THANK YOU FOR YOUR BUSINESS',
-            style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: _brandPrimary),
+            style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: brandPrimary),
           ),
           if ((termsAndConditions ?? '').isNotEmpty) ...[
             pw.SizedBox(height: 8),
             pw.Container(
-              padding: const pw.EdgeInsets.all(10),
+              padding: const pw.EdgeInsets.all(12),
               decoration: pw.BoxDecoration(
-                color: PdfColors.grey100,
+                color: lightGrey,
                 borderRadius: pw.BorderRadius.circular(6),
+                border: pw.Border.all(color: accentGrey),
               ),
               child: pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -506,8 +544,8 @@ class ExportService {
           ],
           if (seller != null && !seller.isEmpty) ...[
             pw.SizedBox(height: 10),
-            pw.Divider(color: PdfColors.grey300, height: 1),
-            pw.SizedBox(height: 8),
+            pw.Divider(color: accentGrey, height: 1.5),
+            pw.SizedBox(height: 10),
             pw.Row(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
@@ -515,7 +553,8 @@ class ExportService {
                   child: pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
-                      pw.Text('Company Contact', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      pw.Text('Company Contact', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11, color: headerBg)),
+                      pw.SizedBox(height: 4),
                       if ((seller.phone ?? '').isNotEmpty)
                         pw.Text('Tel: ${seller.phone}', style: const pw.TextStyle(fontSize: 9)),
                       if ((seller.email ?? '').isNotEmpty)
@@ -528,12 +567,13 @@ class ExportService {
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
                       if ((seller.address ?? '').isNotEmpty) ...[
-                        pw.Text('Address', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                        pw.Text('Address', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11, color: headerBg)),
+                        pw.SizedBox(height: 2),
                         pw.Text(seller.address ?? '', style: const pw.TextStyle(fontSize: 9)),
                       ],
                       if ((seller.taxId ?? '').isNotEmpty) ...[
-                        pw.SizedBox(height: 4),
-                        pw.Text('Tax ID: ${seller.taxId}', style: const pw.TextStyle(fontSize: 9)),
+                        pw.SizedBox(height: 6),
+                        pw.Text('Tax ID: ${seller.taxId}', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
                       ],
                     ],
                   ),
@@ -549,9 +589,9 @@ class ExportService {
     final separatedSections = _intersperse<pw.Widget>(
       sectionWidgets,
       pw.Column(children: [
-        pw.SizedBox(height: 12),
-        pw.Divider(color: PdfColors.grey300, height: 1),
-        pw.SizedBox(height: 12),
+        pw.SizedBox(height: 14),
+        pw.Divider(color: accentGrey, height: 1.5),
+        pw.SizedBox(height: 14),
       ]),
     );
 
@@ -560,14 +600,14 @@ class ExportService {
         theme: theme,
         margin: const pw.EdgeInsets.fromLTRB(28, 20, 28, 28),
         pageFormat: PdfPageFormat.a4,
-        header: (ctx) => _topRule(),
-        footer: (ctx) => _footerInvoice(ctx),
+        header: (ctx) => _buildTopRule(),
+        footer: (ctx) => _buildFooterInvoice(ctx),
         build: (ctx) => [
           topBanner(),
           pw.SizedBox(height: 16),
           headerInfo(),
           pw.SizedBox(height: 18),
-          pw.Text('SALES DETAILS', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold, color: _headerBg)),
+          pw.Text('SALES DETAILS', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold, color: headerBg)),
           pw.SizedBox(height: 10),
           ...separatedSections,
           pw.SizedBox(height: 18),
@@ -582,7 +622,6 @@ class ExportService {
     await _saveBytes(fileName, Uint8List.fromList(bytes), extOverride: 'pdf', mime: MimeType.pdf);
   }
 
-  // Helpers -------------------------------------------------------------------
   static List<String> _headersFromRows(List<Map<String, dynamic>> rows) {
     final set = <String>{};
     for (final r in rows) {
@@ -630,33 +669,32 @@ class ExportService {
     return '$y-$m-$d $hh:$mm';
   }
 
-  static pw.Widget _kv(String k, String v) => pw.Padding(
+  static pw.Widget kvLargeModern(
+    String k,
+    String v, {
+    bool bold = false,
+    PdfColor? color,
+    double fontSize = 11,
+  }) =>
+      pw.Padding(
         padding: const pw.EdgeInsets.only(bottom: 4),
-        child: pw.RichText(
-          text: pw.TextSpan(
-            children: [
-              pw.TextSpan(text: '$k ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-              pw.TextSpan(text: v),
-            ],
-          ),
-        ),
-      );
-
-  static pw.Widget _kvLarge(String k, String v, {bool bold = false, PdfColor? color}) => pw.Padding(
-        padding: const pw.EdgeInsets.only(bottom: 6),
         child: pw.RichText(
           text: pw.TextSpan(
             children: [
               pw.TextSpan(
                 text: '$k: ',
-                style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11),
+                style: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: fontSize,
+                  color: headerBg,
+                ),
               ),
               pw.TextSpan(
                 text: v,
                 style: pw.TextStyle(
-                  fontSize: 12,
+                  fontSize: fontSize,
                   fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
-                  color: color,
+                  color: color ?? headerBg,
                 ),
               ),
             ],
@@ -664,30 +702,127 @@ class ExportService {
         ),
       );
 
-  static pw.Widget _infoCard({required String title, required List<pw.Widget> lines}) => pw.Container(
+  static pw.Widget buildModernItemTable({
+    required List<String> headers,
+    required List<List<String>> rows,
+  }) {
+    final tableRows = <pw.TableRow>[];
+
+    tableRows.add(
+      pw.TableRow(
+        decoration: const pw.BoxDecoration(color: headerBg),
+        children: headers
+            .asMap()
+            .entries
+            .map((entry) {
+              final isNumeric = entry.key > 3;
+              return pw.Container(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                alignment: isNumeric ? pw.Alignment.centerRight : pw.Alignment.centerLeft,
+                child: pw.Text(
+                  entry.value,
+                  style: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    fontSize: 10,
+                    color: PdfColors.white,
+                  ),
+                ),
+              );
+            })
+            .toList(),
+      ),
+    );
+
+    for (int i = 0; i < rows.length; i++) {
+      final row = rows[i];
+      final isEven = i % 2 == 0;
+
+      tableRows.add(
+        pw.TableRow(
+          decoration: pw.BoxDecoration(
+            color: isEven ? lightGrey : PdfColors.white,
+            border: pw.Border(
+              bottom: pw.BorderSide(
+                color: PdfColors.grey300,
+                width: 0.5,
+              ),
+            ),
+          ),
+          children: row
+              .asMap()
+              .entries
+              .map((entry) {
+                final isNumeric = entry.key > 3;
+                final value = entry.value;
+
+                return pw.Container(
+                  padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+                  alignment: isNumeric ? pw.Alignment.centerRight : pw.Alignment.centerLeft,
+                  child: pw.Text(
+                    value,
+                    style: pw.TextStyle(
+                      fontSize: 9,
+                      color: isNumeric ? brandPrimary : headerBg,
+                      fontWeight: isNumeric ? pw.FontWeight.bold : pw.FontWeight.normal,
+                    ),
+                  ),
+                );
+              })
+              .toList(),
+        ),
+      );
+    }
+
+    return pw.Table(
+      border: pw.TableBorder(
+        top: const pw.BorderSide(color: headerBg, width: 0.7),
+        bottom: const pw.BorderSide(color: headerBg, width: 0.7),
+        left: const pw.BorderSide(color: headerBg, width: 0.7),
+        right: const pw.BorderSide(color: headerBg, width: 0.7),
+      ),
+      columnWidths: {
+        0: const pw.FlexColumnWidth(2.2),
+        1: const pw.FlexColumnWidth(1.1),
+        2: const pw.FlexColumnWidth(1.1),
+        3: const pw.FlexColumnWidth(1.1),
+        4: const pw.FlexColumnWidth(1.3),
+        5: const pw.FlexColumnWidth(1.3),
+        6: const pw.FlexColumnWidth(1.4),
+        7: const pw.FlexColumnWidth(1.4),
+      },
+      children: tableRows,
+    );
+  }
+
+  static pw.Widget _buildInfoCard({required String title, required List<pw.Widget> lines}) => pw.Container(
         padding: const pw.EdgeInsets.all(14),
         decoration: pw.BoxDecoration(
           color: PdfColors.white,
           borderRadius: pw.BorderRadius.circular(8),
-          border: pw.Border.all(color: PdfColors.grey300, width: 1),
-          boxShadow: [pw.BoxShadow(blurRadius: 4, offset: const PdfPoint(0, 1), color: PdfColors.grey400)],
+          border: pw.Border.all(color: accentGrey, width: 1.2),
+          boxShadow: [pw.BoxShadow(blurRadius: 4, offset: const PdfPoint(0, 1), color: PdfColors.grey500)],
         ),
         child: pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            pw.Text(title, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11, color: _headerBg)),
+            pw.Text(title, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11, color: headerBg)),
             pw.SizedBox(height: 8),
             ...lines,
           ],
         ),
       );
 
-  static pw.Widget _topRule() => pw.Column(children: [
-        pw.Container(height: 3, decoration: pw.BoxDecoration(gradient: pw.LinearGradient(colors: [_brandPrimary, _brandAccent]))),
+  static pw.Widget _buildTopRule() => pw.Column(children: [
+        pw.Container(
+          height: 3,
+          decoration: pw.BoxDecoration(
+            gradient: pw.LinearGradient(colors: [brandPrimary, brandAccent]),
+          ),
+        ),
         pw.SizedBox(height: 8),
       ]);
 
-  static pw.Widget _footer(pw.Context ctx) => pw.Container(
+  static pw.Widget _buildFooter(pw.Context ctx) => pw.Container(
         padding: const pw.EdgeInsets.only(top: 8),
         alignment: pw.Alignment.centerRight,
         child: pw.Text(
@@ -696,9 +831,9 @@ class ExportService {
         ),
       );
 
-  static pw.Widget _footerInvoice(pw.Context ctx) => pw.Column(
+  static pw.Widget _buildFooterInvoice(pw.Context ctx) => pw.Column(
         children: [
-          pw.Divider(color: PdfColors.grey300, height: 1),
+          pw.Divider(color: accentGrey, height: 1.5),
           pw.Padding(
             padding: const pw.EdgeInsets.only(top: 6),
             child: pw.Row(
@@ -726,7 +861,7 @@ class ExportService {
               style: pw.TextStyle(
                 fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
                 fontSize: 10,
-                color: _headerBg,
+                color: headerBg,
               ),
             ),
             pw.TextSpan(text: value, style: const pw.TextStyle(fontSize: 10)),
@@ -739,7 +874,7 @@ class ExportService {
           children: [
             pw.TextSpan(
               text: '$label: ',
-              style: pw.TextStyle(fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal, fontSize: 10, color: _headerBg),
+              style: pw.TextStyle(fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal, fontSize: 10, color: headerBg),
             ),
             pw.TextSpan(text: value, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: color)),
           ],
@@ -750,22 +885,22 @@ class ExportService {
     final s = statusText.toLowerCase();
     if (s.contains('paid')) {
       return _StatusColors(
-        bg: PdfColor(0.90, 0.98, 0.92),
-        fg: _successGreen,
-        border: _successGreen,
+        bg: const PdfColor(0.90, 0.98, 0.92),
+        fg: successGreen,
+        border: successGreen,
       );
     }
     if (s.contains('credit')) {
       return _StatusColors(
-        bg: PdfColor(1.00, 0.96, 0.90),
-        fg: _warningOrange,
-        border: _warningOrange,
+        bg: const PdfColor(1.00, 0.96, 0.90),
+        fg: warningOrange,
+        border: warningOrange,
       );
     }
     return _StatusColors(
-      bg: PdfColor(1.00, 0.92, 0.92),
-      fg: _dangerRed,
-      border: _dangerRed,
+      bg: const PdfColor(1.00, 0.92, 0.92),
+      fg: dangerRed,
+      border: dangerRed,
     );
   }
 
@@ -778,11 +913,9 @@ class ExportService {
     }
     return out;
   }
-}
 
-class _StatusColors {
-  final PdfColor bg;
-  final PdfColor fg;
-  final PdfColor border;
-  const _StatusColors({required this.bg, required this.fg, required this.border});
+  static PdfColor _darkenColor(PdfColor color, double factor) {
+    final clamped = (double f) => (f * (1 - factor)).clamp(0.0, 1.0).toDouble();
+    return PdfColor(clamped(color.red), clamped(color.green), clamped(color.blue));
+  }
 }
