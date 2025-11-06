@@ -23,6 +23,9 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
   String _selectedPeriod = 'This Month';
   late final TabController _tabController;
 
+  // Custom range (inclusive)
+  DateTimeRange? _customRange;
+
   @override
   void initState() {
     super.initState();
@@ -34,6 +37,12 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
 
   void _onTabChanged() {
     if (!_tabController.indexIsChanging) return;
+    // If a preset period is selected (not custom), refresh the tab with default loaders
+    if (_customRange != null) {
+      // Custom range is entirely handled client-side for Sales (and exports) so no re-fetch is required
+      setState(() {});
+      return;
+    }
     final idx = _tabController.index;
     final now = DateTime.now().toUtc();
     final bloc = context.read<ReportsBloc>();
@@ -55,14 +64,67 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
     super.dispose();
   }
 
-  void _onPeriodSelected(String period) {
-    setState(() => _selectedPeriod = period);
+  Future<void> _pickCustomRange() async {
+    final now = DateTime.now();
+    final firstDate = DateTime(now.year - 3, 1, 1);
+    final lastDate = DateTime(now.year + 1, 12, 31);
+
+    final initial = _customRange ??
+        DateTimeRange(
+          start: DateTime(now.year, now.month, 1),
+          end: DateTime(now.year, now.month, now.day),
+        );
+
+    final result = await showDateRangePicker(
+      context: context,
+      firstDate: firstDate,
+      lastDate: lastDate,
+      initialDateRange: initial,
+      saveText: 'Apply',
+      helpText: 'Select Custom Range',
+      builder: (ctx, child) {
+        final theme = Theme.of(ctx);
+        return Theme(
+          data: theme.copyWith(
+            colorScheme: theme.colorScheme.copyWith(
+              primary: AppColors.kPrimary,
+              onPrimary: AppColors.kTextOnPrimary,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (result != null) {
+      setState(() {
+        _customRange = DateTimeRange(
+          start: DateTime(result.start.year, result.start.month, result.start.day),
+          end: DateTime(result.end.year, result.end.month, result.end.day),
+        );
+        _selectedPeriod = '${_fmtYMD(_customRange!.start)} – ${_fmtYMD(_customRange!.end)}';
+      });
+    }
+  }
+
+  void _onPeriodSelected(String period) async {
+    if (period == 'Custom Range') {
+      await _pickCustomRange();
+      return; // Do not hit backend; UI and exports use _customRange
+    }
+
+    // Reset custom range when selecting predefined period
+    setState(() {
+      _customRange = null;
+      _selectedPeriod = period;
+    });
+
     final bloc = context.read<ReportsBloc>();
     final now = DateTime.now().toUtc();
     if (period == 'Today') {
       bloc.add(LoadDailyReport(DateTime.utc(now.year, now.month, now.day)));
     } else if (period == 'This Week') {
-      // For now reuse monthly; replace with weekly endpoint if available
+      // Reuse monthly until weekly endpoint is available
       bloc.add(LoadMonthlyReport(now.year, now.month));
     } else if (period == 'This Month') {
       bloc.add(LoadMonthlyReport(now.year, now.month));
@@ -74,97 +136,27 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
     }
   }
 
+  // EXPORT MENU ----------------------------------------------------------------
   Widget _buildExportButton(BuildContext context, ReportsState state) {
     final enabled = state is SalesReportLoaded ||
         state is InventoryReportLoaded ||
         state is FinancialReportLoaded ||
         state is CustomersReportLoaded;
+
     return PopupMenuButton<String>(
-      onSelected: enabled
-          ? (value) async {
-              // Export raw numeric data (no currency symbols) for CSV/Excel
-              if (state is SalesReportLoaded) {
-                final report = state.report;
-                final data = report.daily.isNotEmpty
-                    ? report.daily
-                        .map((d) => {
-                              'date': d.date,
-                              'revenue': d.revenue,
-                              'cost': d.cost,
-                              'profit': d.grossProfit,
-                              'orders': d.orders
-                            })
-                        .toList()
-                    : report.topProducts
-                        .map((p) => {
-                              'product_id': p.productId,
-                              'revenue': p.revenue,
-                              'quantity': p.quantity
-                            })
-                        .toList();
-                if (value == 'csv') {
-                  await ExportService.exportToCsv(data);
-                } else {
-                  await ExportService.exportToExcel(data);
-                }
-                return;
-              }
-              if (state is InventoryReportLoaded) {
-                final inv = state.report;
-                final data = inv.products
-                    .map((p) => {
-                          'productId': p.productId,
-                          'name': p.name,
-                          'quantity': p.quantity,
-                          'cost': p.cost,
-                          'stockValue': p.stockValue
-                        })
-                    .toList();
-                if (value == 'csv') {
-                  await ExportService.exportToCsv(data);
-                } else {
-                  await ExportService.exportToExcel(data);
-                }
-                return;
-              }
-              if (state is FinancialReportLoaded) {
-                final fin = state.report;
-                final totals = fin.totals.entries.map((e) => {'key': e.key, 'value': e.value}).toList();
-                if (value == 'csv') {
-                  await ExportService.exportToCsv(totals);
-                } else {
-                  await ExportService.exportToExcel(totals);
-                }
-                return;
-              }
-              if (state is CustomersReportLoaded) {
-                final cr = state.report;
-                final data = cr.topCustomers
-                    .map((c) => {
-                          'customerId': c.customerId,
-                          'name': c.name,
-                          'email': c.email ?? '',
-                          'spend': c.spend
-                        })
-                    .toList();
-                if (value == 'csv') {
-                  await ExportService.exportToCsv(data);
-                } else {
-                  await ExportService.exportToExcel(data);
-                }
-                return;
-              }
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No data to export')));
-            }
-          : null,
+      onSelected: enabled ? (value) => _onExportSelected(context, value, state) : null,
       itemBuilder: (BuildContext context) => const [
         PopupMenuItem<String>(
           value: 'excel',
-          child: ListTile(leading: Icon(Icons.table_chart), title: Text('Export to Excel')),
+          child: ListTile(leading: Icon(Icons.table_chart), title: Text('Export to Excel (.xlsx)')),
         ),
         PopupMenuItem<String>(
           value: 'csv',
-          child: ListTile(leading: Icon(Icons.download), title: Text('Export to CSV')),
+          child: ListTile(leading: Icon(Icons.download), title: Text('Export to CSV (.csv)')),
+        ),
+        PopupMenuItem<String>(
+          value: 'pdf',
+          child: ListTile(leading: Icon(Icons.picture_as_pdf), title: Text('Export to PDF (.pdf)')),
         ),
       ],
       icon: const Icon(Icons.download_rounded),
@@ -172,35 +164,282 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
     );
   }
 
-  Widget _buildPeriodSelector() {
-    return PopupMenuButton<String>(
-      initialValue: _selectedPeriod,
-      onSelected: _onPeriodSelected,
-      offset: const Offset(0, 50),
-      child: Chip(
-        avatar: const Icon(Icons.calendar_today, size: 18),
-        label: Text(_selectedPeriod),
-        backgroundColor: AppColors.kPrimary.withOpacity(0.08),
-      ),
-      itemBuilder: (BuildContext context) =>
-          ['Today', 'This Week', 'This Month', 'Last 3 Months', 'Custom Range']
-              .map((String value) => PopupMenuItem<String>(value: value, child: Text(value)))
-              .toList(),
-    );
+  Future<void> _onExportSelected(BuildContext context, String value, ReportsState state) async {
+    // SALES -------------------------------------------------------------------
+    if (state is SalesReportLoaded) {
+      final report = state.report;
+      final usingDaily = report.daily.isNotEmpty;
+
+      // Apply custom-range filter client-side for Sales
+      List<dynamic> filterDaily(List<dynamic> daily) {
+        if (_customRange == null) return daily;
+        return daily.where((d) {
+          // d.date is assumed to be ISO yyyy-MM-dd or similar
+          final dt = _parseDateSafe(d.date);
+          if (dt == null) return false;
+          return !dt.isBefore(_customRange!.start) && !dt.isAfter(_customRange!.end);
+        }).toList();
+      }
+
+      if (value == 'csv') {
+        final data = usingDaily
+            ? filterDaily(report.daily)
+                .map((d) => {
+                      'date': d.date,
+                      'revenue': d.revenue,
+                      'cost': d.cost,
+                      'profit': d.grossProfit,
+                      'orders': d.orders
+                    })
+                .toList()
+            : report.topProducts
+                .map((p) => {
+                      'product_id': p.productId,
+                      'revenue': p.revenue,
+                      'quantity': p.quantity
+                    })
+                .toList();
+        await ExportService.exportToCsv(data, fileName: 'sales_${_fileSuffix()}.csv');
+        return;
+      }
+
+      if (value == 'excel') {
+        final data = usingDaily
+            ? filterDaily(report.daily)
+                .map((d) => {
+                      'Date': d.date,
+                      'Revenue': d.revenue,
+                      'Cost': d.cost,
+                      'Profit': d.grossProfit,
+                      'Orders': d.orders
+                    })
+                .toList()
+            : report.topProducts
+                .map((p) => {
+                      'ProductId': p.productId,
+                      'Revenue': p.revenue,
+                      'Quantity': p.quantity
+                    })
+                .toList();
+        await ExportService.exportToExcel(data, fileName: 'sales_${_fileSuffix()}.xlsx', sheetName: 'Sales');
+        return;
+      }
+
+      if (value == 'pdf') {
+        final title = 'Sales Report';
+        final subtitle = _customRange != null ? _selectedPeriod : _selectedPeriod;
+        if (usingDaily) {
+          final headers = ['Date', 'Revenue', 'Cost', 'Profit', 'Orders'];
+          final rows = filterDaily(report.daily)
+              .map((d) => [
+                    d.date,
+                    CurrencyFmt.format(context, d.revenue),
+                    CurrencyFmt.format(context, d.cost),
+                    CurrencyFmt.format(context, d.grossProfit),
+                    d.orders
+                  ])
+              .toList();
+          await ExportService.exportToPdf(
+            title: title,
+            subtitle: subtitle,
+            headers: headers,
+            rows: rows,
+            fileName: 'sales_${_fileSuffix()}.pdf',
+          );
+        } else {
+          final headers = ['Product', 'Revenue', 'Qty'];
+          final rows = report.topProducts
+              .map((p) => [
+                    p.productId.toString(),
+                    CurrencyFmt.format(context, p.revenue),
+                    p.quantity
+                  ])
+              .toList();
+          await ExportService.exportToPdf(
+            title: title,
+            subtitle: subtitle,
+            headers: headers,
+            rows: rows,
+            fileName: 'sales_${_fileSuffix()}.pdf',
+          );
+        }
+        return;
+      }
+    }
+
+    // INVENTORY ---------------------------------------------------------------
+    if (state is InventoryReportLoaded) {
+      final inv = state.report;
+
+      if (value == 'csv') {
+        final data = inv.products
+            .map((p) => {
+                  'product_id': p.productId,
+                  'name': p.name,
+                  'quantity': p.quantity,
+                  'cost': p.cost,
+                  'stock_value': p.stockValue
+                })
+            .toList();
+        await ExportService.exportToCsv(data, fileName: 'inventory_${_fileSuffix()}.csv');
+        return;
+      }
+
+      if (value == 'excel') {
+        final data = inv.products
+            .map((p) => {
+                  'ProductId': p.productId,
+                  'Name': p.name,
+                  'Quantity': p.quantity,
+                  'Cost': p.cost,
+                  'StockValue': p.stockValue
+                })
+            .toList();
+        await ExportService.exportToExcel(data, fileName: 'inventory_${_fileSuffix()}.xlsx', sheetName: 'Inventory');
+        return;
+      }
+
+      if (value == 'pdf') {
+        final headers = ['Product', 'Qty', 'Cost', 'Stock Value'];
+        final rows = inv.products
+            .map((p) => [
+                  p.name,
+                  p.quantity,
+                  CurrencyFmt.format(context, p.cost),
+                  CurrencyFmt.format(context, p.stockValue),
+                ])
+            .toList();
+        await ExportService.exportToPdf(
+          title: 'Inventory Report',
+          subtitle: _selectedPeriod,
+          headers: headers,
+          rows: rows,
+          fileName: 'inventory_${_fileSuffix()}.pdf',
+        );
+        return;
+      }
+    }
+
+    // FINANCIAL ---------------------------------------------------------------
+    if (state is FinancialReportLoaded) {
+      final fin = state.report;
+      if (value == 'csv') {
+        final totals = fin.totals.entries.map((e) => {'metric': e.key, 'value': e.value}).toList();
+        await ExportService.exportToCsv(totals, fileName: 'financial_${_fileSuffix()}.csv');
+        return;
+      }
+      if (value == 'excel') {
+        final totals = fin.totals.entries.map((e) => {'Metric': e.key, 'Value': e.value}).toList();
+        await ExportService.exportToExcel(totals, fileName: 'financial_${_fileSuffix()}.xlsx', sheetName: 'Financial');
+        return;
+      }
+      if (value == 'pdf') {
+        final headers = ['Metric', 'Value'];
+        final rows = fin.totals.entries
+            .map((e) => [
+                  e.key,
+                  e.value is num ? CurrencyFmt.format(context, e.value as num) : e.value.toString()
+                ])
+            .toList();
+        await ExportService.exportToPdf(
+          title: 'Financial Report',
+          subtitle: _selectedPeriod,
+          headers: headers,
+          rows: rows,
+          fileName: 'financial_${_fileSuffix()}.pdf',
+        );
+        return;
+      }
+    }
+
+    // CUSTOMERS ---------------------------------------------------------------
+    if (state is CustomersReportLoaded) {
+      final cr = state.report;
+      if (value == 'csv') {
+        final data = cr.topCustomers
+            .map((c) => {
+                  'customer_id': c.customerId,
+                  'name': c.name,
+                  'email': c.email ?? '',
+                  'spend': c.spend
+                })
+            .toList();
+        await ExportService.exportToCsv(data, fileName: 'customers_${_fileSuffix()}.csv');
+        return;
+      }
+      if (value == 'excel') {
+        final data = cr.topCustomers
+            .map((c) => {
+                  'CustomerId': c.customerId,
+                  'Name': c.name,
+                  'Email': c.email ?? '',
+                  'Spend': c.spend
+                })
+            .toList();
+        await ExportService.exportToExcel(data, fileName: 'customers_${_fileSuffix()}.xlsx', sheetName: 'Customers');
+        return;
+      }
+      if (value == 'pdf') {
+        final headers = ['Customer', 'Email', 'Spend'];
+        final rows = cr.topCustomers
+            .map((c) => [
+                  c.name,
+                  c.email ?? '',
+                  CurrencyFmt.format(context, c.spend),
+                ])
+            .toList();
+        await ExportService.exportToPdf(
+          title: 'Customers Report',
+          subtitle: _selectedPeriod,
+          headers: headers,
+          rows: rows,
+          fileName: 'customers_${_fileSuffix()}.pdf',
+        );
+        return;
+      }
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No data to export')));
   }
 
+  String _fileSuffix() {
+    final d = DateTime.now();
+    final y = d.year.toString().padLeft(4, '0');
+    final m = d.month.toString().padLeft(2, '0');
+    final da = d.day.toString().padLeft(2, '0');
+    final hh = d.hour.toString().padLeft(2, '0');
+    final mm = d.minute.toString().padLeft(2, '0');
+    final period = _selectedPeriod.replaceAll(' ', '_').replaceAll('/', '-');
+    return '${period.toLowerCase()}_${y}${m}${da}_$hh$mm';
+  }
+
+  // VIEWS ---------------------------------------------------------------------
   Widget _buildSalesView(ReportResponse report) {
-    // Chart data (keep numeric values)
-    final revenueTrend = report.daily.map((d) => {'label': d.date, 'value': d.revenue}).toList();
+    // Filter daily by custom range (if selected)
+    final List<dynamic> daily = _customRange == null
+        ? report.daily
+        : report.daily.where((d) {
+            final dt = _parseDateSafe(d.date);
+            if (dt == null) return false;
+            return !dt.isBefore(_customRange!.start) && !dt.isAfter(_customRange!.end);
+          }).toList();
+
+    // Recompute cards from filtered daily if possible
+    num sum(num Function(dynamic d) pick) => daily.fold<num>(0, (s, e) => s + (pick(e) as num));
+    final revenueSum = daily.isNotEmpty ? sum((d) => d.revenue) : (report.totals.revenue);
+    final profitSum = daily.isNotEmpty ? sum((d) => d.grossProfit) : (report.totals.grossProfit);
+    final ordersSum = daily.isNotEmpty ? sum((d) => d.orders) : (report.totals.orders);
+    final avgOrder = (ordersSum > 0) ? (revenueSum / ordersSum) : 0;
+
+    final revenueTrend = daily.map((d) => {'label': d.date, 'value': d.revenue}).toList();
     final topProducts = report.topProducts
         .map((p) => {'label': p.productId.toString(), 'value': p.revenue})
         .toList();
 
-    // Table data (numbers left raw; ReportDataTable will format currency-friendly keys)
     final dataTable = ReportDataTable(
-      title: 'Daily Breakdown',
+      title: _customRange == null ? 'Daily Breakdown' : 'Daily Breakdown (${_selectedPeriod})',
       headers: const ['Date', 'Revenue', 'Cost', 'Profit', 'Orders'],
-      data: report.daily
+      data: daily
           .map((d) => {
                 'Date': d.date,
                 'Revenue': d.revenue,
@@ -211,28 +450,11 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
           .toList(),
     );
 
-    // KPI cards (format with CurrencyFmt)
     final cards = [
-      {
-        'title': 'Revenue',
-        'value': CurrencyFmt.format(context, report.totals.revenue),
-        'color': AppColors.kPrimary
-      },
-      {
-        'title': 'Gross Profit',
-        'value': CurrencyFmt.format(context, report.totals.grossProfit),
-        'color': Colors.green
-      },
-      {
-        'title': 'Orders',
-        'value': report.totals.orders.toString(),
-        'color': Colors.blueGrey
-      },
-      {
-        'title': 'Avg Order',
-        'value': CurrencyFmt.format(context, report.totals.averageOrderValue),
-        'color': Colors.orange
-      },
+      {'title': 'Revenue', 'value': CurrencyFmt.format(context, revenueSum), 'color': AppColors.kPrimary},
+      {'title': 'Gross Profit', 'value': CurrencyFmt.format(context, profitSum), 'color': Colors.green},
+      {'title': 'Orders', 'value': ordersSum.toString(), 'color': Colors.blueGrey},
+      {'title': 'Avg Order', 'value': CurrencyFmt.format(context, avgOrder), 'color': Colors.orange},
     ];
 
     return ListView(
@@ -244,7 +466,11 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
           return ReportCardGrid(data: cards, responsiveGrid: cols);
         }),
         const SizedBox(height: AppSizes.padding * 2),
-        ReportChartCard(title: 'Revenue Trend', chartData: revenueTrend, chartType: ChartType.line),
+        ReportChartCard(
+          title: _customRange == null ? 'Revenue Trend' : 'Revenue Trend (${_selectedPeriod})',
+          chartData: revenueTrend,
+          chartType: ChartType.line,
+        ),
         const SizedBox(height: AppSizes.padding * 2),
         ReportChartCard(title: 'Top Products', chartData: topProducts, chartType: ChartType.bar),
         const SizedBox(height: AppSizes.padding * 2),
@@ -276,8 +502,8 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
         .map((p) => {
               'Product': p.name,
               'Qty': p.quantity,
-              'Cost': p.cost, // formatted in table
-              'StockValue': p.stockValue, // formatted in table
+              'Cost': p.cost,
+              'StockValue': p.stockValue,
             })
         .toList();
 
@@ -362,7 +588,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
         .map((c) => {
               'Name': c.name,
               'Email': c.email ?? '',
-              'Spend': c.spend, // formatted in table
+              'Spend': c.spend,
             })
         .toList();
 
@@ -392,8 +618,9 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
       listener: (context, state) {
         if (state is ReportsError) {
           ScaffoldMessenger.of(context).clearSnackBars();
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text(state.message), backgroundColor: AppColors.kError));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(state.message), backgroundColor: AppColors.kError),
+          );
         }
       },
       builder: (context, state) {
@@ -468,5 +695,51 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
         );
       },
     );
+  }
+
+  Widget _buildPeriodSelector() {
+    return PopupMenuButton<String>(
+      initialValue: _selectedPeriod,
+      onSelected: _onPeriodSelected,
+      offset: const Offset(0, 50),
+      child: Chip(
+        avatar: const Icon(Icons.calendar_today, size: 18),
+        label: Text(_selectedPeriod),
+        backgroundColor: AppColors.kPrimary.withOpacity(0.08),
+      ),
+      itemBuilder: (BuildContext context) =>
+          ['Today', 'This Week', 'This Month', 'Last 3 Months', 'Custom Range']
+              .map((String value) => PopupMenuItem<String>(value: value, child: Text(value)))
+              .toList(),
+    );
+  }
+
+  // Utils ---------------------------------------------------------------------
+  String _fmtYMD(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  DateTime? _parseDateSafe(String s) {
+    try {
+      // Try ISO first
+      final dt = DateTime.tryParse(s);
+      if (dt != null) return DateTime(dt.year, dt.month, dt.day);
+      // Try common dd/MM/yyyy
+      final partsSlash = s.split('/');
+      if (partsSlash.length == 3) {
+        final d = int.tryParse(partsSlash[0]);
+        final m = int.tryParse(partsSlash[1]);
+        final y = int.tryParse(partsSlash[2]);
+        if (d != null && m != null && y != null) return DateTime(y, m, d);
+      }
+      // Try common yyyy-MM-dd (already handled by DateTime.tryParse in most cases)
+      final partsDash = s.split('-');
+      if (partsDash.length == 3) {
+        final y = int.tryParse(partsDash[0]);
+        final m = int.tryParse(partsDash[1]);
+        final d = int.tryParse(partsDash[2]);
+        if (d != null && m != null && y != null) return DateTime(y, m, d);
+      }
+    } catch (_) {}
+    return null;
   }
 }
