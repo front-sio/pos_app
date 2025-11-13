@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Screens
 import 'package:sales_app/features/customers/presentation/customers_screen.dart';
@@ -117,6 +118,7 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
   void initState() {
     super.initState();
     activeMenu = widget.initialPage;
+    _loadSavedPage();
 
     appSettings = AppSettings(
       appName: "Sales Business App",
@@ -146,6 +148,19 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
     ).chain(CurveTween(curve: Curves.easeOutCubic)).animate(_overlayCtrl);
 
     _rootKeyFocus = FocusNode(debugLabel: 'AdminScaffoldRootKeyFocus');
+  }
+
+  Future<void> _loadSavedPage() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedPage = prefs.getString('active_menu');
+    if (savedPage != null && mounted) {
+      setState(() => activeMenu = savedPage);
+    }
+  }
+
+  Future<void> _savePage(String page) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('active_menu', page);
   }
 
   @override
@@ -369,6 +384,7 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
     setState(() {
       activeMenu = menu;
     });
+    _savePage(menu);
 
     if (_anyOverlayVisible()) {
       _closeOverlay();

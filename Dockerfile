@@ -27,6 +27,12 @@ RUN flutter pub get && flutter build web --release
 
 # Serve with Nginx
 FROM nginx:alpine
+
+# Copy custom nginx config for Flutter web SPA routing
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Copy built Flutter web app
 COPY --from=0 /app/build/web /usr/share/nginx/html
+
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

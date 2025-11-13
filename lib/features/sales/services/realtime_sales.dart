@@ -25,45 +25,50 @@ class RealtimeSales {
     final origin = '${uri.scheme}://${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
     if (kDebugMode) debugPrint('[RealtimeSales] connecting to $origin via /socket.io');
 
-    // Allow polling fallback to avoid failures behind some proxies
-    _socket = IO.io(origin, <String, dynamic>{
-      'transports': ['websocket', 'polling'],
-      'path': '/socket.io',
-      'autoConnect': true,
-      'reconnection': true,
-      'reconnectionAttempts': 999999,
-      'reconnectionDelay': 700,
-      // Note: extraHeaders are ignored on web; rely on CORS on server
-    });
-
-    _socket!.onConnect((_) {
-      if (kDebugMode) debugPrint('[RealtimeSales] connected');
-    });
-
-    _socket!.onConnectError((err) {
-      if (kDebugMode) debugPrint('[RealtimeSales] connect_error: $err');
-    });
-
-    _socket!.onError((err) {
-      if (kDebugMode) debugPrint('[RealtimeSales] error: $err');
-    });
-
-    _socket!.onDisconnect((reason) {
-      if (kDebugMode) debugPrint('[RealtimeSales] disconnected: $reason');
-    });
-
-    // Unified sales event from backend
-    _socket!.on('sales_changed', (data) {
-      final type = _extractType(data);
-      if (kDebugMode) debugPrint('[RealtimeSales] sales_changed: $type');
-
-      _debouncer?.cancel();
-      _debouncer = Timer(debounce, () {
-        if (!_controller.isClosed) _controller.add(type);
+    try {
+      // Allow polling fallback to avoid failures behind some proxies
+      _socket = IO.io(origin, <String, dynamic>{
+        'transports': ['websocket', 'polling'],
+        'path': '/socket.io',
+        'autoConnect': true,
+        'reconnection': true,
+        'reconnectionAttempts': 5,
+        'reconnectionDelay': 1000,
+        'timeout': 10000,
+        // Note: extraHeaders are ignored on web; rely on CORS on server
       });
-    });
 
-    _socket!.connect();
+      _socket!.onConnect((_) {
+        if (kDebugMode) debugPrint('[RealtimeSales] connected');
+      });
+
+      _socket!.onConnectError((err) {
+        if (kDebugMode) debugPrint('[RealtimeSales] connect_error: $err (socket service may not be available)');
+      });
+
+      _socket!.onError((err) {
+        if (kDebugMode) debugPrint('[RealtimeSales] error: $err');
+      });
+
+      _socket!.onDisconnect((reason) {
+        if (kDebugMode) debugPrint('[RealtimeSales] disconnected: $reason');
+      });
+
+      // Unified sales event from backend
+      _socket!.on('sales_changed', (data) {
+        final type = _extractType(data);
+        if (kDebugMode) debugPrint('[RealtimeSales] sales_changed: $type');
+
+        _debouncer?.cancel();
+        _debouncer = Timer(debounce, () {
+          if (!_controller.isClosed) _controller.add(type);
+        });
+      });
+
+      _socket!.connect();
+    } catch (e) {
+      if (kDebugMode) debugPrint('[RealtimeSales] Failed to initialize socket: $e (continuing without realtime updates)');
+    }
   }
 
   String _extractType(dynamic data) {

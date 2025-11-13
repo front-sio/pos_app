@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:sales_app/constants/colors.dart';
 import 'package:sales_app/constants/sizes.dart';
 import 'package:sales_app/utils/currency.dart';
+import 'package:sales_app/features/sales/bloc/sales_bloc.dart';
+import 'package:sales_app/features/sales/bloc/sales_state.dart';
 
-class BottomSummaryBar extends StatelessWidget {
+class BottomSummaryBar extends StatefulWidget {
   final TextEditingController paidAmountCtrl;
   final TextEditingController discountCtrl;
   final double Function(String) computeParseAmount;
@@ -27,16 +30,41 @@ class BottomSummaryBar extends StatelessWidget {
   });
 
   @override
+  State<BottomSummaryBar> createState() => _BottomSummaryBarState();
+}
+
+class _BottomSummaryBarState extends State<BottomSummaryBar> {
+  @override
+  void initState() {
+    super.initState();
+    widget.paidAmountCtrl.addListener(_rebuild);
+    widget.discountCtrl.addListener(_rebuild);
+  }
+
+  @override
+  void dispose() {
+    widget.paidAmountCtrl.removeListener(_rebuild);
+    widget.discountCtrl.removeListener(_rebuild);
+    super.dispose();
+  }
+
+  void _rebuild() {
+    if (mounted) setState(() {});
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final subtotal = computeSubtotalCallback();
-    final discount = computeParseAmount(discountCtrl.text);
-    final total = (subtotal - discount).clamp(0, double.infinity);
-    final paidAmount = computeParseAmount(paidAmountCtrl.text);
-    final due = (total - paidAmount).clamp(0, double.infinity);
+    return BlocBuilder<SalesBloc, SalesState>(
+      builder: (context, salesState) {
+        final subtotal = widget.computeSubtotalCallback();
+        final discount = widget.computeParseAmount(widget.discountCtrl.text);
+        final total = (subtotal - discount).clamp(0, double.infinity);
+        final paidAmount = widget.computeParseAmount(widget.paidAmountCtrl.text);
+        final due = (total - paidAmount).clamp(0, double.infinity);
 
-    String fmt(num v) => CurrencyFmt.format(context, v);
+        String fmt(num v) => CurrencyFmt.format(context, v);
 
-    return SafeArea(
+        return SafeArea(
       top: false,
       child: Container(
         padding: const EdgeInsets.all(AppSizes.padding),
@@ -58,7 +86,7 @@ class BottomSummaryBar extends StatelessWidget {
               children: [
                 Expanded(
                   child: TextField(
-                    controller: discountCtrl,
+                    controller: widget.discountCtrl,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     inputFormatters: [
                       FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
@@ -74,7 +102,7 @@ class BottomSummaryBar extends StatelessWidget {
                 const SizedBox(width: AppSizes.padding),
                 Expanded(
                   child: TextField(
-                    controller: paidAmountCtrl,
+                    controller: widget.paidAmountCtrl,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     inputFormatters: [
                       FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
@@ -155,9 +183,9 @@ class BottomSummaryBar extends StatelessWidget {
             ),
 
             // Any extra rows such as tax, fees, etc.
-            if (extraRows.isNotEmpty) ...[
+            if (widget.extraRows.isNotEmpty) ...[
               const SizedBox(height: AppSizes.padding),
-              ...extraRows,
+              ...widget.extraRows,
             ],
 
             const SizedBox(height: AppSizes.padding),
@@ -167,7 +195,7 @@ class BottomSummaryBar extends StatelessWidget {
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: onCancel,
+                    onPressed: widget.onCancel,
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
@@ -181,7 +209,7 @@ class BottomSummaryBar extends StatelessWidget {
                 Expanded(
                   flex: 2,
                   child: FilledButton(
-                    onPressed: onCheckout,
+                    onPressed: widget.onCheckout,
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       backgroundColor: AppColors.kPrimary,
@@ -200,6 +228,8 @@ class BottomSummaryBar extends StatelessWidget {
           ],
         ),
       ),
+        );
+      },
     );
   }
 }

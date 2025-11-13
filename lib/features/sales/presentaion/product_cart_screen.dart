@@ -671,7 +671,11 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
     final neededKeys = cart.keys.map((p) => p.id).toSet();
 
     for (final k in existingKeys.difference(neededKeys)) {
-      _lineEdits[k]?.dispose();
+      final le = _lineEdits[k];
+      if (le != null) {
+        le.unitPriceCtrl.removeListener(_requestRebuild);
+        le.dispose();
+      }
       _lineEdits.remove(k);
     }
 
@@ -680,8 +684,13 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
     for (final entry in cart.entries) {
       final p = entry.key;
       final qty = entry.value;
+      final isNew = !_lineEdits.containsKey(p.id);
       _lineEdits.putIfAbsent(p.id, () => LineEdit());
       final le = _lineEdits[p.id]!;
+
+      if (isNew) {
+        le.unitPriceCtrl.addListener(_requestRebuild);
+      }
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final defaultPrice = (p.price ?? 0.0).toStringAsFixed(digits);

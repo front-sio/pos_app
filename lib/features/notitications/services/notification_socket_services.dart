@@ -25,51 +25,53 @@ class NotificationSocketService {
   Future<void> connect({String? token}) async {
     disconnect();
 
-    // Derive origin from base API URL (no separate socket url dependency)
-    final base = AppConfig.baseUrl;
-    final uri = Uri.parse(base);
-    final origin = '${uri.scheme}://${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
+    try {
+      // Derive origin from base API URL (no separate socket url dependency)
+      final base = AppConfig.baseUrl;
+      final uri = Uri.parse(base);
+      final origin = '${uri.scheme}://${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
 
-    // Prefer provided token, fallback to secure storage
-    final secureToken = token ?? await const FlutterSecureStorage().read(key: 'token');
+      // Prefer provided token, fallback to secure storage
+      final secureToken = token ?? await const FlutterSecureStorage().read(key: 'token');
 
-    if (kDebugMode) {
-      debugPrint('[NotificationSocket] connecting to $origin via /socket.io-notifications');
-    }
+      if (kDebugMode) {
+        debugPrint('[NotificationSocket] connecting to $origin via /socket.io-notifications');
+      }
 
-    final options = <String, dynamic>{
-      'transports': ['websocket', 'polling'],
-      'path': '/socket.io-notifications',
-      'autoConnect': true,
-      'reconnection': true,
-      'reconnectionAttempts': 999999,
-      'reconnectionDelay': 700,
-      // Browsers: handshake auth
-      'auth': (secureToken != null && secureToken.isNotEmpty) ? {'token': secureToken} : {},
-      // Native: attach Authorization header (ignored by web)
-      if (secureToken != null && secureToken.isNotEmpty)
-        'extraHeaders': {'Authorization': 'Bearer $secureToken'},
-    };
+      final options = <String, dynamic>{
+        'transports': ['websocket', 'polling'],
+        'path': '/socket.io-notifications',
+        'autoConnect': true,
+        'reconnection': true,
+        'reconnectionAttempts': 5,
+        'reconnectionDelay': 1000,
+        'timeout': 10000,
+        // Browsers: handshake auth
+        'auth': (secureToken != null && secureToken.isNotEmpty) ? {'token': secureToken} : {},
+        // Native: attach Authorization header (ignored by web)
+        if (secureToken != null && secureToken.isNotEmpty)
+          'extraHeaders': {'Authorization': 'Bearer $secureToken'},
+      };
 
-    _socket = IO.io(origin, options);
+      _socket = IO.io(origin, options);
 
-    _socket!.onConnect((_) {
-      if (kDebugMode) debugPrint('[NotificationSocket] connected');
-      // Request a snapshot (unreadCount + optional backlog)
-      _socket!.emit('snapshot_request');
-    });
+      _socket!.onConnect((_) {
+        if (kDebugMode) debugPrint('[NotificationSocket] connected');
+        // Request a snapshot (unreadCount + optional backlog)
+        _socket!.emit('snapshot_request');
+      });
 
-    _socket!.onConnectError((err) {
-      if (kDebugMode) debugPrint('[NotificationSocket] connect_error: $err');
-    });
+      _socket!.onConnectError((err) {
+        if (kDebugMode) debugPrint('[NotificationSocket] connect_error: $err (socket service may not be available)');
+      });
 
-    _socket!.onError((err) {
-      if (kDebugMode) debugPrint('[NotificationSocket] error: $err');
-    });
+      _socket!.onError((err) {
+        if (kDebugMode) debugPrint('[NotificationSocket] error: $err');
+      });
 
-    _socket!.onDisconnect((reason) {
-      if (kDebugMode) debugPrint('[NotificationSocket] disconnected: $reason');
-    });
+      _socket!.onDisconnect((reason) {
+        if (kDebugMode) debugPrint('[NotificationSocket] disconnected: $reason');
+      });
 
     // Snapshot payload: { unreadCount: number, items: [] }
     _socket!.on('snapshot', (payload) {
@@ -104,7 +106,10 @@ class NotificationSocketService {
       }
     });
 
-    _socket!.connect();
+      _socket!.connect();
+    } catch (e) {
+      if (kDebugMode) debugPrint('[NotificationSocket] Failed to initialize: $e (continuing without realtime notifications)');
+    }
   }
 
   void markAllRead() {
