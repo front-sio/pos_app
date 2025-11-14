@@ -9,7 +9,9 @@ abstract class SalesEvent extends Equatable {
   List<Object> get props => [];
 }
 
-class LoadSales extends SalesEvent {}
+class LoadSales extends SalesEvent {
+  const LoadSales();
+}
 
 class AddSale extends SalesEvent {
   final int customerId;
@@ -56,7 +58,9 @@ class UpdateItemQuantity extends SalesEvent {
   List<Object> get props => [product, quantity];
 }
 
-class ResetCart extends SalesEvent {}
+class ResetCart extends SalesEvent {
+  const ResetCart();
+}
 
 class AddItemFromBarcode extends SalesEvent {
   final String barcode;

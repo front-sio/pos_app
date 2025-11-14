@@ -9,6 +9,7 @@ import 'package:sales_app/features/products/services/realtime_product.dart';
 import 'package:sales_app/utils/responsive.dart';
 import 'package:sales_app/utils/interaction_lock.dart';
 import 'package:sales_app/utils/currency.dart';
+import 'package:sales_app/widgets/error_placeholder.dart';
 
 import 'package:sales_app/features/products/bloc/products_bloc.dart';
 import 'package:sales_app/features/products/bloc/products_event.dart';
@@ -378,23 +379,8 @@ class _ProductsScreenState extends State<ProductsScreen> with TickerProviderStat
 
         if (state is ProductsError) {
           return SliverFillRemaining(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Icon(Icons.error_outline, size: 64, color: cs.error),
-                  const SizedBox(height: 16),
-                  Text('Oops! Something went wrong', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-                  const SizedBox(height: 8),
-                  Text(state.message, style: theme.textTheme.bodyMedium, textAlign: TextAlign.center),
-                  const SizedBox(height: 24),
-                  ElevatedButton.icon(
-                    onPressed: () => context.read<ProductsBloc>().add(FetchProductsPage(1, _limit)),
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Try Again'),
-                  ),
-                ]),
-              ),
+            child: ErrorPlaceholder(
+              onRetry: () => context.read<ProductsBloc>().add(FetchProductsPage(1, _limit)),
             ),
           );
         }

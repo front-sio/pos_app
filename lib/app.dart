@@ -39,12 +39,12 @@ class PosBusinessApp extends StatelessWidget {
         builder: (context, state) {
           if (state is AuthAuthenticated) {
             return const AdminScaffold();
-          } else if (state is AuthUnauthenticated || state is AuthLoading) {
-            // Stay on login screen for both unauthenticated and loading states
-            // Login screen handles its own loading UI
+          } else if (state is AuthUnauthenticated || state is AuthLoading || state is AuthFailure) {
+            // Stay on login screen for unauthenticated, loading, and failure states
+            // Login screen handles its own loading UI and error messages
             return const LoginScreen();
           }
-          // Initial loading when app starts
+          // Initial loading when app starts (AuthInitial)
           return const Scaffold(
             body: AppLoader.fullscreen(message: 'Preparing app...'),
           );

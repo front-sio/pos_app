@@ -131,10 +131,10 @@ class SalesBloc extends Bloc<SalesEvent, SalesState> {
       _cart.clear();
       emit(CartUpdated(Map.from(_cart)));
       emit(const SalesOperationSuccess("Sale added successfully"));
-      add(LoadSales());
+      add(const LoadSales());
     } catch (e) {
       emit(SalesError(e.toString()));
-      add(LoadSales());
+      add(const LoadSales());
     }
   }
 

@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import 'package:sales_app/constants/colors.dart';
 import 'package:sales_app/constants/sizes.dart';
 import 'package:sales_app/utils/currency.dart';
+import 'package:sales_app/widgets/error_placeholder.dart';
 
 // Services and blocs
 import 'package:sales_app/features/customers/services/customer_services.dart';
@@ -83,7 +84,7 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    context.read<SalesBloc>().add(LoadSales());
+    context.read<SalesBloc>().add(const LoadSales());
     _startRealtime();
   }
 
@@ -104,7 +105,7 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _refresh() async {
-    context.read<SalesBloc>().add(LoadSales());
+    context.read<SalesBloc>().add(const LoadSales());
     await Future.delayed(const Duration(milliseconds: 150));
   }
 
@@ -120,13 +121,13 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
       _refreshDebounce = Timer(kRefreshCooldown - since, () {
         _lastRefresh = DateTime.now();
         _invalidateTileCaches();
-        context.read<SalesBloc>().add(LoadSales());
+        context.read<SalesBloc>().add(const LoadSales());
       });
       return;
     }
     _lastRefresh = now;
     _invalidateTileCaches();
-    context.read<SalesBloc>().add(LoadSales());
+    context.read<SalesBloc>().add(const LoadSales());
   }
 
   void _invalidateTileCaches() {
@@ -313,7 +314,9 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
             } else if (state is SalesLoading) {
               sales = _latestSales;
             } else if (state is SalesError) {
-              return Center(child: Text(state.message, style: TextStyle(color: AppColors.kError)));
+              return ErrorPlaceholder(
+                onRetry: () => context.read<SalesBloc>().add(const LoadSales()),
+              );
             } else {
               sales = _latestSales;
             }
@@ -744,7 +747,7 @@ class _SaleDetailsSheetState extends State<_SaleDetailsSheet> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Return recorded')));
-      context.read<SalesBloc>().add(LoadSales());
+      context.read<SalesBloc>().add(const LoadSales());
     } catch (e, st) {
       if (kDebugMode) {
         debugPrint('[Return][error] saleId=${_sale.id} saleItemId=${item.id} err=$e');

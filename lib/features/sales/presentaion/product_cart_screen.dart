@@ -313,7 +313,7 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
             onPressed: () {
               try {
                 Navigator.pop(context);
-                context.read<SalesBloc>().add(ResetCart());
+                context.read<SalesBloc>().add(const ResetCart());
                 widget.onCancel?.call();
               } catch (e, st) {
                 _logAndToastError('CancelSale', e, st);

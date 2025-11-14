@@ -6,8 +6,6 @@ import 'package:sales_app/features/auth/logic/auth_bloc.dart';
 import 'package:sales_app/features/auth/logic/auth_event.dart';
 import 'package:sales_app/features/auth/logic/auth_state.dart';
 import 'package:sales_app/features/auth/presentation/login_background_painter.dart';
-import 'package:sales_app/widgets/admin_scaffold.dart';
-import 'package:sales_app/widgets/auth_scaffold.dart';
 import 'package:sales_app/widgets/custom_field.dart';
 
 import 'forgot_password_screen.dart';
@@ -260,19 +258,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                 ),
               ),
             ),
-          ),
-          // BlocListener for navigation only
-          BlocListener<AuthBloc, AuthState>(
-            listener: (context, state) {
-              if (state is AuthAuthenticated) {
-                // Navigate directly without showing loader dialog
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AdminScaffold()),
-                );
-              }
-            },
-            child: const SizedBox.shrink(),
           ),
         ],
       ),
