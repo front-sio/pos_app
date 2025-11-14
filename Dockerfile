@@ -17,7 +17,6 @@ COPY assets ./assets
 # Build for web with optimizations
 RUN flutter build web \
     --release \
-    --web-renderer canvaskit \
     --no-tree-shake-icons
 
 # Stage 2: Serve with Nginx
