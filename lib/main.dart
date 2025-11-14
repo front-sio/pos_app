@@ -181,8 +181,7 @@ void main() async {
           BlocProvider<SettingsBloc>(create: (context) => SettingsBloc(context.read<SettingsService>())),
           BlocProvider<ExpenseBloc>(create: (context) => ExpenseBloc(service: context.read<ExpenseService>())),
           BlocProvider<NotificationBloc>(
-            create: (context) => NotificationBloc(service: context.read<NotificationSocketService>())
-              ..add(const StartNotifications()),
+            create: (context) => NotificationBloc(service: context.read<NotificationSocketService>()),
           ),
           // New blocs
           BlocProvider<CategoryBloc>(create: (context) => CategoryBloc(service: context.read<CategoryService>())..add(const LoadCategories())),
@@ -226,6 +225,10 @@ class _AuthenticatedAppState extends State<_AuthenticatedApp> {
           listenWhen: (prev, next) => next is AuthAuthenticated || next is AuthUnauthenticated,
           listener: (context, state) {
             if (state is AuthAuthenticated) {
+              // Start notifications with token
+              context.read<NotificationBloc>().add(StartNotifications(token: state.token));
+              
+              // Load other data
               context.read<ProductsBloc>().add(FetchProducts());
               context.read<StockBloc>().add(const LoadProducts(page: 1));
               context.read<CustomerBloc>().add(FetchCustomersPage(1, 20));

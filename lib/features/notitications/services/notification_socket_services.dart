@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:sales_app/config/config.dart';
 import 'package:sales_app/features/notitications/data/notification_model.dart';
 
 class NotificationSocketService {
-  IO.Socket? _socket;
+  io.Socket? _socket;
 
   final _notifController = StreamController<AppNotification>.broadcast();
   final _snapshotController = StreamController<NotificationSnapshot>.broadcast();
@@ -17,16 +17,11 @@ class NotificationSocketService {
   bool get connected => _socket?.connected == true;
 
   /// Connects to the notifications Socket.IO endpoint.
-  /// This implementation mirrors the RealtimeProducts style:
-  /// - Builds origin from AppConfig.baseUrl
-  /// - Uses a dedicated Socket.IO path: /socket.io-notifications
-  /// - Sends token via auth payload and extraHeaders
-  /// - Enables reconnection with backoff
   Future<void> connect({String? token}) async {
     disconnect();
 
     try {
-      // Derive origin from base API URL (no separate socket url dependency)
+      // Derive origin from base API URL
       final base = AppConfig.baseUrl;
       final uri = Uri.parse(base);
       final origin = '${uri.scheme}://${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
@@ -53,7 +48,7 @@ class NotificationSocketService {
           'extraHeaders': {'Authorization': 'Bearer $secureToken'},
       };
 
-      _socket = IO.io(origin, options);
+      _socket = io.io(origin, options);
 
       _socket!.onConnect((_) {
         if (kDebugMode) debugPrint('[NotificationSocket] connected');
@@ -62,7 +57,7 @@ class NotificationSocketService {
       });
 
       _socket!.onConnectError((err) {
-        if (kDebugMode) debugPrint('[NotificationSocket] connect_error: $err (socket service may not be available)');
+        if (kDebugMode) debugPrint('[NotificationSocket] connect_error: $err');
       });
 
       _socket!.onError((err) {
@@ -73,42 +68,42 @@ class NotificationSocketService {
         if (kDebugMode) debugPrint('[NotificationSocket] disconnected: $reason');
       });
 
-    // Snapshot payload: { unreadCount: number, items: [] }
-    _socket!.on('snapshot', (payload) {
-      try {
-        final unread = int.tryParse('${payload?['unreadCount'] ?? 0}') ?? 0;
-        final items = <AppNotification>[];
-        final raw = payload?['items'];
-        if (raw is List) {
-          for (final it in raw) {
-            items.add(AppNotification.fromSocket(it));
+      // Snapshot payload: { unreadCount: number, items: [] }
+      _socket!.on('snapshot', (payload) {
+        try {
+          final unread = int.tryParse('${payload?['unreadCount'] ?? 0}') ?? 0;
+          final items = <AppNotification>[];
+          final raw = payload?['items'];
+          if (raw is List) {
+            for (final it in raw) {
+              items.add(AppNotification.fromSocket(it));
+            }
           }
+          if (!_snapshotController.isClosed) {
+            _snapshotController.add(NotificationSnapshot(unreadCount: unread, items: items));
+          }
+          if (kDebugMode) debugPrint('[NotificationSocket] snapshot: unread=$unread, items=${items.length}');
+        } catch (e) {
+          if (kDebugMode) debugPrint('[NotificationSocket] snapshot parse error: $e');
         }
-        if (!_snapshotController.isClosed) {
-          _snapshotController.add(NotificationSnapshot(unreadCount: unread, items: items));
-        }
-        if (kDebugMode) debugPrint('[NotificationSocket] snapshot: unread=$unread, items=${items.length}');
-      } catch (e) {
-        if (kDebugMode) debugPrint('[NotificationSocket] snapshot parse error: $e');
-      }
-    });
+      });
 
-    // Realtime single notification
-    _socket!.on('notify', (payload) {
-      try {
-        final n = AppNotification.fromSocket(payload);
-        if (!_notifController.isClosed) {
-          _notifController.add(n);
+      // Realtime single notification
+      _socket!.on('notify', (payload) {
+        try {
+          final n = AppNotification.fromSocket(payload);
+          if (!_notifController.isClosed) {
+            _notifController.add(n);
+          }
+          if (kDebugMode) debugPrint('[NotificationSocket] notify: ${n.title}');
+        } catch (e) {
+          if (kDebugMode) debugPrint('[NotificationSocket] notify parse error: $e');
         }
-        if (kDebugMode) debugPrint('[NotificationSocket] notify: ${n.title}');
-      } catch (e) {
-        if (kDebugMode) debugPrint('[NotificationSocket] notify parse error: $e');
-      }
-    });
+      });
 
       _socket!.connect();
     } catch (e) {
-      if (kDebugMode) debugPrint('[NotificationSocket] Failed to initialize: $e (continuing without realtime notifications)');
+      if (kDebugMode) debugPrint('[NotificationSocket] Failed to initialize: $e');
     }
   }
 

@@ -4,7 +4,190 @@ A comprehensive Point of Sale (POS) and Sales Management System built with Flutt
 
 ## Recent Updates (Nov 14, 2025)
 
-### Network Error Handling & API Status Screen (NEW - Nov 14, 2025)
+### WebSocket & Realtime Features Fix (Nov 14, 2025)
+- ✅ **Notifications service FULLY STRUCTURED** - Express + Drizzle ORM + Socket.IO
+- ✅ **Proper package.json** - All dependencies and scripts configured
+- ✅ **Drizzle migrations** - Database schema managed with drizzle-kit
+- ✅ **Database table created** - notifications table in PostgreSQL
+- ✅ **Gateway configuration updated** - Enabled notifications endpoints
+- ✅ **Flutter notifications enabled** - Full realtime connection working
+- ✅ **UI completely updated** - Beautiful notification cards with type colors
+- ✅ **Badge in app bar** - Shows unread count with visual indicator
+- ✅ **Notification types** - Success (green), Warning (orange), Error (red), Info (blue)
+- ✅ **Auto-connect on login** - Notifications start with JWT token
+- ✅ **Socket.IO realtime** - Live notifications to users
+- ✅ **REST API endpoints** - CRUD operations for notifications
+- ✅ **Webhook endpoints** - Other services can trigger notifications
+- ✅ **Business event triggers** - Invoices, sales, stock, purchases, etc.
+- ✅ **Smart notification logic** - Low stock alerts, large sales, overdue invoices
+- ✅ **Targeted & broadcast** - User-specific or system-wide notifications
+- ✅ **Products realtime working** - Socket.IO properly configured for products
+- ✅ **Clean error logs** - No more repeated connection errors
+- ✅ **User authentication** - JWT token verification
+- ℹ️  **Products WebSocket** - Enabled on `/socket.io-products` path
+- ℹ️  **Notifications WebSocket** - Enabled on `/socket.io-notifications` path
+- ℹ️  **Port 3022** - Notifications service on dedicated port
+
+## Notifications Service Setup
+
+### Backend Structure (Like other microservices)
+```
+notifications-service/
+├── package.json           # Dependencies (Express, Drizzle, Socket.IO)
+├── drizzle.config.ts      # Database configuration
+├── tsconfig.json          # TypeScript configuration
+├── .env                   # Environment variables
+├── migrations/            # Drizzle database migrations
+└── src/
+    ├── index.ts           # Main Express + Socket.IO server
+    ├── realtime.ts        # Socket.IO handlers
+    ├── notificationTriggers.ts  # Business logic triggers
+    ├── db/
+    │   ├── db.ts          # Drizzle database connection
+    │   └── schema/
+    │       ├── index.ts
+    │       └── notifications.ts  # Notification model
+    ├── services/
+    │   └── notificationService.ts  # CRUD operations
+    └── routes/
+        ├── notifications.ts  # REST API routes
+        └── webhooks.ts       # Webhook endpoints
+```
+
+### Webhook Integration (IMPLEMENTED)
+
+**Sales Service** → Triggers notifications on:
+- ✅ **Sale Completed** - When transaction completes
+- ✅ **Large Sale Alert** - Sales ≥ 1M TZS (broadcast to admins)
+
+**Products Service** → Triggers notifications on:
+- ✅ **Product Created** - When new product added
+- ✅ **Low Stock Alert** - When stock ≤ reorder level
+- ✅ **Stock Out** - When stock reaches 0
+
+**Code Integration Example (Sales Service):**
+```typescript
+// After successful sale creation
+triggerNotification('sale-completed', {
+  saleId: Number(result.id),
+  total: netTotal,
+  userId: userId,
+});
+```
+
+**Code Integration Example (Products Service):**
+```typescript
+// After stock update, check levels
+if (minStock > 0 && currentStock <= minStock) {
+  triggerNotification('low-stock', {
+    productId: product.id,
+    productName: product.name,
+    currentStock: currentStock,
+    minStock: minStock,
+    userId: 1,
+  });
+}
+```
+
+### Installation & Setup
+```bash
+cd sales-gateway/notifications-service
+
+# Install dependencies
+pnpm install
+
+# Generate database migration
+pnpm run migrate:dev
+
+# Push migration to database
+pnpm run migrate:up
+
+# Build TypeScript
+pnpm run build
+
+# Start service
+pnpm start
+# OR for development
+pnpm run dev
+```
+
+### Database Configuration
+Update `.env` with your database credentials:
+```
+NOTIFICATIONS_PORT=3022
+NOTIFICATIONS_DATABASE_URL=postgresql://postgres:password@74.50.97.22:5438/notificationsdb
+JWT_SECRET=a59a6d94ccbae4ac5adbab06540b7d39fa1ebbfb69f583962ef63010e81807c2
+```
+
+**WHY NOTIFICATIONS HAS ITS OWN DATABASE:**
+Following microservices best practices, each service should have its own database for:
+- **Data isolation**: Notifications data separate from products/sales
+- **Independent scaling**: Scale notification storage independently
+- **Schema autonomy**: Update notification schema without affecting other services
+- **Fault tolerance**: Database issues in one service don't affect others
+
+**Database Setup:**
+```bash
+# Create dedicated notificationsdb
+PGPASSWORD=password psql -h 74.50.97.22 -p 5438 -U postgres -c "CREATE DATABASE notificationsdb;"
+```
+
+**Note:** Ensure the database URL format is: `postgresql://user:password@host:port/database`
+
+### Manual Table Creation (if migration hangs)
+If `pnpm run migrate:up` hangs, create the table manually:
+```bash
+PGPASSWORD=your_password psql -h host -p port -U postgres -d notificationsdb -c "
+CREATE TABLE IF NOT EXISTS notifications (
+  id serial PRIMARY KEY NOT NULL,
+  user_id integer NOT NULL,
+  title text NOT NULL,
+  message text NOT NULL,
+  type text DEFAULT 'info' NOT NULL,
+  is_read boolean DEFAULT false NOT NULL,
+  metadata text,
+  created_at timestamp DEFAULT now() NOT NULL,
+  read_at timestamp
+);
+"
+```
+
+## Notification Triggers
+
+The system automatically sends notifications for these business events:
+
+### 📄 Invoice Events
+- **Invoice Created**: When new invoice is generated
+- **Payment Received**: When customer makes payment
+- **Invoice Overdue**: Alerts for past-due invoices
+
+### 💰 Sales Events
+- **Sale Completed**: Every successful sale
+- **Large Sale Alert**: High-value sales (≥1,000,000 TZS) - broadcast to admins
+
+### 📦 Stock Events
+- **Low Stock**: When inventory falls below minimum level
+- **Stock Out**: When product is completely out of stock
+
+### 🛒 Purchase Events
+- **Purchase Created**: New purchase order placed
+- **Purchase Received**: When goods are received
+
+### 👥 Customer Events
+- **New Customer**: When customer is registered
+
+### 🏷️ Product Events
+- **Product Created**: New product added to catalog
+- **Price Changed**: When product price is updated
+
+### 🔄 Return Events
+- **Return Processed**: When sale return is completed
+
+### ⚙️ System Events
+- **System Maintenance**: Broadcast maintenance notifications
+- **Daily Reports**: End-of-day business summary
+
+### Network Error Handling & API Status Screen (Nov 14, 2025)
 - ✅ **API Error Screen** - Dedicated screen showing server connection issues (English)
 - ✅ **Network error detection** - Distinguishes network vs other errors
 - ✅ **User-friendly error messages** - Clear messages in English

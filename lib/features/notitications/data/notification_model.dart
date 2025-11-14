@@ -1,43 +1,56 @@
 class AppNotification {
   final String id;
   final String title;
-  final String body;
+  final String message;
   final DateTime createdAt;
-  final bool read;
-  final String? type;
-  final Map<String, dynamic>? data;
+  final bool isRead;
+  final String type;
+  final Map<String, dynamic>? metadata;
 
   AppNotification({
     required this.id,
     required this.title,
-    required this.body,
+    required this.message,
     required this.createdAt,
-    this.read = false,
-    this.type,
-    this.data,
+    this.isRead = false,
+    this.type = 'info',
+    this.metadata,
   });
 
   AppNotification copyWith({bool? read}) => AppNotification(
         id: id,
         title: title,
-        body: body,
+        message: message,
         createdAt: createdAt,
-        read: read ?? this.read,
+        isRead: read ?? this.isRead,
         type: type,
-        data: data,
+        metadata: metadata,
       );
 
   factory AppNotification.fromSocket(dynamic json) {
     final Map<String, dynamic> j = (json as Map).cast<String, dynamic>();
     return AppNotification(
-      id: (j['id'] ?? j['_id'] ?? DateTime.now().millisecondsSinceEpoch.toString()).toString(),
+      id: (j['id'] ?? DateTime.now().millisecondsSinceEpoch.toString()).toString(),
       title: (j['title'] ?? 'Notification').toString(),
-      body: (j['body'] ?? '').toString(),
-      createdAt: DateTime.tryParse('${j['createdAt'] ?? j['created_at'] ?? DateTime.now().toIso8601String()}') ??
-          DateTime.now(),
-      read: (j['read'] == true),
-      type: j['type']?.toString(),
-      data: (j['data'] is Map) ? (j['data'] as Map).cast<String, dynamic>() : null,
+      message: (j['message'] ?? j['body'] ?? '').toString(),
+      createdAt: DateTime.tryParse(j['createdAt'] ?? DateTime.now().toIso8601String()) ?? DateTime.now(),
+      isRead: (j['isRead'] == true) || (j['read'] == true),
+      type: j['type']?.toString() ?? 'info',
+      metadata: (j['metadata'] is Map) ? (j['metadata'] as Map).cast<String, dynamic>() : null,
     );
+  }
+
+  // Helper to get notification color based on type
+  String getIconName() {
+    switch (type.toLowerCase()) {
+      case 'success':
+        return 'check_circle';
+      case 'warning':
+        return 'warning';
+      case 'error':
+        return 'error';
+      default:
+        return 'info';
+    }
   }
 }
