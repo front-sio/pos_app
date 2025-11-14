@@ -80,10 +80,12 @@ curl -I https://your-domain.com
 - Potential build cancellations during compilation
 - Permission and security issues
 
-**Solution**: The Dockerfile now creates a non-root user (`flutter`) for the build stage ✅ (already fixed)
-- Creates a dedicated `flutter` user with UID 1000
+**Solution**: The Dockerfile now uses the existing non-root user (`ubuntu`) for the build stage ✅ (already fixed)
+- Uses the pre-existing `ubuntu` user with UID 1000 from the Flutter base image
+- Grants ownership of Flutter SDK directories to the ubuntu user
 - All build commands run as this non-root user
 - Proper ownership is set for all copied files
+- Configures git to trust the Flutter SDK directory
 - This eliminates the root user warning and improves build reliability
 
 ### Issue: Build timeout or cancellation during deployment
