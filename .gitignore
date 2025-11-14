@@ -7,12 +7,9 @@
 .pub/
 generated_plugin_registrant.dart
 
-
 # ignore everything in build except web
 build/*
 !build/web/
-
-
 
 # iOS
 ios/Flutter/Flutter.podspec
