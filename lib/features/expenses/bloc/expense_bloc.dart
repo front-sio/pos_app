@@ -3,6 +3,7 @@ import 'package:sales_app/features/expenses/bloc/expense_event.dart';
 import 'package:sales_app/features/expenses/bloc/expense_state.dart';
 import 'package:sales_app/features/expenses/data/expense_model.dart';
 import 'package:sales_app/features/expenses/services/expense_services.dart';
+import 'package:sales_app/utils/api_error_handler.dart';
 
 class ExpenseBloc extends Bloc<ExpenseEvent, ExpenseState> {
   final ExpenseService service;
@@ -13,17 +14,6 @@ class ExpenseBloc extends Bloc<ExpenseEvent, ExpenseState> {
     on<CreateExpenseEvent>(_onCreateExpense);
   }
 
-  String _friendly(Object e) {
-    final t = e.toString().toLowerCase();
-    if (t.contains('failed to load')) {
-      return "We couldn't load expenses. Please try again.";
-    }
-    if (t.contains('failed to create')) {
-      return "We couldn't save your expense. Please try again.";
-    }
-    return "We couldn't complete the request. Please try again.";
-  }
-
   Future<void> _onLoadExpenses(LoadExpenses event, Emitter<ExpenseState> emit) async {
     try {
       emit(ExpensesLoading());
@@ -31,7 +21,8 @@ class ExpenseBloc extends Bloc<ExpenseEvent, ExpenseState> {
       final list = raw.map((e) => Expense.fromJson(e)).toList();
       emit(ExpensesLoaded(list));
     } catch (e) {
-      emit(ExpensesError(_friendly(e)));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(ExpensesError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     }
   }
 
@@ -41,7 +32,8 @@ class ExpenseBloc extends Bloc<ExpenseEvent, ExpenseState> {
       final raw = await service.getRawExpense(event.expenseId);
       emit(ExpenseDetailsLoaded(Expense.fromJson(raw)));
     } catch (e) {
-      emit(ExpensesError(_friendly(e)));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(ExpensesError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     }
   }
 
@@ -60,7 +52,8 @@ class ExpenseBloc extends Bloc<ExpenseEvent, ExpenseState> {
       // Re-fetch to get the latest list
       add(const LoadExpenses());
     } catch (e) {
-      emit(ExpensesError(_friendly(e)));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(ExpensesError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     }
   }
 }

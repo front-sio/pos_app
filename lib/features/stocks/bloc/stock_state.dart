@@ -85,7 +85,10 @@ class StockLoaded extends StockState {
 
 class StockError extends StockState {
   final String message;
-  const StockError(this.message);
+  final bool isNetworkError;
+  
+  const StockError(this.message, {this.isNetworkError = false});
+  
   @override
-  List<Object?> get props => [message];
+  List<Object?> get props => [message, isNetworkError];
 }

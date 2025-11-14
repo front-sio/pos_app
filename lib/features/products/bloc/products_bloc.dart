@@ -3,6 +3,7 @@ import 'package:sales_app/features/products/bloc/products_event.dart';
 import 'package:sales_app/features/products/bloc/products_state.dart';
 import 'package:sales_app/features/products/data/product_model.dart';
 import 'package:sales_app/features/products/services/product_service.dart';
+import 'package:sales_app/utils/api_error_handler.dart';
 
 class ProductsBloc extends Bloc<ProductsEvent, ProductsState> {
   final ProductService _productService;
@@ -36,7 +37,8 @@ class ProductsBloc extends Bloc<ProductsEvent, ProductsState> {
         ..addEntries(list.map((p) => MapEntry(p.id, p)));
       emit(ProductsLoaded(_allSorted));
     } catch (e) {
-      emit(ProductsError(e.toString()));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(ProductsError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     }
   }
 
@@ -49,7 +51,8 @@ class ProductsBloc extends Bloc<ProductsEvent, ProductsState> {
       }
       emit(ProductsLoaded(_allSorted));
     } catch (e) {
-      emit(ProductsError(e.toString()));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(ProductsError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     }
   }
 
@@ -65,7 +68,8 @@ class ProductsBloc extends Bloc<ProductsEvent, ProductsState> {
       _byId[created.id] = created;
       emit(ProductsLoaded(_allSorted));
     } catch (e) {
-      emit(ProductsError(e.toString()));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(ProductsError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     }
   }
 
@@ -76,7 +80,8 @@ class ProductsBloc extends Bloc<ProductsEvent, ProductsState> {
       _byId[event.id] = updated;
       emit(ProductsLoaded(_allSorted));
     } catch (e) {
-      emit(ProductsError(e.toString()));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(ProductsError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     }
   }
 
@@ -86,7 +91,8 @@ class ProductsBloc extends Bloc<ProductsEvent, ProductsState> {
       _byId.remove(event.id);
       emit(ProductsLoaded(_allSorted)); // reflect instantly in UI
     } catch (e) {
-      emit(ProductsError(e.toString()));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(ProductsError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     }
   }
 }

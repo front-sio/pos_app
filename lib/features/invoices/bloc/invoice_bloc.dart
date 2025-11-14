@@ -2,6 +2,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:sales_app/features/invoices/bloc/invoice_event.dart';
 import 'package:sales_app/features/invoices/bloc/invoice_state.dart';
 import 'package:sales_app/features/invoices/services/invoice_services.dart';
+import 'package:sales_app/utils/api_error_handler.dart';
 
 class InvoiceBloc extends Bloc<InvoiceEvent, InvoiceState> {
   final InvoiceService service;
@@ -21,7 +22,8 @@ class InvoiceBloc extends Bloc<InvoiceEvent, InvoiceState> {
       final list = await service.getInvoices();
       emit(InvoicesLoaded(list));
     } catch (e) {
-      emit(InvoicesError(e.toString()));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(InvoicesError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     }
   }
 
@@ -32,7 +34,8 @@ class InvoiceBloc extends Bloc<InvoiceEvent, InvoiceState> {
       final pays = await service.getPayments(event.invoiceId);
       emit(InvoiceDetailsLoaded(inv, pays));
     } catch (e) {
-      emit(InvoicesError(e.toString()));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(InvoicesError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     }
   }
 
@@ -48,7 +51,8 @@ class InvoiceBloc extends Bloc<InvoiceEvent, InvoiceState> {
       emit(const InvoiceOperationSuccess('Invoice created'));
       add(const LoadInvoices());
     } catch (e) {
-      emit(InvoicesError(e.toString()));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(InvoicesError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     }
   }
 
@@ -58,7 +62,8 @@ class InvoiceBloc extends Bloc<InvoiceEvent, InvoiceState> {
       emit(const InvoiceOperationSuccess('Payment added'));
       add(LoadInvoiceDetails(event.invoiceId));
     } catch (e) {
-      emit(InvoicesError(e.toString()));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(InvoicesError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     }
   }
 
@@ -68,7 +73,8 @@ class InvoiceBloc extends Bloc<InvoiceEvent, InvoiceState> {
       emit(const InvoiceOperationSuccess('Discount applied'));
       add(LoadInvoiceDetails(event.invoiceId));
     } catch (e) {
-      emit(InvoicesError(e.toString()));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(InvoicesError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     }
   }
 
@@ -78,7 +84,8 @@ class InvoiceBloc extends Bloc<InvoiceEvent, InvoiceState> {
       emit(const InvoiceOperationSuccess('Invoice updated'));
       add(LoadInvoiceDetails(event.invoiceId));
     } catch (e) {
-      emit(InvoicesError(e.toString()));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(InvoicesError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     }
   }
 }

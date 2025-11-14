@@ -4,7 +4,25 @@ A comprehensive Point of Sale (POS) and Sales Management System built with Flutt
 
 ## Recent Updates (Nov 14, 2025)
 
-### Invoice Discount Fix (NEW)
+### Network Error Handling & API Status Screen (NEW - Nov 14, 2025)
+- ✅ **API Error Screen** - Dedicated screen showing server connection issues (English)
+- ✅ **Network error detection** - Distinguishes network vs other errors
+- ✅ **User-friendly error messages** - Clear messages in English
+- ✅ **Detailed error info** - Shows server URL and endpoint
+- ✅ **Connection tips** - Helpful suggestions for troubleshooting
+- ✅ **Retry functionality** - Easy retry button to reconnect
+- ✅ **Timeout handling** - 30-second timeout with proper error messages
+- ✅ **ClientException handling** - Catches and displays network failures
+- ✅ **All features updated** - Products, Invoices, Customers, Sales, Stocks, Suppliers, Expenses, Dashboard
+- ✅ **Purchase service updated** - Uses AuthHttpClient for proper auth
+- ✅ **Error state tracking** - Tracks network vs non-network errors
+- ✅ **Smart error display** - Full screen for network errors, snackbar for others
+- ✅ **Offline vs unreachable** - Different handling for no internet vs server down
+- ✅ **Socket error handling** - Proper handling when server is unreachable
+- ✅ **Status code details** - Shows HTTP status codes when available
+- ✅ **Consistent error handling** - All features use same error pattern
+
+### Invoice Discount Fix
 - ✅ **Discount affects total_amount** - Backend correctly reduces invoice total
 - ✅ **Discount affects paid_amount** - Overpayments automatically adjusted
 - ✅ **Discount affects due_amount** - Outstanding balance recalculated

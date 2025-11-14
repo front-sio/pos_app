@@ -6,6 +6,7 @@ import 'package:sales_app/constants/sizes.dart';
 import 'package:sales_app/utils/currency.dart';
 import 'package:sales_app/widgets/animated_card.dart';
 import 'package:sales_app/widgets/responsive_grid.dart';
+import 'package:sales_app/widgets/api_error_screen.dart';
 
 import 'package:sales_app/features/purchases/bloc/purchase_bloc.dart';
 import 'package:sales_app/features/purchases/bloc/purchase_event.dart';
@@ -51,14 +52,29 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
                         SnackBar(content: Text(state.message), backgroundColor: AppColors.kSuccess),
                       );
                     }
-                    if (state is PurchaseError) {
+                    if (state is PurchaseError && !state.isNetworkError) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(state.message), backgroundColor: AppColors.kError),
+                        SnackBar(
+                          content: Text(state.message), 
+                          backgroundColor: AppColors.kError,
+                          duration: const Duration(seconds: 4),
+                        ),
                       );
                     }
                   },
-                  buildWhen: (prev, curr) => curr is PurchaseLoading || curr is PurchaseLoaded,
+                  buildWhen: (prev, curr) => curr is PurchaseLoading || curr is PurchaseLoaded || curr is PurchaseError,
                   builder: (context, state) {
+                    // Show API error screen for network errors on initial load
+                    if (state is PurchaseError && state.isNetworkError && _lastKnownPurchases.isEmpty) {
+                      return ApiErrorScreen(
+                        errorMessage: state.message,
+                        endpoint: '/products/purchases',
+                        onRetry: () {
+                          context.read<PurchaseBloc>().add(const LoadPurchases());
+                        },
+                      );
+                    }
+
                     if (state is PurchaseLoading && _lastKnownPurchases.isEmpty) {
                       return const Padding(
                         padding: EdgeInsets.only(top: 60),

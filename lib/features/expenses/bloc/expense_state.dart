@@ -26,9 +26,12 @@ class ExpenseDetailsLoaded extends ExpenseState {
 
 class ExpensesError extends ExpenseState {
   final String message;
-  const ExpensesError(this.message);
+  final bool isNetworkError;
+  
+  const ExpensesError(this.message, {this.isNetworkError = false});
+  
   @override
-  List<Object?> get props => [message];
+  List<Object?> get props => [message, isNetworkError];
 }
 
 class ExpenseOperationSuccess extends ExpenseState {

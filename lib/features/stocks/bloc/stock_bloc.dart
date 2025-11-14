@@ -5,6 +5,7 @@ import 'package:sales_app/features/stocks/bloc/stock_state.dart';
 import 'package:sales_app/features/products/services/product_service.dart' as products;
 import 'package:sales_app/features/stocks/data/stock_transaction_model.dart';
 import 'package:sales_app/features/stocks/services/stock_service.dart' as stocks;
+import 'package:sales_app/utils/api_error_handler.dart';
 
 class StockBloc extends Bloc<StockEvent, StockState> {
   final products.ProductService productService;
@@ -103,7 +104,8 @@ class StockBloc extends Bloc<StockEvent, StockState> {
         isLoadingMore: false,
       );
     } catch (e) {
-      emit(StockError(e.toString()));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(StockError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     } finally {
       _isFetchingProducts = false;
     }
@@ -176,7 +178,8 @@ class StockBloc extends Bloc<StockEvent, StockState> {
       _allTransactions.removeWhere((t) => t.id == tempId);
       final filtered = _applyTxnSearch(_allTransactions, _currentTransactionsQuery);
       _emitCombined(emit, transactions: _allTransactions, filteredTransactions: filtered);
-      emit(StockError(e.toString()));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(StockError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     }
   }
 
@@ -226,7 +229,8 @@ class StockBloc extends Bloc<StockEvent, StockState> {
       );
       _currentTransactionsQuery = event.query ?? _currentTransactionsQuery;
     } catch (e) {
-      emit(StockError(e.toString()));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(StockError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     } finally {
       _isFetchingTransactions = false;
     }
@@ -247,7 +251,8 @@ class StockBloc extends Bloc<StockEvent, StockState> {
       // Reload to reflect changes (silent to avoid flicker)
       add(LoadTransactions(page: 1, query: _currentTransactionsQuery, silent: true));
     } catch (e) {
-      emit(StockError(e.toString()));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(StockError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     }
   }
 
@@ -263,7 +268,8 @@ class StockBloc extends Bloc<StockEvent, StockState> {
         filteredTransactions: filtered,
       );
     } catch (e) {
-      emit(StockError(e.toString()));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(StockError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     }
   }
 

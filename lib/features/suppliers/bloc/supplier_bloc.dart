@@ -3,6 +3,7 @@ import 'package:sales_app/features/suppliers/bloc/supplier_event.dart';
 import 'package:sales_app/features/suppliers/bloc/supplier_state.dart';
 import 'package:sales_app/features/suppliers/data/supplier_model.dart';
 import 'package:sales_app/features/suppliers/services/supplier_service.dart';
+import 'package:sales_app/utils/api_error_handler.dart';
 
 class SupplierBloc extends Bloc<SupplierEvent, SupplierState> {
   final SupplierService service;
@@ -74,7 +75,8 @@ class SupplierBloc extends Bloc<SupplierEvent, SupplierState> {
       await _fetchPageInternal(page: event.page, limit: event.limit);
       emit(SuppliersLoaded(_list(), hasMore: _hasMore));
     } catch (e) {
-      emit(SuppliersError(e.toString()));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(SuppliersError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     }
   }
 
@@ -93,7 +95,8 @@ class SupplierBloc extends Bloc<SupplierEvent, SupplierState> {
         searchQuery: current?.searchQuery ?? '',
       ));
     } catch (e) {
-      emit(SuppliersError(e.toString()));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(SuppliersError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     }
   }
 
@@ -128,7 +131,8 @@ class SupplierBloc extends Bloc<SupplierEvent, SupplierState> {
       _upsertOne(created, toTop: true);
       emit(SuppliersLoaded(_list(), hasMore: _hasMore));
     } catch (e) {
-      emit(SuppliersError(e.toString()));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(SuppliersError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     }
   }
 
@@ -139,7 +143,8 @@ class SupplierBloc extends Bloc<SupplierEvent, SupplierState> {
       _upsertOne(updated, toTop: false);
       emit(SuppliersLoaded(_list(), hasMore: _hasMore));
     } catch (e) {
-      emit(SuppliersError(e.toString()));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(SuppliersError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     }
   }
 
@@ -149,7 +154,8 @@ class SupplierBloc extends Bloc<SupplierEvent, SupplierState> {
       _removeById(event.id);
       emit(SuppliersLoaded(_list(), hasMore: _hasMore));
     } catch (e) {
-      emit(SuppliersError(e.toString()));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(SuppliersError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     }
   }
 }

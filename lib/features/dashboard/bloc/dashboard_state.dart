@@ -20,7 +20,10 @@ class DashboardLoaded extends DashboardState {
 
 class DashboardError extends DashboardState {
   final String message;
-  const DashboardError(this.message);
+  final bool isNetworkError;
+  
+  const DashboardError(this.message, {this.isNetworkError = false});
+  
   @override
-  List<Object?> get props => [message];
+  List<Object?> get props => [message, isNetworkError];
 }

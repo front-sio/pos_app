@@ -28,9 +28,12 @@ class InvoiceDetailsLoaded extends InvoiceState {
 
 class InvoicesError extends InvoiceState {
   final String message;
-  const InvoicesError(this.message);
+  final bool isNetworkError;
+  
+  const InvoicesError(this.message, {this.isNetworkError = false});
+  
   @override
-  List<Object?> get props => [message];
+  List<Object?> get props => [message, isNetworkError];
 }
 
 class InvoiceOperationSuccess extends InvoiceState {

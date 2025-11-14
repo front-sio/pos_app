@@ -3,6 +3,7 @@ import 'package:sales_app/features/customers/bloc/customer_event.dart';
 import 'package:sales_app/features/customers/bloc/customer_state.dart';
 import 'package:sales_app/features/customers/data/customer_model.dart';
 import 'package:sales_app/features/customers/services/customer_services.dart';
+import 'package:sales_app/utils/api_error_handler.dart';
 
 class CustomerBloc extends Bloc<CustomerEvent, CustomerState> {
   final CustomerService service;
@@ -75,7 +76,8 @@ class CustomerBloc extends Bloc<CustomerEvent, CustomerState> {
       await _fetchPageInternal(page: event.page, limit: event.limit);
       emit(CustomersLoaded(_list(), hasMore: _hasMore));
     } catch (e) {
-      emit(CustomersError(e.toString()));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(CustomersError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     }
   }
 
@@ -95,7 +97,8 @@ class CustomerBloc extends Bloc<CustomerEvent, CustomerState> {
         searchQuery: current?.searchQuery ?? '',
       ));
     } catch (e) {
-      emit(CustomersError(e.toString()));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(CustomersError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     }
   }
 
@@ -127,7 +130,8 @@ class CustomerBloc extends Bloc<CustomerEvent, CustomerState> {
       _upsertOne(created, toTop: true);
       emit(CustomersLoaded(_list(), hasMore: _hasMore));
     } catch (e) {
-      emit(CustomersError(e.toString()));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(CustomersError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     }
   }
 
@@ -138,7 +142,8 @@ class CustomerBloc extends Bloc<CustomerEvent, CustomerState> {
       _upsertOne(updated, toTop: false);
       emit(CustomersLoaded(_list(), hasMore: _hasMore));
     } catch (e) {
-      emit(CustomersError(e.toString()));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(CustomersError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     }
   }
 
@@ -148,7 +153,8 @@ class CustomerBloc extends Bloc<CustomerEvent, CustomerState> {
       _removeById(event.id);
       emit(CustomersLoaded(_list(), hasMore: _hasMore));
     } catch (e) {
-      emit(CustomersError(e.toString()));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(CustomersError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     }
   }
 }

@@ -7,6 +7,7 @@ import 'package:sales_app/features/sales/bloc/sales_state.dart';
 import 'package:sales_app/features/sales/data/new_sale_dto.dart';
 import 'package:sales_app/features/sales/data/sale_item.dart';
 import 'package:sales_app/features/sales/repository/sales_repository.dart';
+import 'package:sales_app/utils/api_error_handler.dart';
 
 class SalesBloc extends Bloc<SalesEvent, SalesState> {
   final SalesRepository _repository;
@@ -75,7 +76,8 @@ class SalesBloc extends Bloc<SalesEvent, SalesState> {
         emit(SalesError('Product with barcode $input not found.'));
       }
     } catch (e) {
-      emit(SalesError(e.toString()));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(SalesError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     }
   }
 
@@ -85,7 +87,8 @@ class SalesBloc extends Bloc<SalesEvent, SalesState> {
       final sales = await _repository.getAllSales();
       emit(SalesLoaded(sales));
     } catch (e) {
-      emit(SalesError(e.toString()));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(SalesError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     }
   }
 
@@ -133,7 +136,8 @@ class SalesBloc extends Bloc<SalesEvent, SalesState> {
       emit(const SalesOperationSuccess("Sale added successfully"));
       add(const LoadSales());
     } catch (e) {
-      emit(SalesError(e.toString()));
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(SalesError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
       add(const LoadSales());
     }
   }

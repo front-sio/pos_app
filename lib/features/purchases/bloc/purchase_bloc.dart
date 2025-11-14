@@ -3,6 +3,7 @@ import 'package:sales_app/features/purchases/bloc/purchase_event.dart';
 import 'package:sales_app/features/purchases/bloc/purchase_state.dart';
 import 'package:sales_app/features/purchases/services/purchase_service.dart';
 import 'package:sales_app/features/purchases/data/purchase_model.dart';
+import 'package:sales_app/utils/api_error_handler.dart';
 
 class PurchaseBloc extends Bloc<PurchaseEvent, PurchaseState> {
   final PurchaseService service;
@@ -19,7 +20,10 @@ class PurchaseBloc extends Bloc<PurchaseEvent, PurchaseState> {
       final list = await service.getAllPurchases();
       emit(PurchaseLoaded(list));
     } catch (e) {
-      emit(PurchaseError(e.toString()));
+      final errorMessage = e is ApiException 
+          ? e.message 
+          : ApiErrorHandler.getErrorMessage(e);
+      emit(PurchaseError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
     }
   }
 
@@ -41,7 +45,10 @@ class PurchaseBloc extends Bloc<PurchaseEvent, PurchaseState> {
       emit(const PurchaseOperationSuccess('Purchase recorded successfully'));
       emit(PurchaseLoaded(list));
     } catch (e) {
-      emit(PurchaseError(e.toString()));
+      final errorMessage = e is ApiException 
+          ? e.message 
+          : ApiErrorHandler.getErrorMessage(e);
+      emit(PurchaseError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
       if (hadLoaded) emit(PurchaseLoaded(prev));
     }
   }
@@ -59,7 +66,10 @@ class PurchaseBloc extends Bloc<PurchaseEvent, PurchaseState> {
       emit(const PurchaseOperationSuccess('Payment updated'));
       emit(PurchaseLoaded(list));
     } catch (e) {
-      emit(PurchaseError(e.toString()));
+      final errorMessage = e is ApiException 
+          ? e.message 
+          : ApiErrorHandler.getErrorMessage(e);
+      emit(PurchaseError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
       if (hadLoaded) emit(PurchaseLoaded(prev));
     }
   }

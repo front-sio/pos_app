@@ -37,9 +37,10 @@ class CustomersLoaded extends CustomerState {
 
 class CustomersError extends CustomerState {
   final String message;
+  final bool isNetworkError;
 
-  CustomersError(this.message);
+  CustomersError(this.message, {this.isNetworkError = false});
 
   @override
-  List<Object?> get props => [message];
+  List<Object?> get props => [message, isNetworkError];
 }

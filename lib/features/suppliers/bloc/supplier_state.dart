@@ -37,9 +37,10 @@ class SuppliersLoaded extends SupplierState {
 
 class SuppliersError extends SupplierState {
   final String message;
+  final bool isNetworkError;
 
-  SuppliersError(this.message);
+  SuppliersError(this.message, {this.isNetworkError = false});
 
   @override
-  List<Object?> get props => [message];
+  List<Object?> get props => [message, isNetworkError];
 }

@@ -20,9 +20,12 @@ class PurchaseLoaded extends PurchaseState {
 
 class PurchaseError extends PurchaseState {
   final String message;
-  const PurchaseError(this.message);
+  final bool isNetworkError;
+  
+  const PurchaseError(this.message, {this.isNetworkError = false});
+  
   @override
-  List<Object?> get props => [message];
+  List<Object?> get props => [message, isNetworkError];
 }
 
 class PurchaseOperationSuccess extends PurchaseState {

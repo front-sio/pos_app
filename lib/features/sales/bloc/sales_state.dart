@@ -34,11 +34,12 @@ class CartUpdated extends SalesState {
 
 class SalesError extends SalesState {
   final String message;
+  final bool isNetworkError;
 
-  const SalesError(this.message);
+  const SalesError(this.message, {this.isNetworkError = false});
 
   @override
-  List<Object> get props => [message];
+  List<Object> get props => [message, isNetworkError];
 }
 
 class SalesOperationSuccess extends SalesState {

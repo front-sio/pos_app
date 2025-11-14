@@ -19,8 +19,10 @@ class ProductsLoaded extends ProductsState {
 
 class ProductsError extends ProductsState {
   final String message;
-  ProductsError(this.message);
+  final bool isNetworkError;
+  
+  ProductsError(this.message, {this.isNetworkError = false});
 
   @override
-  List<Object?> get props => [message];
+  List<Object?> get props => [message, isNetworkError];
 }

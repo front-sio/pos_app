@@ -121,7 +121,7 @@ void main() async {
   final reportsRepository = ReportsRepository(service: reportsService);
   final usersApiService = UsersApiService(baseUrl: baseUrl);
   final usersRepository = UsersRepository(api: usersApiService, auth: authRepository);
-  final purchaseService = PurchaseService();
+  final purchaseService = PurchaseService(baseUrl: baseUrl, client: httpClient);
   final dashboardService = DashboardService(purchaseService: purchaseService, salesService: salesService);
   final notificationSocketService = NotificationSocketService();
   final settingsService = SettingsService(baseUrl: baseUrl, client: httpClient);
