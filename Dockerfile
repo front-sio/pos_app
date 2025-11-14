@@ -1,24 +1,21 @@
 # Stage 1: Build Flutter Web App
 FROM ghcr.io/cirruslabs/flutter:stable AS build
 
-# Create a non-root user for building
-RUN useradd -m -u 1000 -s /bin/bash flutter && \
-    mkdir -p /app && \
-    chown -R flutter:flutter /app
+# Create work directory
+RUN mkdir -p /app
 
-USER flutter
 WORKDIR /app
 
 # Copy pubspec files first for better caching
-COPY --chown=flutter:flutter pubspec.yaml pubspec.lock ./
+COPY pubspec.yaml pubspec.lock ./
 
 # Get dependencies (cached if pubspec hasn't changed)
 RUN flutter pub get
 
 # Copy source code
-COPY --chown=flutter:flutter lib ./lib
-COPY --chown=flutter:flutter web ./web
-COPY --chown=flutter:flutter assets ./assets
+COPY lib ./lib
+COPY web ./web
+COPY assets ./assets
 
 # Build for web with optimizations
 RUN flutter build web \
