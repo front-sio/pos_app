@@ -201,24 +201,26 @@ flutter build web --release
 
 ## Recent Updates (2025-11-14)
 
+### Latest Enhancements
+- **Products Screen AppBar**: Category and Unit buttons have labels, Sort and Filter remain icon-only to save space
+- **Login Flow**: Simple and fast - button shows inline loading, then navigates directly to dashboard (no extra loader dialog)
+
 ### Bug Fixes & Enhancements
-1. **Product Form Validation**: Added required field validation for Category and Unit dropdowns. Users must now select these fields when creating/editing products.
-2. **Purchase Screen**: Fixed issue where products weren't loading immediately when creating a new purchase. Products now load automatically when the screen opens.
-3. **Sales Screen**: Fixed issue where products and customers weren't loading immediately when creating a sale. Both resources now load automatically when the cart screen opens.
-4. **Category & Unit Management (Product Form)**: Enhanced quick-add buttons with labels ('Add Category', 'Add Unit') next to fields for better UX.
-5. **Category & Unit Management (Products Screen)**: Added labeled buttons ('Add Category', 'Add Unit') in products screen for quick creation without navigating away.
-6. **Supplier Management**: Added supplier quick-add button in product form - users can now create suppliers on-the-fly without leaving the product form.
-7. **Session Expiry Handling**: Implemented automatic logout when session expires (401 response). Users are now automatically logged out when their token expires, preventing errors and data inconsistencies.
+1. **Product Form Validation**: Required field validation for Category and Unit
+2. **AppBar Buttons**: Category/Unit with text labels, Sort/Filter as icons only (no overflow)
+3. **View Toggle**: Working List/Grid view with responsive columns
+4. **Login Loading**: Fast login flow - button loading → direct navigation to dashboard
+5. **Supplier Management**: Quick-add in product form
+6. **Login Screen**: Full-page animated sales-themed background
+7. **Error Handling**: Immediate error display with icons
+8. **Session Expiry**: Auto-logout on 401 response
 
 ### Technical Changes
-- Enhanced `ProductsBloc` initialization to trigger `FetchProducts()` event when entering purchase/sales screens if products aren't already loaded
-- Added form validators for required category and unit selections in product creation/editing
-- Improved UX with labeled category/unit/supplier creation buttons in both product form and products screen
-- Added `SupplierOverlayScreen` import and `_openSupplierCreate()` method in product overlay
-- Implemented `OnUnauthorized` callback in `AuthHttpClient` to detect 401 responses
-- Added `_AuthenticatedApp` wrapper widget to setup unauthorized callback and auto-logout
-- Customer screen already loads from backend API correctly (no changes needed)
-- Products screen now shows both 'Add Category' and 'Add Unit' buttons with labels for better discoverability
+- Products AppBar: TextButton.icon for Category/Unit, IconButton for Sort/Filter
+- app.dart: AuthLoading stays on LoginScreen (no fullscreen loader)
+- login_screen.dart: Direct navigation after successful auth (no intermediate loader)
+- Grid view: Responsive 2/3/4 columns
+- BLoC pattern maintained throughout
 
 ## License
 

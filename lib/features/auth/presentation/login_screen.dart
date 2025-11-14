@@ -18,7 +18,7 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
   // Controllers
   final identifierController = TextEditingController();
   final passwordController = TextEditingController();
@@ -27,6 +27,20 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _identifierFocus = FocusNode();
   final _passwordFocus = FocusNode();
+
+  // Animation
+  late AnimationController _animationController;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 8),
+    )..repeat();
+    _animation = Tween<double>(begin: 0, end: 1).animate(_animationController);
+  }
 
   // Validation helpers
   String? _validateIdentifier(String? value) {
@@ -73,19 +87,24 @@ class _LoginScreenState extends State<LoginScreen> {
     passwordController.dispose();
     _identifierFocus.dispose();
     _passwordFocus.dispose();
+    _animationController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return AuthScaffold(
-      child: Stack(
+    return Scaffold(
+      body: Stack(
         children: [
-          // Background shapes
-          // Use a `ConstrainedBox` to provide explicit constraints instead of `SizedBox.expand`
+          // Full page animated background
           Positioned.fill(
-            child: CustomPaint(
-              painter: LoginBackgroundPainter(),
+            child: AnimatedBuilder(
+              animation: _animation,
+              builder: (context, child) {
+                return CustomPaint(
+                  painter: LoginBackgroundPainter(animation: _animation),
+                );
+              },
             ),
           ),
           // Login card
@@ -93,10 +112,10 @@ class _LoginScreenState extends State<LoginScreen> {
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
               child: Card(
-                elevation: 6,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                elevation: 8,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                 child: Padding(
-                  padding: const EdgeInsets.all(24.0),
+                  padding: const EdgeInsets.all(32.0),
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 400),
                     child: Form(
@@ -174,26 +193,56 @@ class _LoginScreenState extends State<LoginScreen> {
                           // Login button
                           SizedBox(
                             width: double.infinity,
-                            child: BlocBuilder<AuthBloc, AuthState>(
+                            child: BlocConsumer<AuthBloc, AuthState>(
+                              listener: (context, state) {
+                                if (state is AuthFailure) {
+                                  // Show error immediately before navigation
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Row(
+                                        children: [
+                                          const Icon(Icons.error_outline, color: Colors.white),
+                                          const SizedBox(width: 8),
+                                          Expanded(child: Text(state.error)),
+                                        ],
+                                      ),
+                                      backgroundColor: Colors.red,
+                                      behavior: SnackBarBehavior.floating,
+                                      duration: const Duration(seconds: 4),
+                                    ),
+                                  );
+                                }
+                              },
                               builder: (context, state) {
                                 final isLoading = state is AuthLoading;
                                 return ElevatedButton(
                                   onPressed: isLoading ? null : _submitLogin,
                                   style: ElevatedButton.styleFrom(
                                     minimumSize: const Size.fromHeight(50),
-                                    backgroundColor: isLoading ? AppColors.kPrimary.withOpacity(0.5) : AppColors.kPrimary,
+                                    backgroundColor: AppColors.kPrimary,
+                                    disabledBackgroundColor: AppColors.kPrimary.withOpacity(0.7),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                   ),
                                   child: isLoading
-                                      ? const SizedBox(
-                                          height: 24,
-                                          width: 24,
-                                          child: CircularProgressIndicator(
-                                            color: Colors.white,
-                                            strokeWidth: 3,
-                                          ),
+                                      ? Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: const [
+                                            SizedBox(
+                                              height: 20,
+                                              width: 20,
+                                              child: CircularProgressIndicator(
+                                                color: Colors.white,
+                                                strokeWidth: 2.5,
+                                              ),
+                                            ),
+                                            SizedBox(width: 12),
+                                            Text(
+                                              "Logging in...",
+                                              style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
+                                            ),
+                                          ],
                                         )
                                       : const Text(
                                           "Login",
@@ -212,28 +261,14 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
           ),
-          // BlocListener for showing snackbars
+          // BlocListener for navigation only
           BlocListener<AuthBloc, AuthState>(
             listener: (context, state) {
               if (state is AuthAuthenticated) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("Login Successful!"),
-                    backgroundColor: Colors.green,
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
+                // Navigate directly without showing loader dialog
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(builder: (_) => const AdminScaffold()),
-                );
-              } else if (state is AuthFailure) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(state.error),
-                    backgroundColor: Colors.red,
-                    behavior: SnackBarBehavior.floating,
-                  ),
                 );
               }
             },

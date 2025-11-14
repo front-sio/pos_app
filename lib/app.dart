@@ -22,7 +22,7 @@ class PosBusinessApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: "POS Business App",
+      title: "Business App",
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       routes: {
@@ -39,13 +39,12 @@ class PosBusinessApp extends StatelessWidget {
         builder: (context, state) {
           if (state is AuthAuthenticated) {
             return const AdminScaffold();
-          } else if (state is AuthUnauthenticated) {
+          } else if (state is AuthUnauthenticated || state is AuthLoading) {
+            // Stay on login screen for both unauthenticated and loading states
+            // Login screen handles its own loading UI
             return const LoginScreen();
-          } else if (state is AuthLoading) {
-            return const Scaffold(
-              body: AppLoader.fullscreen(message: 'Signing you in...'),
-            );
           }
+          // Initial loading when app starts
           return const Scaffold(
             body: AppLoader.fullscreen(message: 'Preparing app...'),
           );

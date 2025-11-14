@@ -40,6 +40,7 @@ class _ProductsScreenState extends State<ProductsScreen> with TickerProviderStat
   bool _loadingMeta = true;
 
   bool _isSearching = false;
+  bool _isGridView = false; // Toggle between list and grid view
 
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -218,35 +219,47 @@ class _ProductsScreenState extends State<ProductsScreen> with TickerProviderStat
         titlePadding: EdgeInsets.only(left: _getHorizontalPadding(context), bottom: 16),
       ),
       actions: [
+        TextButton.icon(
+          icon: Icon(_isGridView ? Icons.view_list : Icons.grid_view, size: 18),
+          label: Text(_isGridView ? 'List' : 'Grid'),
+          onPressed: _toggleViewMode,
+          style: TextButton.styleFrom(
+            foregroundColor: Theme.of(context).colorScheme.onSurface,
+          ),
+        ),
         IconButton(icon: const Icon(Icons.sort), onPressed: _showSortBottomSheet, tooltip: 'Sort'),
         IconButton(icon: const Icon(Icons.filter_list), onPressed: _showFilterBottomSheet, tooltip: 'Filter'),
+        TextButton.icon(
+          icon: const Icon(Icons.category_outlined, size: 18),
+          label: const Text('Category'),
+          onPressed: _openCategoryOverlayCreate,
+          style: TextButton.styleFrom(
+            foregroundColor: Theme.of(context).colorScheme.primary,
+          ),
+        ),
+        TextButton.icon(
+          icon: const Icon(Icons.straighten, size: 18),
+          label: const Text('Unit'),
+          onPressed: _openUnitOverlayCreate,
+          style: TextButton.styleFrom(
+            foregroundColor: Theme.of(context).colorScheme.primary,
+          ),
+        ),
         PopupMenuButton<String>(
           icon: const Icon(Icons.more_vert),
           onSelected: (value) async {
             switch (value) {
-              case 'grid':
-                _toggleViewMode();
-                break;
               case 'export':
                 _exportProducts();
                 break;
               case 'settings':
                 _openSettings();
                 break;
-              case 'add_category':
-                await _openCategoryOverlayCreate();
-                break;
-              case 'add_unit':
-                await _openUnitOverlayCreate();
-                break;
             }
           },
           itemBuilder: (context) => const [
-            PopupMenuItem(value: 'grid', child: Row(children: [Icon(Icons.grid_view, size: 20), SizedBox(width: 12), Text('Toggle View')])),
             PopupMenuItem(value: 'export', child: Row(children: [Icon(Icons.download, size: 20), SizedBox(width: 12), Text('Export')])),
             PopupMenuItem(value: 'settings', child: Row(children: [Icon(Icons.settings, size: 20), SizedBox(width: 12), Text('Settings')])),
-            PopupMenuItem(value: 'add_category', child: Row(children: [Icon(Icons.category_outlined, size: 20), SizedBox(width: 12), Text('Add Category')])),
-            PopupMenuItem(value: 'add_unit', child: Row(children: [Icon(Icons.straighten, size: 20), SizedBox(width: 12), Text('Add Unit')])),
           ],
         ),
         const SizedBox(width: 8),
@@ -308,53 +321,21 @@ class _ProductsScreenState extends State<ProductsScreen> with TickerProviderStat
       );
     }
 
+    // Simple horizontal list for all screen sizes
     return Container(
       height: 56,
       margin: const EdgeInsets.only(bottom: 8),
       padding: EdgeInsets.symmetric(horizontal: _getHorizontalPadding(context)),
-      child: Row(
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
         children: [
-          Expanded(
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              children: [
-                _categoryChip(label: 'All', selected: _selectedCategoryId == null, onTap: () => setState(() => _selectedCategoryId = null)),
-                const SizedBox(width: 8),
-                ..._categories.expand((c) sync* {
-                  yield _categoryChip(label: c.name, selected: _selectedCategoryId == c.id, onTap: () => setState(() => _selectedCategoryId = c.id));
-                  yield const SizedBox(width: 8);
-                }).toList(),
-              ],
-            ),
-          ),
-          Tooltip(
-            message: 'Add Category',
-            child: OutlinedButton.icon(
-              icon: Icon(Icons.add_circle_outline, color: cs.primary, size: 18),
-              label: Text('Add Category', style: TextStyle(color: cs.primary, fontSize: 12)),
-              onPressed: _openCategoryOverlayCreate,
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                side: BorderSide(color: cs.primary),
-                visualDensity: VisualDensity.compact,
-              ),
-            ),
-          ),
+          _categoryChip(label: 'All', selected: _selectedCategoryId == null, onTap: () => setState(() => _selectedCategoryId = null)),
           const SizedBox(width: 8),
-          Tooltip(
-            message: 'Add Unit',
-            child: OutlinedButton.icon(
-              icon: Icon(Icons.add_circle_outline, color: cs.primary, size: 18),
-              label: Text('Add Unit', style: TextStyle(color: cs.primary, fontSize: 12)),
-              onPressed: _openUnitOverlayCreate,
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                side: BorderSide(color: cs.primary),
-                visualDensity: VisualDensity.compact,
-              ),
-            ),
-          ),
+          ..._categories.expand((c) sync* {
+            yield _categoryChip(label: c.name, selected: _selectedCategoryId == c.id, onTap: () => setState(() => _selectedCategoryId = c.id));
+            yield const SizedBox(width: 8);
+          }).toList(),
         ],
       ),
     );
@@ -444,7 +425,7 @@ class _ProductsScreenState extends State<ProductsScreen> with TickerProviderStat
             );
           }
 
-          return Responsive.isMobile(context) ? _buildMobileProductList(products) : _buildGridProductList(products);
+          return _isGridView ? _buildGridProductList(products) : _buildMobileProductList(products);
         }
 
         return const SliverFillRemaining(child: SizedBox.shrink());
@@ -482,14 +463,15 @@ class _ProductsScreenState extends State<ProductsScreen> with TickerProviderStat
   }
 
   Widget _buildGridProductList(List<Product> products) {
+    final crossAxisCount = Responsive.isMobile(context) ? 2 : (Responsive.isTablet(context) ? 3 : 4);
     return SliverPadding(
       padding: EdgeInsets.all(_getHorizontalPadding(context)),
       sliver: SliverGrid(
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: Responsive.isTablet(context) ? 2 : 3,
-          childAspectRatio: 0.8,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
+          crossAxisCount: crossAxisCount,
+          childAspectRatio: 0.75,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
         ),
         delegate: SliverChildBuilderDelegate(
           (context, index) {
@@ -697,7 +679,10 @@ class _ProductsScreenState extends State<ProductsScreen> with TickerProviderStat
   }
 
   void _toggleViewMode() {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('View toggle feature coming soon!')));
+    setState(() {
+      _isGridView = !_isGridView;
+    });
+    HapticFeedback.lightImpact();
   }
 
   void _exportProducts() {
