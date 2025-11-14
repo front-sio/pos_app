@@ -10,17 +10,10 @@ services:
       - dokploy-network
     labels:
       - "traefik.enable=true"
-      - "traefik.docker.network=dokploy-network"
-      - "traefik.http.routers.magasin-elhadi-project-magasinsalesapp-x8kwje-7-web.rule=Host(`magasinelhadi.iperfee.com`)"
-      - "traefik.http.routers.magasin-elhadi-project-magasinsalesapp-x8kwje-7-web.entrypoints=web"
-      - "traefik.http.routers.magasin-elhadi-project-magasinsalesapp-x8kwje-7-web.middlewares=redirect-to-https@file"
-      - "traefik.http.routers.magasin-elhadi-project-magasinsalesapp-x8kwje-7-web.service=magasin-elhadi-project-magasinsalesapp-x8kwje-7-web"
-      - "traefik.http.routers.magasin-elhadi-project-magasinsalesapp-x8kwje-7-websecure.rule=Host(`magasinelhadi.iperfee.com`)"
-      - "traefik.http.routers.magasin-elhadi-project-magasinsalesapp-x8kwje-7-websecure.entrypoints=websecure"
-      - "traefik.http.routers.magasin-elhadi-project-magasinsalesapp-x8kwje-7-websecure.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.magasin-elhadi-project-magasinsalesapp-x8kwje-7-websecure.service=magasin-elhadi-project-magasinsalesapp-x8kwje-7-websecure"
-      - "traefik.http.services.magasin-elhadi-project-magasinsalesapp-x8kwje-7-web.loadbalancer.server.port=80"
-      - "traefik.http.services.magasin-elhadi-project-magasinsalesapp-x8kwje-7-websecure.loadbalancer.server.port=80"
+      - "traefik.http.routers.flutter-web.rule=Host(`magasinelhadi.iperfee.com`)"
+      - "traefik.http.routers.flutter-web.entrypoints=websecure"
+      - "traefik.http.routers.flutter-web.tls.certresolver=letsencrypt"
+      - "traefik.http.services.flutter-web.loadbalancer.server.port=80"
 
 networks:
   dokploy-network:

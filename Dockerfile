@@ -1,42 +1,30 @@
 # Stage 1: Build Flutter Web App
 FROM ghcr.io/cirruslabs/flutter:stable AS build
 
-# Create work directory
-RUN mkdir -p /app
-
 WORKDIR /app
 
-# Copy pubspec files first for better caching
+# Copy dependencies
 COPY pubspec.yaml pubspec.lock ./
-
-# Get dependencies (cached if pubspec hasn't changed)
 RUN flutter pub get
 
-# Copy source code
-COPY lib ./lib
-COPY web ./web
-COPY assets ./assets
+# Copy the rest
+COPY . .
 
-# Build for web with optimizations
-RUN flutter build web \
-    --release \
-    --no-tree-shake-icons
+# Build optimized web bundle
+RUN flutter build web --release --no-tree-shake-icons
 
-# Stage 2: Serve with Nginx
+# Stage 2: Serve using Nginx
 FROM nginx:alpine
 
-# Copy built web app
+# Remove default nginx page
+RUN rm -rf /usr/share/nginx/html/*
+
+# Copy built Flutter web output
 COPY --from=build /app/build/web /usr/share/nginx/html
 
-# Copy nginx configuration
+# Copy custom nginx config
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Expose port
 EXPOSE 80
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --quiet --tries=1 --spider http://localhost/health || exit 1
-
-# Start nginx
 CMD ["nginx", "-g", "daemon off;"]
