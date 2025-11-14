@@ -4,13 +4,42 @@ A comprehensive Point of Sale (POS) and Sales Management System built with Flutt
 
 ## Recent Updates (Nov 14, 2025)
 
+### Invoice Discount Fix (NEW)
+- ✅ **Discount affects total_amount** - Backend correctly reduces invoice total
+- ✅ **Discount affects paid_amount** - Overpayments automatically adjusted
+- ✅ **Discount affects due_amount** - Outstanding balance recalculated
+- ✅ **Payment adjustment** - Excess payments removed when discount applied
+- ✅ **Sales notification** - Sales service notified of discounts
+- ✅ **Status recomputation** - Invoice status (paid/credited/unpaid) updated
+- ✅ **Frontend sync** - UI shows updated total, paid, and due amounts
+- ✅ **Both backend & frontend** - Complete discount flow working
+
+### Network Connectivity & PWA Features (REAL-TIME FIX - Nov 14, 2025)
+- ✅ **Real-time offline detection (Web)** - Native browser online/offline events
+- ✅ **Immediate feedback** - No polling delays, instant offline screen
+- ✅ **Const event fixed** - ConnectivityChanged properly marked as const
+- ✅ **No false positives** - Only shows offline screen when genuinely offline
+- ✅ **Clean state management** - Proper debouncing with 300ms delay
+- ✅ **English UI only** - All messages in English as requested
+- ✅ **Removed native splash** - Only custom splash screen shows
+- ✅ **Debounced state changes** - 300ms debounce prevents rapid toggling
+- ✅ **Offline placeholder** - Beautiful screen with retry functionality
+- ✅ **Connection tips** - Helpful dialog with troubleshooting tips (English)
+- ✅ **Multi-platform support** - Web uses browser events, mobile uses connectivity_plus
+- ✅ **Cross-platform** - Works on Android, iOS, Web, and Desktop
+- ✅ **Version detection** - Notifies user when new version is available (English)
+- ✅ **Auto-refresh prompt** - User can refresh to load new changes (English)
+- ✅ **PWA install prompt** - Prompts mobile users to install app (English)
+- ✅ **Smart timing** - Shows install prompt after 10 seconds on mobile
+- ✅ **Service Worker** - Detects updates and manages cache
+
 ### Splash Screen & Weather Integration (COMPLETE)
 - ✅ **Custom Flutter splash widget** - Beautiful animated splash screen
 - ✅ **Single splash only** - Hidden Flutter default loader completely
-- ✅ **Blue theme** - Modern blue gradient (#2196F3)
+- ✅ **Soft blue theme** - Modern solid blue (#1976D2) - no gradient
+- ✅ **Optimized text sizes** - Smaller, cleaner font sizes for better UI
 - ✅ **Direct app start** - Flutter loader hidden, only custom splash visible
 - ✅ **Web optimized** - Blue background + hidden default loader
-- ✅ **Optimized text sizes** - Reduced for better readability
 - ✅ **Time-based greetings** - Good Morning/Afternoon/Evening/Night with icons
 - ✅ **Real weather integration** - Uses OpenWeatherMap API for live weather
 - ✅ **Improved location detection** - Fallback to API if geocoding fails

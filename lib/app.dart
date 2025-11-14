@@ -9,6 +9,7 @@ import 'package:sales_app/widgets/admin_scaffold.dart';
 import 'package:sales_app/widgets/app_loader.dart';
 import 'package:sales_app/widgets/network_aware_wrapper.dart';
 import 'package:sales_app/widgets/splash_screen.dart';
+import 'package:sales_app/widgets/connectivity_wrapper.dart';
 
 // Existing routes
 import 'package:sales_app/features/notitications/presentation/notifications_screen.dart';
@@ -59,22 +60,24 @@ class _PosBusinessAppState extends State<PosBusinessApp> {
         builder: (_) => const _UnknownRouteScreen(),
         settings: settings,
       ),
-      home: BlocBuilder<AuthBloc, AuthState>(
-        builder: (context, state) {
-          if (state is AuthAuthenticated) {
-            return const NetworkAwareWrapper(
-              child: AdminScaffold(),
+      home: ConnectivityWrapper(
+        child: BlocBuilder<AuthBloc, AuthState>(
+          builder: (context, state) {
+            if (state is AuthAuthenticated) {
+              return const NetworkAwareWrapper(
+                child: AdminScaffold(),
+              );
+            } else if (state is AuthUnauthenticated || state is AuthLoading || state is AuthFailure) {
+              // Stay on login screen for unauthenticated, loading, and failure states
+              // Login screen handles its own loading UI and error messages
+              return const LoginScreen();
+            }
+            // Initial loading when app starts (AuthInitial)
+            return const Scaffold(
+              body: AppLoader.fullscreen(message: 'Preparing app...'),
             );
-          } else if (state is AuthUnauthenticated || state is AuthLoading || state is AuthFailure) {
-            // Stay on login screen for unauthenticated, loading, and failure states
-            // Login screen handles its own loading UI and error messages
-            return const LoginScreen();
-          }
-          // Initial loading when app starts (AuthInitial)
-          return const Scaffold(
-            body: AppLoader.fullscreen(message: 'Preparing app...'),
-          );
-        },
+          },
+        ),
       ),
     );
   }

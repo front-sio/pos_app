@@ -236,8 +236,9 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
         ));
       }
 
-      final paid = payments.fold<double>(0.0, (s, p) => s + p.amount);
-      final due = ((inv.totalAmount - paid).clamp(0, double.infinity)).toDouble();
+      // Use paid and due from invoice model (updated by backend after discount)
+      final paid = inv.paidAmount;
+      final due = inv.dueAmount;
       final statusLabel = _computeStatus(inv.totalAmount, paid).label;
       final status = statusLabel == 'PAID' ? 'Paid' : (statusLabel == 'CREDITED' ? 'Credited' : 'Unpaid');
 
@@ -309,8 +310,9 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
 
         final Invoice inv = state.invoice;
         final payments = state.payments;
-        final paid = payments.fold<double>(0.0, (s, p) => s + p.amount);
-        final double due = ((inv.totalAmount - paid).clamp(0, double.infinity)).toDouble();
+        // Use paid and due from invoice model (updated by backend after discount)
+        final paid = inv.paidAmount;
+        final double due = inv.dueAmount;
         final status = _computeStatus(inv.totalAmount, paid);
 
         final isWide = MediaQuery.of(context).size.width >= 900;

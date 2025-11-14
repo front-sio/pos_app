@@ -12,59 +12,20 @@ class NetworkAwareWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocListener<ConnectivityBloc, ConnectivityState>(
-      listener: (context, state) {
+    return BlocBuilder<ConnectivityBloc, ConnectivityState>(
+      builder: (context, state) {
+        // Only show offline screen when explicitly offline
         if (state is ConnectivityOffline) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Row(
-                children: [
-                  Icon(Icons.wifi_off, color: Colors.white),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'No internet connection. Please check your connection.',
-                      style: TextStyle(fontSize: 14),
-                    ),
-                  ),
-                ],
-              ),
-              backgroundColor: Colors.red,
-              duration: Duration(seconds: 3),
-            ),
-          );
-        } else if (state is ConnectivityOnline) {
-          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Row(
-                children: [
-                  Icon(Icons.wifi, color: Colors.white),
-                  SizedBox(width: 12),
-                  Text(
-                    'Connection restored!',
-                    style: TextStyle(fontSize: 14),
-                  ),
-                ],
-              ),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
-            ),
+          return _NoConnectionPlaceholder(
+            onRetry: () {
+              context.read<ConnectivityBloc>().add(const CheckConnectivity());
+            },
           );
         }
+        
+        // Show the normal app for online or initial state
+        return child;
       },
-      child: BlocBuilder<ConnectivityBloc, ConnectivityState>(
-        builder: (context, state) {
-          if (state is ConnectivityOffline) {
-            return _NoConnectionPlaceholder(
-              onRetry: () {
-                context.read<ConnectivityBloc>().add(const CheckConnectivity());
-              },
-            );
-          }
-          return child;
-        },
-      ),
     );
   }
 }

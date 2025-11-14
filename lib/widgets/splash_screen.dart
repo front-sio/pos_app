@@ -114,16 +114,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       body: Container(
         width: double.infinity,
         height: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              const Color(0xFF2196F3), // Blue
-              const Color(0xFF1976D2), // Darker blue
-              Colors.white,
-            ],
-          ),
+        decoration: const BoxDecoration(
+          color: Color(0xFF1976D2), // Solid soft blue
         ),
         child: SafeArea(
           child: Column(
@@ -145,10 +137,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                     Text(
                       _greeting,
                       style: const TextStyle(
-                        fontSize: 18,
+                        fontSize: 16,
                         fontWeight: FontWeight.w500,
                         color: Colors.white,
-                        letterSpacing: 1.0,
+                        letterSpacing: 0.8,
                       ),
                     ),
                   ],
@@ -172,15 +164,15 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                       Text(
                         'Sales Management',
                         style: TextStyle(
-                          fontSize: 18,
+                          fontSize: 22,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
-                          letterSpacing: 1.5,
+                          letterSpacing: 1.2,
                           shadows: [
                             Shadow(
-                              color: Colors.black.withOpacity(0.3),
-                              offset: const Offset(2, 2),
-                              blurRadius: 4,
+                              color: Colors.black.withOpacity(0.2),
+                              offset: const Offset(1, 1),
+                              blurRadius: 3,
                             ),
                           ],
                         ),
@@ -189,10 +181,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                       Text(
                         'Your Business, Simplified',
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: 13,
                           fontWeight: FontWeight.w400,
-                          color: Colors.white.withOpacity(0.9),
-                          letterSpacing: 1.2,
+                          color: Colors.white.withOpacity(0.95),
+                          letterSpacing: 0.8,
                         ),
                       ),
                     ],
@@ -219,9 +211,9 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                     Text(
                       'Loading...',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.8),
-                        fontSize: 14,
-                        letterSpacing: 1.2,
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 13,
+                        letterSpacing: 0.8,
                       ),
                     ),
                   ],
@@ -261,7 +253,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                               'Getting weather...',
                               style: TextStyle(
                                 color: Colors.white.withOpacity(0.9),
-                                fontSize: 14,
+                                fontSize: 12,
                               ),
                             ),
                           ],
@@ -282,7 +274,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                                   _location,
                                   style: const TextStyle(
                                     color: Colors.white,
-                                    fontSize: 14,
+                                    fontSize: 13,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -290,8 +282,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                                   Text(
                                     '${_temperature!.toStringAsFixed(1)}°C',
                                     style: TextStyle(
-                                      color: Colors.white.withOpacity(0.9),
-                                      fontSize: 12,
+                                      color: Colors.white.withOpacity(0.95),
+                                      fontSize: 11,
                                     ),
                                   ),
                               ],

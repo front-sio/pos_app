@@ -3,8 +3,10 @@ import 'package:equatable/equatable.dart';
 class Invoice extends Equatable {
   final int id;
   final int customerId;
-  final String status; // 'paid' | 'unpaid'
+  final String status; // 'paid' | 'unpaid' | 'credited'
   final double totalAmount;
+  final double paidAmount;
+  final double dueAmount;
   final DateTime createdAt;
 
   const Invoice({
@@ -12,6 +14,8 @@ class Invoice extends Equatable {
     required this.customerId,
     required this.status,
     required this.totalAmount,
+    required this.paidAmount,
+    required this.dueAmount,
     required this.createdAt,
   });
 
@@ -32,17 +36,23 @@ class Invoice extends Equatable {
   }
 
   factory Invoice.fromJson(Map<String, dynamic> json) {
+    final totalAmt = _asDouble(json['total_amount']);
+    final paidAmt = _asDouble(json['paid_amount']);
+    final dueAmt = _asDouble(json['due_amount']);
+    
     return Invoice(
       id: _asInt(json['id']),
       customerId: _asInt(json['customer_id']),
       status: (json['status']?.toString() ?? 'unpaid').toLowerCase(),
-      totalAmount: _asDouble(json['total_amount']),
+      totalAmount: totalAmt,
+      paidAmount: paidAmt,
+      dueAmount: dueAmt > 0 ? dueAmt : (totalAmt - paidAmt).clamp(0, double.infinity),
       createdAt: _asDate(json['created_at']),
     );
   }
 
   @override
-  List<Object?> get props => [id, customerId, status, totalAmount, createdAt];
+  List<Object?> get props => [id, customerId, status, totalAmount, paidAmount, dueAmount, createdAt];
 }
 
 class Payment extends Equatable {

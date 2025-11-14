@@ -18,7 +18,6 @@ dependencies:
   cupertino_icons: ^1.0.8
   socket_io_client: ^2.0.3+1
   flutter_colorpicker:
-  connectivity_plus:
   fluttertoast:
   image_picker:
   mobile_scanner:
@@ -43,6 +42,7 @@ dependencies:
   file_saver: ^0.2.12
   geolocator: ^10.1.0
   geocoding: ^2.1.1
+  connectivity_plus: ^6.0.5
  
 
 dev_dependencies:
@@ -61,6 +61,8 @@ flutter:
     - assets/lottie/animations/loader.json
     - assets/lottie/profile_upload.json
     - assets/lottie/sales_logo.json
+
+# Native splash disabled - using custom splash screen
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
