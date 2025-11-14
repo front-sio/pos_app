@@ -7,6 +7,8 @@ import 'package:sales_app/features/settings/presentation/currency_settings_scree
 import 'package:sales_app/theme/app_theme.dart';
 import 'package:sales_app/widgets/admin_scaffold.dart';
 import 'package:sales_app/widgets/app_loader.dart';
+import 'package:sales_app/widgets/network_aware_wrapper.dart';
+import 'package:sales_app/widgets/splash_screen.dart';
 
 // Existing routes
 import 'package:sales_app/features/notitications/presentation/notifications_screen.dart';
@@ -16,11 +18,33 @@ import 'package:sales_app/features/notitications/presentation/notifications_scre
 import 'package:sales_app/features/categories/presentation/categories_screen.dart';
 import 'package:sales_app/features/units/presentation/units_screen.dart';
 
-class PosBusinessApp extends StatelessWidget {
+class PosBusinessApp extends StatefulWidget {
   const PosBusinessApp({super.key});
 
   @override
+  State<PosBusinessApp> createState() => _PosBusinessAppState();
+}
+
+class _PosBusinessAppState extends State<PosBusinessApp> {
+  bool _showSplash = true;
+
+  @override
   Widget build(BuildContext context) {
+    if (_showSplash) {
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: SplashScreen(
+          onComplete: () {
+            if (mounted) {
+              setState(() {
+                _showSplash = false;
+              });
+            }
+          },
+        ),
+      );
+    }
+
     return MaterialApp(
       title: "Business App",
       debugShowCheckedModeBanner: false,
@@ -38,7 +62,9 @@ class PosBusinessApp extends StatelessWidget {
       home: BlocBuilder<AuthBloc, AuthState>(
         builder: (context, state) {
           if (state is AuthAuthenticated) {
-            return const AdminScaffold();
+            return const NetworkAwareWrapper(
+              child: AdminScaffold(),
+            );
           } else if (state is AuthUnauthenticated || state is AuthLoading || state is AuthFailure) {
             // Stay on login screen for unauthenticated, loading, and failure states
             // Login screen handles its own loading UI and error messages

@@ -291,9 +291,9 @@ class _InvoiceOverlayScreenState extends State<InvoiceOverlayScreen> with Ticker
           );
         }
       },
-      buildWhen: (_, s) => s is InvoiceDetailsLoaded || s is InvoicesLoading || s is InvoicesError,
+      buildWhen: (_, s) => s is InvoiceDetailsLoaded || s is InvoiceDetailsLoading || s is InvoicesError,
       builder: (context, state) {
-        if (state is InvoicesLoading) {
+        if (state is InvoiceDetailsLoading) {
           return const SizedBox(height: 360, child: Center(child: CircularProgressIndicator()));
         }
         if (state is InvoicesError) {

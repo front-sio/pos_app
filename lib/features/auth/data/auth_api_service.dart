@@ -3,15 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
-
-class ApiException implements Exception {
-  final String message;
-  final int? statusCode;
-  const ApiException(this.message, {this.statusCode});
-
-  @override
-  String toString() => message;
-}
+import 'package:sales_app/utils/api_error_handler.dart';
 
 class AuthApiService {
   final String baseUrl;
@@ -39,36 +31,65 @@ class AuthApiService {
         case 400:
         case 422:
           throw ApiException(
-            serverMessage ?? 'Please check your input and try again.',
+            serverMessage ?? 'Taarifa ulizotuma si sahihi. Tafadhali angalia na jaribu tena.',
             statusCode: response.statusCode,
+            type: ApiErrorType.validation,
           );
         case 401:
           throw ApiException(
-            serverMessage ?? 'Invalid email/username or password.',
+            serverMessage ?? 'Jina la mtumiaji au nywila si sahihi.',
             statusCode: response.statusCode,
+            type: ApiErrorType.http,
           );
         case 403:
           throw ApiException(
-            serverMessage ?? 'You do not have permission to access this app.',
+            serverMessage ?? 'Huna ruhusa ya kutumia programu hii.',
             statusCode: response.statusCode,
+            type: ApiErrorType.http,
           );
         case 404:
           throw ApiException(
-            serverMessage ?? 'Service temporarily unavailable. Please try again later.',
+            serverMessage ?? 'Huduma haipatikani kwa sasa. Tafadhali jaribu tena baadaye.',
             statusCode: response.statusCode,
+            type: ApiErrorType.http,
+          );
+        case 502:
+        case 503:
+        case 504:
+          throw ApiException(
+            'Huduma haipatikani kwa sasa. Tafadhali angalia kama server inafanya kazi.',
+            statusCode: response.statusCode,
+            type: ApiErrorType.http,
           );
         default:
           throw ApiException(
-            serverMessage ?? 'Server error. Please try again later.',
+            serverMessage ?? 'Tatizo la server. Tafadhali jaribu tena baadaye.',
             statusCode: response.statusCode,
+            type: ApiErrorType.http,
           );
       }
     } on SocketException {
-      throw const ApiException('Cannot connect to server. Check your internet connection.');
+      throw ApiException(
+        'Imeshindwa kuunganisha na server. Angalia muunganisho wako wa mtandao.',
+        type: ApiErrorType.network,
+      );
     } on TimeoutException {
-      throw const ApiException('Request timed out. Please try again.');
+      throw ApiException(
+        'Muda umeisha. Tafadhali jaribu tena.',
+        type: ApiErrorType.timeout,
+      );
     } on FormatException {
-      throw const ApiException('Received an unexpected response from the server.');
+      throw ApiException(
+        'Tatizo la kusoma jibu kutoka server.',
+        type: ApiErrorType.parsing,
+      );
+    } catch (e) {
+      if (e is ApiException) rethrow;
+      throw ApiException(
+        'Tatizo limetokea. Tafadhali jaribu tena.',
+        type: ApiErrorType.unknown,
+        originalError: e,
+      );
     }
   }
 
@@ -108,21 +129,39 @@ class AuthApiService {
         case 409:
         case 422:
           throw ApiException(
-            serverMessage ?? 'Please check your input and try again.',
+            serverMessage ?? 'Taarifa ulizotuma si sahihi. Tafadhali angalia na jaribu tena.',
             statusCode: response.statusCode,
+            type: ApiErrorType.validation,
           );
         default:
           throw ApiException(
-            serverMessage ?? 'Could not complete registration. Please try again later.',
+            serverMessage ?? 'Imeshindwa kukamilisha usajili. Tafadhali jaribu tena baadaye.',
             statusCode: response.statusCode,
+            type: ApiErrorType.http,
           );
       }
     } on SocketException {
-      throw const ApiException('Cannot connect to server. Check your internet connection.');
+      throw ApiException(
+        'Imeshindwa kuunganisha na server. Angalia muunganisho wako wa mtandao.',
+        type: ApiErrorType.network,
+      );
     } on TimeoutException {
-      throw const ApiException('Request timed out. Please try again.');
+      throw ApiException(
+        'Muda umeisha. Tafadhali jaribu tena.',
+        type: ApiErrorType.timeout,
+      );
     } on FormatException {
-      throw const ApiException('Received an unexpected response from the server.');
+      throw ApiException(
+        'Tatizo la kusoma jibu kutoka server.',
+        type: ApiErrorType.parsing,
+      );
+    } catch (e) {
+      if (e is ApiException) rethrow;
+      throw ApiException(
+        'Tatizo limetokea. Tafadhali jaribu tena.',
+        type: ApiErrorType.unknown,
+        originalError: e,
+      );
     }
   }
 

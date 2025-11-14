@@ -18,7 +18,11 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="Sales Management App">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <!-- Permissions Policy for Geolocation -->
+  <meta http-equiv="Permissions-Policy" content="geolocation=(self)">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -29,8 +33,25 @@
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>sales_app</title>
+  <title>Sales Management</title>
   <link rel="manifest" href="manifest.json">
+  
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #2196F3;
+      overflow: hidden;
+    }
+    
+    /* Hide Flutter's default loading indicator */
+    body > .flutter-loader,
+    body > div[style*="position: absolute"] {
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
+    }
+  </style>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>

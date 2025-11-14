@@ -2,6 +2,56 @@
 
 A comprehensive Point of Sale (POS) and Sales Management System built with Flutter. This mobile/desktop application provides a complete interface for managing sales, inventory, customers, and business operations.
 
+## Recent Updates (Nov 14, 2025)
+
+### Splash Screen & Weather Integration (COMPLETE)
+- ✅ **Custom Flutter splash widget** - Beautiful animated splash screen
+- ✅ **Single splash only** - Hidden Flutter default loader completely
+- ✅ **Blue theme** - Modern blue gradient (#2196F3)
+- ✅ **Direct app start** - Flutter loader hidden, only custom splash visible
+- ✅ **Web optimized** - Blue background + hidden default loader
+- ✅ **Optimized text sizes** - Reduced for better readability
+- ✅ **Time-based greetings** - Good Morning/Afternoon/Evening/Night with icons
+- ✅ **Real weather integration** - Uses OpenWeatherMap API for live weather
+- ✅ **Improved location detection** - Fallback to API if geocoding fails
+- ✅ **Beautiful animations** - Fade, scale, and slide transitions
+- ✅ **Weekly weather widget** - 7-day forecast on dashboard (real data)
+- ✅ **Scrollable forecast** - Fixed RenderFlex overflow (99640px fix!)
+- ✅ **Web scroll arrows** - Left/right arrows for easy navigation
+- ✅ **Mobile-first responsive** - Adapts card sizes for small screens
+- ✅ **Weather icons** - Emojis for clear, cloudy, rainy, thunderstorm, etc.
+- ✅ **Web location support** - Geolocation permissions configured for web
+- ✅ **Emoji support** - Fixed Noto fonts warning
+
+### API Error Handling with User-Friendly Messages (UPDATED)
+- ✅ **Comprehensive error handling** - Catches timeouts, network errors, bad gateway
+- ✅ **Swahili error messages** - All errors shown in clear Swahili
+- ✅ **Timeout detection** - 30-second timeout with retry suggestions
+- ✅ **Server unavailable detection** - Detects 502, 503, 504 errors
+- ✅ **Network error handling** - Clear messages for connection failures
+- ✅ **User-friendly dialogs** - Error dialogs with retry options
+- ✅ **Snackbar notifications** - Quick error feedback with icons
+
+### Network Connectivity Monitoring (UPDATED)
+- ✅ **App-level network monitoring** - Automatic detection of network loss
+- ✅ **Real-time notifications** - Immediate snackbar alerts when connection lost/restored
+- ✅ **Offline placeholder** - User-friendly screen with retry functionality
+- ✅ **Seamless restoration** - Returns to the same page when back online
+- ✅ **English UI** - All messages in English for clarity
+- ✅ **Connection tips** - Helpful troubleshooting tips in English
+
+### Backend Fixes
+- ✅ Fixed TypeScript compilation error in sales service (`returnedValue` variable scope)
+- ✅ Verified invoice-sales bidirectional communication for returns and discounts
+- ✅ Ensured proper payment adjustments when processing returns
+
+### Frontend Improvements
+- ✅ **Fixed invoice loader issue** - Loader no longer continuously updates on invoice page (NEW)
+- ✅ Added error placeholder widgets for better UX on API failures
+- ✅ Improved error handling - technical errors hidden from users
+- ✅ Enhanced login flow to prevent premature app loader display
+- ✅ Optimized dashboard loading for faster user experience
+
 ## Features
 
 ### 📦 Product Management
@@ -62,6 +112,14 @@ A comprehensive Point of Sale (POS) and Sales Management System built with Flutt
 - ✅ Sales reports
 - ✅ Real-time notifications
 - ✅ Settings management
+- ✅ **Network connectivity monitoring** (NEW)
+- ✅ **Offline/Online detection** (NEW)
+- ✅ **Auto-reconnection** (NEW)
+- ✅ **API error handling with Swahili messages** (NEW)
+- ✅ **Timeout and server error detection** (NEW)
+- ✅ **Animated splash screen** (NEW)
+- ✅ **Weather integration with 7-day forecast** (NEW)
+- ✅ **Time-based greetings** (NEW)
 
 ## Prerequisites
 
@@ -132,6 +190,7 @@ Or manually test:
 - [ ] View invoices
 - [ ] Apply discount
 - [ ] Verify sale updated (bidirectional)
+- [ ] Check loader doesn't continuously update at top of page (FIXED)
 
 ### ✅ Returns
 - [ ] Process return
@@ -143,6 +202,23 @@ Or manually test:
 - [ ] Edit user
 - [ ] Delete user
 - [ ] Test permissions
+
+### ✅ Network Connectivity (UPDATED)
+- [ ] Turn off WiFi/Data - verify offline placeholder appears
+- [ ] Check English error messages displayed
+- [ ] Click "Try Again" button to retry
+- [ ] Turn on WiFi/Data - verify online notification
+- [ ] Verify user returns to same page
+- [ ] Test connection tips dialog (in English)
+
+### ✅ API Error Handling (NEW)
+- [ ] Stop backend server - verify user-friendly error shown
+- [ ] Check error message is in Swahili (not "Bad Gateway" or "502")
+- [ ] Verify timeout errors show after 30 seconds
+- [ ] Test POST request when server is down
+- [ ] Check error snackbar appears with icon
+- [ ] Verify "Jaribu Tena" (retry) option available
+- [ ] Test various API errors (404, 500, 503)
 
 ## Default Login
 
@@ -173,6 +249,19 @@ baseUrl = 'http://10.0.2.2:8080';
 // iOS simulator/Physical device:
 baseUrl = 'http://YOUR_IP:8080';
 ```
+
+### Network Status
+The app automatically monitors network connectivity:
+- **Offline**: Shows user-friendly placeholder with retry button
+- **Online**: Notification when connection restored, returns to active page
+- **Messages**: All in English for clarity
+
+### API Errors
+The app handles all API errors gracefully:
+- **Timeout**: Shows after 30 seconds with retry option
+- **Server Down (502/503/504)**: Clear message that server is unavailable
+- **Network Errors**: Explains connection issues in Swahili
+- **No Technical Jargon**: Users see friendly messages, not "Bad Gateway" or status codes
 
 ### Build Issues
 ```bash
@@ -257,3 +346,27 @@ flutter build web --release
 ## License
 
 Private - All Rights Reserved
+
+## Splash Screen & Weather Features
+
+### Splash Screen
+The app now features a beautiful animated splash screen with:
+- **Time-based greetings**: "Good Morning", "Good Afternoon", "Good Evening", or "Good Night"
+- **Weather display**: Shows current location and temperature
+- **Smooth animations**: Fade-in, scale, and slide effects
+- **Modern UI**: Gradient background with professional design
+- **Duration**: 4 seconds before showing main app
+
+### Weather Integration
+- **Current weather**: Displayed on splash screen
+- **7-day forecast**: Widget on dashboard showing weather for the week
+- **Location-aware**: Uses GPS to detect user's location and city
+- **Weather icons**: Clear (☀️), Cloudy (☁️), Rainy (🌧️), Thunderstorm (⛈️), etc.
+- **Temperature**: Shows in Celsius
+- **Refresh option**: Manual refresh button on weather widget
+
+### Permissions Required
+- **Location**: For detecting user's city and weather
+  - Android: Automatically requested
+  - iOS: Add to Info.plist (if testing on iOS)
+

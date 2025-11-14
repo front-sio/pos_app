@@ -3,7 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
 import '../data/auth_repository.dart';
-import '../data/auth_api_service.dart'; // For ApiException
+import 'package:sales_app/utils/api_error_handler.dart';
 
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final AuthRepository repository;

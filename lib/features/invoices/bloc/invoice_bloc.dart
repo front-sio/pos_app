@@ -27,7 +27,7 @@ class InvoiceBloc extends Bloc<InvoiceEvent, InvoiceState> {
 
   Future<void> _onLoadInvoiceDetails(LoadInvoiceDetails event, Emitter<InvoiceState> emit) async {
     try {
-      emit(InvoicesLoading());
+      emit(InvoiceDetailsLoading());
       final inv = await service.getInvoice(event.invoiceId);
       final pays = await service.getPayments(event.invoiceId);
       emit(InvoiceDetailsLoaded(inv, pays));

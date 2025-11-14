@@ -95,6 +95,10 @@ import 'package:sales_app/features/categories/bloc/category_event.dart';
 import 'package:sales_app/features/units/bloc/unit_bloc.dart';
 import 'package:sales_app/features/units/bloc/unit_event.dart';
 
+// Network Connectivity
+import 'package:sales_app/network/connectivity_bloc.dart';
+import 'package:sales_app/widgets/splash_screen.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -154,6 +158,7 @@ void main() async {
       ],
       child: MultiBlocProvider(
         providers: [
+          BlocProvider<ConnectivityBloc>(create: (_) => ConnectivityBloc()),
           BlocProvider<AuthBloc>(create: (_) => AuthBloc(repository: authRepository)..add(AppStarted())),
           BlocProvider<StockBloc>(create: (context) => StockBloc(
                 productService: context.read<ProductService>(),

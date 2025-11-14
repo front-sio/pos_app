@@ -44,6 +44,9 @@ class AppTheme {
       colorScheme: colorScheme,
       scaffoldBackgroundColor:
           isDark ? const Color(0xFF121212) : AppColors.kBackground,
+      
+      // Font fallback to handle emoji and special characters
+      fontFamily: null, // Use default system fonts with emoji support
 
       // Typography
       textTheme: TextTheme(

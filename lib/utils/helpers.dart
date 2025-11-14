@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:sales_app/utils/api_error_handler.dart';
 
 /// Shows a toast message to the user.
 ///
@@ -26,6 +27,90 @@ void showSnackbar(BuildContext context, String message, {Color color = Colors.gr
     SnackBar(
       content: Text(message),
       backgroundColor: color,
+    ),
+  );
+}
+
+/// Shows an error snackbar with user-friendly message from API error
+void showErrorSnackbar(BuildContext context, dynamic error) {
+  String message;
+  
+  if (error is ApiException) {
+    message = error.message;
+  } else {
+    message = ApiErrorHandler.getErrorMessage(error);
+  }
+  
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Row(
+        children: [
+          const Icon(Icons.error_outline, color: Colors.white),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(fontSize: 14),
+            ),
+          ),
+        ],
+      ),
+      backgroundColor: Colors.red[700],
+      duration: const Duration(seconds: 4),
+      action: SnackBarAction(
+        label: 'Sawa',
+        textColor: Colors.white,
+        onPressed: () {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        },
+      ),
+    ),
+  );
+}
+
+/// Shows an error dialog with user-friendly message
+void showErrorDialog(BuildContext context, dynamic error, {VoidCallback? onRetry}) {
+  String message;
+  String title = 'Tatizo';
+  
+  if (error is ApiException) {
+    message = error.message;
+    if (error.isNetworkError) {
+      title = 'Tatizo la Mtandao';
+    } else if (error.isServerError) {
+      title = 'Tatizo la Server';
+    } else if (error.isTimeoutError) {
+      title = 'Muda Umeisha';
+    }
+  } else {
+    message = ApiErrorHandler.getErrorMessage(error);
+  }
+  
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Row(
+        children: [
+          Icon(Icons.error_outline, color: Colors.red[700]),
+          const SizedBox(width: 8),
+          Text(title),
+        ],
+      ),
+      content: Text(message),
+      actions: [
+        if (onRetry != null)
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              onRetry();
+            },
+            child: const Text('Jaribu Tena'),
+          ),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Sawa'),
+        ),
+      ],
     ),
   );
 }

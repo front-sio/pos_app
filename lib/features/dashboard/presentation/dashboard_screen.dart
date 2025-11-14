@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:sales_app/constants/colors.dart';
 import 'package:sales_app/constants/sizes.dart';
 import 'package:sales_app/utils/currency.dart';
+import 'package:sales_app/widgets/weekly_weather_widget.dart';
 
 import 'package:sales_app/features/dashboard/bloc/dashboard_bloc.dart';
 import 'package:sales_app/features/dashboard/bloc/dashboard_event.dart';
@@ -69,6 +70,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             switchOutCurve: Curves.easeInOut,
                             child: _SummaryGrid(key: ValueKey(data.summary.hashCode), summary: data.summary),
                           ),
+                          const SizedBox(height: AppSizes.padding * 2),
+                          // Weekly Weather Widget
+                          const WeeklyWeatherWidget(),
                           const SizedBox(height: AppSizes.padding * 2),
                           _SectionHeader(
                             title: 'Recent Activity',

@@ -1,11 +1,11 @@
 {
-    "name": "sales_app",
-    "short_name": "sales_app",
+    "name": "Sales Management",
+    "short_name": "Sales App",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#2196F3",
+    "theme_color": "#2196F3",
+    "description": "Sales Management Application",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
@@ -31,5 +31,8 @@
             "type": "image/png",
             "purpose": "maskable"
         }
+    ],
+    "permissions": [
+        "geolocation"
     ]
 }

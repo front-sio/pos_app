@@ -9,6 +9,7 @@ abstract class InvoiceState extends Equatable {
 
 class InvoicesInitial extends InvoiceState {}
 class InvoicesLoading extends InvoiceState {}
+class InvoiceDetailsLoading extends InvoiceState {}
 
 class InvoicesLoaded extends InvoiceState {
   final List<Invoice> invoices;
