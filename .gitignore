@@ -8,8 +8,12 @@
 build/
 generated_plugin_registrant.dart
 
-# Flutter web build output
-build/web/
+
+# ignore everything in build except web
+build/*
+!build/web/
+
+
 
 # iOS
 ios/Flutter/Flutter.podspec
