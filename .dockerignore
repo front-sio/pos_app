@@ -1,0 +1,63 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE
+.vscode
+.idea
+*.iml
+
+# Documentation
+README.md
+README.md.old
+DEPLOYMENT.md
+TODO
+*.md
+
+# Build artifacts
+build/
+.dart_tool/
+.packages
+.pub-cache/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub/
+
+# Platform-specific (not needed for web build)
+android/
+ios/
+macos/
+linux/
+windows/
+
+# Node modules (if any)
+node_modules/
+pnpm-lock.yaml
+package.json
+
+# Scripts
+check_app_features.sh
+vercel_build.sh
+*.sh
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+*.swo
+.DS_Store
+
+# Docker files themselves
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Env files
+.env
+.env.*
+
+# Other
+.metadata
+devtools_options.yaml
+analysis_options.yaml
