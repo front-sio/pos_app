@@ -11,6 +11,7 @@ import 'package:sales_app/features/customers/data/customer_model.dart';
 import 'package:sales_app/features/customers/services/customer_services.dart';
 
 import 'package:sales_app/features/products/bloc/products_bloc.dart';
+import 'package:sales_app/features/products/bloc/products_event.dart';
 import 'package:sales_app/features/products/bloc/products_state.dart';
 import 'package:sales_app/features/products/data/product_model.dart';
 
@@ -85,8 +86,16 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
       WidgetsBinding.instance.addPostFrameCallback((_) => _focusNode.requestFocus());
     }
     _loadCustomers();
+    _loadProducts();
     _paidAmountCtrl.addListener(_requestRebuild);
     _discountCtrl.addListener(_requestRebuild);
+  }
+
+  void _loadProducts() {
+    final bloc = context.read<ProductsBloc>();
+    if (bloc.state is! ProductsLoaded) {
+      bloc.add(FetchProducts());
+    }
   }
 
   @override

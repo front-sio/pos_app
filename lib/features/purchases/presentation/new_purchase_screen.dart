@@ -7,6 +7,7 @@ import 'package:sales_app/constants/sizes.dart';
 import 'package:sales_app/utils/currency.dart';
 
 import 'package:sales_app/features/products/bloc/products_bloc.dart';
+import 'package:sales_app/features/products/bloc/products_event.dart';
 import 'package:sales_app/features/products/bloc/products_state.dart';
 import 'package:sales_app/features/products/data/product_model.dart';
 import 'package:sales_app/features/products/services/product_service.dart';
@@ -65,6 +66,14 @@ class _NewPurchaseScreenState extends State<NewPurchaseScreen> {
   void initState() {
     super.initState();
     _loadSuppliers();
+    _loadProducts();
+  }
+
+  void _loadProducts() {
+    final bloc = context.read<ProductsBloc>();
+    if (bloc.state is! ProductsLoaded) {
+      bloc.add(FetchProducts());
+    }
   }
 
   @override

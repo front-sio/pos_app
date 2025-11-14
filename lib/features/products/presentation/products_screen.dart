@@ -330,7 +330,30 @@ class _ProductsScreenState extends State<ProductsScreen> with TickerProviderStat
           ),
           Tooltip(
             message: 'Add Category',
-            child: IconButton(onPressed: _openCategoryOverlayCreate, icon: Icon(Icons.add_circle_outline, color: cs.primary)),
+            child: OutlinedButton.icon(
+              icon: Icon(Icons.add_circle_outline, color: cs.primary, size: 18),
+              label: Text('Add Category', style: TextStyle(color: cs.primary, fontSize: 12)),
+              onPressed: _openCategoryOverlayCreate,
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                side: BorderSide(color: cs.primary),
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Tooltip(
+            message: 'Add Unit',
+            child: OutlinedButton.icon(
+              icon: Icon(Icons.add_circle_outline, color: cs.primary, size: 18),
+              label: Text('Add Unit', style: TextStyle(color: cs.primary, fontSize: 12)),
+              onPressed: _openUnitOverlayCreate,
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                side: BorderSide(color: cs.primary),
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
           ),
         ],
       ),
@@ -726,6 +749,7 @@ class _ProductsScreenState extends State<ProductsScreen> with TickerProviderStat
             mode: UnitOverlayMode.create,
             onSaved: () {
               Navigator.of(context).pop();
+              _loadMeta();
               _snack('Unit created');
             },
             onCancel: () => Navigator.of(context).pop(),

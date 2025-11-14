@@ -14,6 +14,7 @@ import 'package:sales_app/widgets/barcode_scanner_screen.dart';
 
 import 'package:sales_app/features/products/presentation/unit_overlay_screen.dart';
 import 'package:sales_app/features/products/presentation/category_overlay_screen.dart';
+import 'package:sales_app/features/suppliers/presentation/supplier_overlay_screen.dart';
 
 // Settings for currency-aware inputs
 import 'package:sales_app/features/settings/bloc/settings_bloc.dart';
@@ -189,6 +190,34 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
               Navigator.of(context).pop();
               await _loadMeta();
               _snack('Unit created');
+            },
+            onCancel: () => Navigator.of(context).pop(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openSupplierCreate() async {
+    final theme = Theme.of(context);
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: theme.colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * 0.75,
+          child: SupplierOverlayScreen(
+            supplier: null,
+            mode: SupplierOverlayMode.create,
+            onSaved: () async {
+              Navigator.of(context).pop();
+              await _loadMeta();
+              _snack('Supplier created');
             },
             onCancel: () => Navigator.of(context).pop(),
           ),
@@ -433,7 +462,19 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
           children: [
             Expanded(child: _unitDropdown()),
             const SizedBox(width: 8),
-            Tooltip(message: 'Add Unit', child: IconButton(icon: Icon(Icons.add_circle_outline, color: cs.primary), onPressed: _openUnitCreate)),
+            Tooltip(
+              message: 'Add Unit',
+              child: OutlinedButton.icon(
+                icon: Icon(Icons.add_circle_outline, color: cs.primary, size: 18),
+                label: Text('Add Unit', style: TextStyle(color: cs.primary, fontSize: 12)),
+                onPressed: _openUnitCreate,
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  side: BorderSide(color: cs.primary),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+            ),
           ],
         );
 
@@ -441,7 +482,19 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
           children: [
             Expanded(child: _categoryDropdown()),
             const SizedBox(width: 8),
-            Tooltip(message: 'Add Category', child: IconButton(icon: Icon(Icons.add_circle_outline, color: cs.primary), onPressed: _openCategoryCreate)),
+            Tooltip(
+              message: 'Add Category',
+              child: OutlinedButton.icon(
+                icon: Icon(Icons.add_circle_outline, color: cs.primary, size: 18),
+                label: Text('Add Category', style: TextStyle(color: cs.primary, fontSize: 12)),
+                onPressed: _openCategoryCreate,
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  side: BorderSide(color: cs.primary),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+            ),
           ],
         );
 
@@ -508,7 +561,7 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
                     const SizedBox(height: AppSizes.padding),
                     pricePerQtyField(),
                     const SizedBox(height: AppSizes.padding),
-                    _categoryDropdown(),
+                    categoryPicker(),
                     const SizedBox(height: AppSizes.padding),
                     _input(controller: _locationController, label: 'Location', icon: Icons.location_on_outlined),
                     const SizedBox(height: AppSizes.padding),
@@ -639,7 +692,8 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
       isExpanded: true,
       items: _units.map((u) => DropdownMenuItem<int>(value: u.id, child: Text(u.name))).toList(),
       onChanged: (v) => setState(() => _selectedUnitId = v),
-      decoration: _inputDecoration('Unit'),
+      decoration: _inputDecoration('Unit*'),
+      validator: (v) => v == null ? 'Please select a unit' : null,
     );
   }
 
@@ -649,7 +703,8 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
       isExpanded: true,
       items: _categories.map((c) => DropdownMenuItem<int>(value: c.id, child: Text(_formatCategoryName(c.name)))).toList(),
       onChanged: (v) => setState(() => _selectedCategoryId = v),
-      decoration: _inputDecoration('Category'),
+      decoration: _inputDecoration('Category*'),
+      validator: (v) => v == null ? 'Please select a category' : null,
     );
   }
 
@@ -668,6 +723,20 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
     return Row(
       children: [
         Expanded(child: _supplierDropdown()),
+        const SizedBox(width: 8),
+        Tooltip(
+          message: 'Add Supplier',
+          child: OutlinedButton.icon(
+            icon: Icon(Icons.add_circle_outline, color: cs.primary, size: 18),
+            label: Text('Add', style: TextStyle(color: cs.primary, fontSize: 12)),
+            onPressed: _openSupplierCreate,
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              side: BorderSide(color: cs.primary),
+              visualDensity: VisualDensity.compact,
+            ),
+          ),
+        ),
         const SizedBox(width: 8),
         Tooltip(
           message: 'Clear Supplier',

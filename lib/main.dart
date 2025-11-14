@@ -183,7 +183,41 @@ void main() async {
           BlocProvider<CategoryBloc>(create: (context) => CategoryBloc(service: context.read<CategoryService>())..add(const LoadCategories())),
           BlocProvider<UnitBloc>(create: (context) => UnitBloc(service: context.read<UnitService>())..add(const LoadUnits())),
         ],
-        child: BlocListener<AuthBloc, AuthState>(
+        child: _AuthenticatedApp(httpClient: httpClient),
+      ),
+    ),
+  );
+}
+
+// Setup 401 handler after AuthBloc is available
+class _AuthenticatedApp extends StatefulWidget {
+  final AuthHttpClient httpClient;
+
+  const _AuthenticatedApp({required this.httpClient});
+
+  @override
+  State<_AuthenticatedApp> createState() => _AuthenticatedAppState();
+}
+
+class _AuthenticatedAppState extends State<_AuthenticatedApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Setup callback after build to ensure context is ready
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        widget.httpClient.onUnauthorized = () {
+          if (mounted) {
+            context.read<AuthBloc>().add(LogoutRequested());
+          }
+        };
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocListener<AuthBloc, AuthState>(
           listenWhen: (prev, next) => next is AuthAuthenticated || next is AuthUnauthenticated,
           listener: (context, state) {
             if (state is AuthAuthenticated) {
@@ -204,8 +238,6 @@ void main() async {
             }
           },
           child: const PosBusinessApp(),
-        ),
-      ),
-    ),
-  );
+        );
+  }
 }

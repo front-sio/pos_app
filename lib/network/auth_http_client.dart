@@ -1,18 +1,22 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 typedef CurrencyProvider = String? Function();
+typedef OnUnauthorized = void Function();
 
 class AuthHttpClient extends http.BaseClient {
   final http.Client _inner;
   final FlutterSecureStorage _storage;
   final CurrencyProvider? _currencyProvider;
+  OnUnauthorized? onUnauthorized;
 
   AuthHttpClient({
     http.Client? inner,
     FlutterSecureStorage? storage,
     CurrencyProvider? currencyProvider,
+    this.onUnauthorized,
   })  : _inner = inner ?? http.Client(),
         _storage = storage ?? const FlutterSecureStorage(),
         _currencyProvider = currencyProvider;
@@ -43,6 +47,15 @@ class AuthHttpClient extends http.BaseClient {
       request.headers.putIfAbsent(k, () => v);
     });
 
-    return _inner.send(request);
+    final response = await _inner.send(request);
+
+    // Check for 401 Unauthorized
+    if (response.statusCode == 401) {
+      // Token expired or invalid
+      await _storage.deleteAll();
+      onUnauthorized?.call();
+    }
+
+    return response;
   }
 }

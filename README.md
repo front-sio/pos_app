@@ -199,6 +199,27 @@ flutter build web --release
 - Backend API: `../sales-gateway/README.md`
 - Testing: `./check_app_features.sh`
 
+## Recent Updates (2025-11-14)
+
+### Bug Fixes & Enhancements
+1. **Product Form Validation**: Added required field validation for Category and Unit dropdowns. Users must now select these fields when creating/editing products.
+2. **Purchase Screen**: Fixed issue where products weren't loading immediately when creating a new purchase. Products now load automatically when the screen opens.
+3. **Sales Screen**: Fixed issue where products and customers weren't loading immediately when creating a sale. Both resources now load automatically when the cart screen opens.
+4. **Category & Unit Management (Product Form)**: Enhanced quick-add buttons with labels ('Add Category', 'Add Unit') next to fields for better UX.
+5. **Category & Unit Management (Products Screen)**: Added labeled buttons ('Add Category', 'Add Unit') in products screen for quick creation without navigating away.
+6. **Supplier Management**: Added supplier quick-add button in product form - users can now create suppliers on-the-fly without leaving the product form.
+7. **Session Expiry Handling**: Implemented automatic logout when session expires (401 response). Users are now automatically logged out when their token expires, preventing errors and data inconsistencies.
+
+### Technical Changes
+- Enhanced `ProductsBloc` initialization to trigger `FetchProducts()` event when entering purchase/sales screens if products aren't already loaded
+- Added form validators for required category and unit selections in product creation/editing
+- Improved UX with labeled category/unit/supplier creation buttons in both product form and products screen
+- Added `SupplierOverlayScreen` import and `_openSupplierCreate()` method in product overlay
+- Implemented `OnUnauthorized` callback in `AuthHttpClient` to detect 401 responses
+- Added `_AuthenticatedApp` wrapper widget to setup unauthorized callback and auto-logout
+- Customer screen already loads from backend API correctly (no changes needed)
+- Products screen now shows both 'Add Category' and 'Add Unit' buttons with labels for better discoverability
+
 ## License
 
 Private - All Rights Reserved
