@@ -60,9 +60,21 @@ curl -I https://your-domain.com
 
 ## 🔧 Troubleshooting
 
-### Issue: "Page Not Found" on Routes
+### Issue: "Page Not Found" when visiting domain
 
-**Solution**: Nginx config handles SPA routing ✅ (already configured in `nginx.conf`)
+**Problem**: When you deploy to Dokploy and visit your domain, you see "Page Not Found" or 404 error. This happens because:
+- This is a Flutter web app with client-side routing (Single Page Application)
+- When you visit routes like `/categories` or `/notifications` directly, Nginx looks for actual files at those paths
+- Since these files don't exist (only `index.html` exists), Nginx returns 404
+
+**Solution**: The `nginx.conf` file configures proper SPA routing ✅ (already configured)
+- All requests are redirected to `index.html` using the `try_files $uri $uri/ /index.html;` directive
+- This allows Flutter's client-side router to handle all routes properly
+- Works for direct URL access, page refresh, and deep linking
+
+### Issue: "Page Not Found" on specific routes after deployment
+
+**Solution**: Ensure `nginx.conf` is properly copied in your Dockerfile ✅ (already configured)
 
 ### Issue: API Connection Failed
 
@@ -95,17 +107,33 @@ docker-compose up --build
 
 ## 📦 Production Checklist
 
-- [ ] Update API base URL
+- [ ] Update API base URL in `lib/config/config.dart`
 - [ ] Build with `--release` flag
-- [ ] Configure domain in docker-compose.yml
-- [ ] Enable HTTPS/SSL (Traefik handles this)
-- [ ] Test all routes work
+- [ ] Configure domain in `docker-compose.yml` Traefik labels
+- [ ] Enable HTTPS/SSL (Traefik handles this automatically)
+- [ ] Test all routes work (direct access, refresh, deep linking)
 - [ ] Verify API connectivity
+- [ ] Ensure `nginx.conf` is included in build (check Dockerfile)
 
 ## 🎯 Performance Tips
 
-1. **Enable Gzip** ✅ (configured in nginx.conf)
-2. **Cache Static Assets** ✅ (configured in nginx.conf)
-3. **Use CDN** (optional, for global distribution)
-4. **Optimize Images** (compress assets in `assets/`)
+1. **Enable Gzip** ✅ (configured in `nginx.conf`)
+2. **Cache Static Assets** ✅ (configured in `nginx.conf`)
+3. **Security Headers** ✅ (configured in `nginx.conf`)
+4. **Use CDN** (optional, for global distribution)
+5. **Optimize Images** (compress assets in `assets/`)
+
+## 🚨 Important Notes
+
+### SPA Routing Configuration
+This Flutter web app uses client-side routing. The `nginx.conf` file is **critical** for proper deployment:
+- It redirects all requests to `index.html` so Flutter's router can handle the routing
+- Without this, direct URL access or page refresh will show 404 errors
+- The Dockerfile automatically includes this configuration
+
+### Files Required for Deployment
+Ensure these files are present:
+- `Dockerfile` - Multi-stage build with Flutter and Nginx
+- `nginx.conf` - Nginx configuration with SPA routing support
+- `docker-compose.yml` - Docker Compose configuration with Traefik labels
 
