@@ -11,6 +11,7 @@
 **Version:** Updated for Dokploy compatibility (Nov 2025)
 
 **Key Improvements:**
+- ✅ Fixed Flutter running as root user in Docker (prevents warnings and build issues)
 - ✅ Removed obsolete docker-compose version field (prevents warnings)
 - ✅ Optimized Dockerfile using official Flutter image (faster builds)
 - ✅ Added `.dockerignore` to reduce build context size (faster uploads)
@@ -71,6 +72,19 @@ curl -I https://your-domain.com
 ```
 
 ## 🔧 Troubleshooting
+
+### Issue: "Woah! You appear to be trying to run flutter as root" warning
+
+**Problem**: The Flutter build runs as root user in Docker, causing:
+- Warning message: "We strongly recommend running the flutter tool without superuser privileges"
+- Potential build cancellations during compilation
+- Permission and security issues
+
+**Solution**: The Dockerfile now creates a non-root user (`flutter`) for the build stage ✅ (already fixed)
+- Creates a dedicated `flutter` user with UID 1000
+- All build commands run as this non-root user
+- Proper ownership is set for all copied files
+- This eliminates the root user warning and improves build reliability
 
 ### Issue: Build timeout or cancellation during deployment
 
