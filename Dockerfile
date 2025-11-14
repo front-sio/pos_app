@@ -1,14 +1,23 @@
 # Stage 1: Build Flutter web
 FROM ghcr.io/cirruslabs/flutter:stable AS build
 
+# Give ubuntu user permission to write to Flutter SDK directories
+RUN chown -R ubuntu:ubuntu /sdks/flutter
+
+# Switch to non-root user
+USER ubuntu
+
+# Configure git to trust Flutter SDK directory
+RUN git config --global --add safe.directory /sdks/flutter
+
 WORKDIR /app
 
 # Copy pubspec and get dependencies first (for caching)
-COPY pubspec.yaml pubspec.lock ./
+COPY --chown=ubuntu:ubuntu pubspec.yaml pubspec.lock ./
 RUN flutter pub get
 
 # Copy the rest of the code
-COPY . .
+COPY --chown=ubuntu:ubuntu . .
 
 # Build Flutter web
 RUN flutter build web --release --no-tree-shake-icons
