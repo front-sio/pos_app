@@ -1,33 +1,40 @@
-# Base image: Ubuntu (small)
-FROM ubuntu:22.04
-
-# Install dependencies
-RUN apt-get update && apt-get install -y \
-  curl \
-  git \
-  unzip \
-  xz-utils \
-  zip \
-  libglu1-mesa \
-  && rm -rf /var/lib/apt/lists/*
-
-# Install latest Flutter stable
-RUN git clone https://github.com/flutter/flutter.git /usr/local/flutter -b stable
-
-ENV PATH="/usr/local/flutter/bin:/usr/local/flutter/bin/cache/dart-sdk/bin:${PATH}"
-
-# Run flutter doctor to pre-cache dependencies
-RUN flutter doctor
+# Stage 1: Build Flutter Web App
+FROM ghcr.io/cirruslabs/flutter:stable AS build
 
 WORKDIR /app
-COPY . .
 
-# Get packages and build for web (this will use Dart 3.9 if flutter stable is >=3.19)
-RUN flutter pub get && flutter build web --release
+# Copy pubspec files first for better caching
+COPY pubspec.yaml pubspec.lock ./
 
-# Serve with Nginx
+# Get dependencies (cached if pubspec hasn't changed)
+RUN flutter pub get
+
+# Copy source code
+COPY lib ./lib
+COPY web ./web
+COPY assets ./assets
+
+# Build for web with optimizations
+RUN flutter build web \
+    --release \
+    --web-renderer canvaskit \
+    --no-tree-shake-icons
+
+# Stage 2: Serve with Nginx
 FROM nginx:alpine
-COPY --from=0 /app/build/web /usr/share/nginx/html
+
+# Copy built web app
+COPY --from=build /app/build/web /usr/share/nginx/html
+
+# Copy nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Expose port
 EXPOSE 80
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --quiet --tries=1 --spider http://localhost/health || exit 1
+
+# Start nginx
 CMD ["nginx", "-g", "daemon off;"]
