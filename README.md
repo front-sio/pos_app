@@ -4,32 +4,49 @@ A comprehensive Point of Sale (POS) and Sales Management System built with Flutt
 
 ## Recent Updates (Nov 15, 2025)
 
+### PWA Features Removed (Nov 15, 2025)
+- ✅ **Removed PWA/Service Worker** - Disabled all Progressive Web App features
+- ✅ **No Service Worker Registration** - App runs as standard web app
+- ✅ **No Manifest.json** - Removed PWA manifest reference
+- ✅ **Cleaner Web App** - Simplified web deployment without PWA overhead
+- ✅ **No Install Prompts** - No more "Add to Home Screen" prompts
+- ✅ **No Offline Caching** - Service worker caching disabled
+
+**Changes:**
+- Removed `manifest.json` link from `web/index.html`
+- Disabled service worker via `window.flutterConfiguration`
+- Set `serviceWorkerSettings: null` to prevent SW registration
+- App now runs as regular web application
+- No PWA features or offline capabilities
+
+**Web Performance:**
+- Faster initial load (no service worker registration)
+- No caching overhead
+- Simpler deployment and updates
+- No service worker conflicts
+
 ### Service Worker Bootstrap Error Fix (Nov 15, 2025)
 - ✅ **Fixed flutter_bootstrap.js Async Error** - Removed duplicate service worker registration
 - ✅ **Single Service Worker Registration** - Flutter bootstrap handles SW automatically
 - ✅ **Cleaner Error Handling** - Eliminated async timeout errors in bootstrap
-- ✅ **Fixed Service Worker Refresh Loop** - Removed auto-reload that caused infinite refresh on blue screen
-- ✅ **Removed PWA Auto-Install Prompt** - Eliminated intrusive install prompts and update notifications
-- ✅ **Fixed dart:html Import Issue** - Migrated to conditional imports for better web compatibility
-- ✅ **Connectivity Service Fix** - Platform-specific implementations for web/mobile connectivity checks
-- ✅ **Splash Screen Optimization** - Reduced splash duration to 3 seconds and added weather loading timeout
-- ✅ **Clean Service Worker** - Simplified registration without version detection polling
+- ℹ️ **PWA Features Removed** - Service worker completely disabled (see PWA section above)
 
 **Changes:**
+- **PWA disabled** - Set `serviceWorkerSettings: null` in flutter configuration
+- Removed `manifest.json` link from index.html
+- App runs as standard web app without offline capabilities
 - Removed duplicate service worker registration from `web/index.html`
-- Flutter's `flutter_bootstrap.js` now handles SW registration exclusively
+- Flutter's `flutter_bootstrap.js` now handles SW (but disabled via config)
 - Fixed async timeout error in service worker loader
-- Service worker now registers without `controllerchange` auto-reload
-- Removed update notification and PWA install prompt functions
 - Split connectivity service into web/mobile platform-specific modules
 - Added 3-second timeout for weather data loading on splash screen
 - All `dart:html` imports moved to conditional platform-specific files
 
 **Web Performance:**
+- No PWA overhead or caching
+- Faster initial load without service worker
 - No more flutter_bootstrap.js async errors
 - No duplicate service worker registrations
-- No more infinite refresh loops on blue screen
-- Faster initial load (3s vs 4s splash)
 - Better error handling for geolocation on web
 - Cleaner console logs without polling messages
 
@@ -579,7 +596,7 @@ The system automatically sends notifications for these business events:
 - ✅ **Frontend sync** - UI shows updated total, paid, and due amounts
 - ✅ **Both backend & frontend** - Complete discount flow working
 
-### Network Connectivity & PWA Features (REAL-TIME FIX - Nov 14, 2025)
+### Network Connectivity Features (REAL-TIME FIX - Nov 14, 2025)
 - ✅ **Real-time offline detection (Web)** - Native browser online/offline events
 - ✅ **Immediate feedback** - No polling delays, instant offline screen
 - ✅ **Const event fixed** - ConnectivityChanged properly marked as const
@@ -592,11 +609,6 @@ The system automatically sends notifications for these business events:
 - ✅ **Connection tips** - Helpful dialog with troubleshooting tips (English)
 - ✅ **Multi-platform support** - Web uses browser events, mobile uses connectivity_plus
 - ✅ **Cross-platform** - Works on Android, iOS, Web, and Desktop
-- ✅ **Version detection** - Notifies user when new version is available (English)
-- ✅ **Auto-refresh prompt** - User can refresh to load new changes (English)
-- ✅ **PWA install prompt** - Prompts mobile users to install app (English)
-- ✅ **Smart timing** - Shows install prompt after 10 seconds on mobile
-- ✅ **Service Worker** - Detects updates and manages cache
 
 ### Splash Screen & Weather Integration (COMPLETE)
 - ✅ **Custom Flutter splash widget** - Beautiful animated splash screen

@@ -34,7 +34,6 @@
   <link rel="icon" type="image/png" href="favicon.png"/>
 
   <title>Sales Management</title>
-  <link rel="manifest" href="manifest.json">
   
   <style>
     body {
@@ -54,6 +53,12 @@
   </style>
 </head>
 <body>
+  <script>
+    // Disable service worker / PWA features
+    window.flutterConfiguration = {
+      serviceWorkerSettings: null
+    };
+  </script>
   <script src="flutter_bootstrap.js" async></script>
   
   <script>
