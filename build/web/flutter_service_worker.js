@@ -3,9 +3,9 @@ const MANIFEST = 'flutter-app-manifest';
 const TEMP = 'flutter-temp-cache';
 const CACHE_NAME = 'flutter-app-cache';
 
-const RESOURCES = {"main.dart.js": "ce767f85c90bd8fa03d22e571eaae810",
-"index.html": "492b7c932400c437f72081e8f46df9e8",
-"/": "492b7c932400c437f72081e8f46df9e8",
+const RESOURCES = {"main.dart.js": "44f2b1d0840f10ceac176cd36e5fa19d",
+"index.html": "6cdd2e1c6deba68e742f560c221fa67d",
+"/": "6cdd2e1c6deba68e742f560c221fa67d",
 "icons/Icon-192.png": "ac9a721a12bbc803b44f645561ecb1e1",
 "icons/Icon-512.png": "96e752610906ba2a93c65f8abe1645f1",
 "icons/Icon-maskable-512.png": "301a7604d45b3e739efc881eb04896ea",
@@ -14,7 +14,7 @@ const RESOURCES = {"main.dart.js": "ce767f85c90bd8fa03d22e571eaae810",
 "assets/packages/fluttertoast/assets/toastify.css": "a85675050054f179444bc5ad70ffc635",
 "assets/packages/fluttertoast/assets/toastify.js": "56e2c9cedd97f10e7e5f1cebd85d53e3",
 "assets/packages/cupertino_icons/assets/CupertinoIcons.ttf": "33b7d9392238c04c131b6ce224e13711",
-"assets/fonts/MaterialIcons-Regular.otf": "838799a001c86fa01aeac875dd6f687e",
+"assets/fonts/MaterialIcons-Regular.otf": "c579d517dc990d02ffe13359132ba881",
 "assets/assets/lottie/animations/loader.json": "8c1ac511b3e89e0dbbc9a2d1cff802e1",
 "assets/assets/lottie/profile_upload.json": "1136b234884dc8e9eaed936ace77df9a",
 "assets/assets/lottie/loader.json": "a15cd3a6755049a16250d7654ee1f81f",
@@ -40,7 +40,7 @@ const RESOURCES = {"main.dart.js": "ce767f85c90bd8fa03d22e571eaae810",
 "canvaskit/skwasm.wasm": "264db41426307cfc7fa44b95a7772109",
 "favicon.png": "5dcef449791fa27946b3d35ad8803796",
 "flutter.js": "888483df48293866f9f41d3d9274a779",
-"flutter_bootstrap.js": "8102a373661746bbb9d580d2a2dfada5"};
+"flutter_bootstrap.js": "a7ad085ac464d45d87f293f7fef4054e"};
 // The application shell files that are downloaded before a service worker can
 // start.
 const CORE = ["main.dart.js",

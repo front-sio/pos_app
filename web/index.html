@@ -74,6 +74,8 @@
     
     // Service Worker Registration for version detection
     if ('serviceWorker' in navigator) {
+      let refreshing = false;
+      
       window.addEventListener('load', function() {
         navigator.serviceWorker.register('/flutter_service_worker.js').then(function(registration) {
           console.log('ServiceWorker registration successful');
@@ -88,12 +90,18 @@
               }
             });
           });
+        }).catch(function(err) {
+          console.log('ServiceWorker registration failed:', err);
         });
       });
       
       // Listen for controller change (new version activated)
+      // Prevent infinite reload loop
       navigator.serviceWorker.addEventListener('controllerchange', function() {
-        window.location.reload();
+        if (!refreshing) {
+          refreshing = true;
+          window.location.reload();
+        }
       });
     }
     

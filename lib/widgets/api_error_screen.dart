@@ -111,20 +111,6 @@ class ApiErrorScreen extends StatelessWidget {
                         const SizedBox(height: 12),
                       ],
                       
-                      _InfoRow(
-                        icon: Icons.dns_outlined,
-                        label: 'Server:',
-                        value: AppConfig.baseUrl,
-                      ),
-                      
-                      if (endpoint != null) ...[
-                        const SizedBox(height: 12),
-                        _InfoRow(
-                          icon: Icons.api_outlined,
-                          label: 'Endpoint:',
-                          value: endpoint!,
-                        ),
-                      ],
                     ],
                   ),
                 ),

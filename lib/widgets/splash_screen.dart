@@ -52,8 +52,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     _controller.forward();
     _loadGreetingAndWeather();
     
-    // Navigate after 4 seconds
-    Timer(const Duration(seconds: 4), () {
+    // Navigate after 3 seconds (reduced from 4 for faster loading)
+    Timer(const Duration(seconds: 3), () {
       if (mounted) {
         widget.onComplete();
       }
@@ -61,14 +61,40 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   }
 
   Future<void> _loadGreetingAndWeather() async {
+    if (!mounted) return;
+    
     setState(() {
       _greeting = _weatherService.getGreeting();
       _greetingIcon = _weatherService.getGreetingIcon();
     });
 
     try {
+      // Add timeout for entire weather loading process
+      await Future.any([
+        _loadWeatherData(),
+        Future.delayed(const Duration(seconds: 3), () {
+          if (mounted) {
+            setState(() {
+              _location = 'Weather unavailable';
+              _loadingWeather = false;
+            });
+          }
+        }),
+      ]);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _location = 'Weather unavailable';
+          _loadingWeather = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadWeatherData() async {
+    try {
       final position = await _weatherService.getCurrentLocation();
-      if (position != null) {
+      if (position != null && mounted) {
         final city = await _weatherService.getCityName(position.latitude, position.longitude);
         final weather = await _weatherService.getCurrentWeather(position.latitude, position.longitude);
         

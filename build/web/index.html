@@ -65,51 +65,17 @@
       // Monitor online/offline events
       window.addEventListener('online', function() {
         console.log('🟢 Network: ONLINE');
-        // Verify with actual connection test
-        fetch('https://www.google.com/favicon.ico', { mode: 'no-cors', cache: 'no-cache' })
-          .then(function() {
-            console.log('✅ Network: Internet connection verified');
-          })
-          .catch(function() {
-            console.log('⚠️ Network: Connected but no internet access');
-          });
       });
       
       window.addEventListener('offline', function() {
         console.log('🔴 Network: OFFLINE');
       });
-      
-      // Periodic connection check every 3 seconds
-      setInterval(function() {
-        if (navigator.onLine) {
-          // Quick connectivity test
-          fetch('https://www.google.com/favicon.ico', { 
-            mode: 'no-cors', 
-            cache: 'no-cache',
-            timeout: 3000 
-          })
-          .then(function() {
-            // Connection is good
-            if (!window._lastConnectionState) {
-              console.log('✅ Periodic check: Connection restored');
-            }
-            window._lastConnectionState = true;
-          })
-          .catch(function(error) {
-            console.log('⚠️ Periodic check: Connection issue -', error.message);
-            window._lastConnectionState = false;
-          });
-        } else {
-          if (window._lastConnectionState !== false) {
-            console.log('🔴 Periodic check: Offline');
-          }
-          window._lastConnectionState = false;
-        }
-      }, 3000);
     })();
     
     // Service Worker Registration for version detection
     if ('serviceWorker' in navigator) {
+      let refreshing = false;
+      
       window.addEventListener('load', function() {
         navigator.serviceWorker.register('/flutter_service_worker.js').then(function(registration) {
           console.log('ServiceWorker registration successful');
@@ -124,19 +90,25 @@
               }
             });
           });
+        }).catch(function(err) {
+          console.log('ServiceWorker registration failed:', err);
         });
       });
       
       // Listen for controller change (new version activated)
+      // Prevent infinite reload loop
       navigator.serviceWorker.addEventListener('controllerchange', function() {
-        window.location.reload();
+        if (!refreshing) {
+          refreshing = true;
+          window.location.reload();
+        }
       });
     }
     
     function showUpdateNotification() {
       const div = document.createElement('div');
       div.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#2196F3;color:white;padding:16px 24px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.3);z-index:99999;display:flex;align-items:center;gap:16px;font-family:system-ui;';
-      div.innerHTML = '<div><strong>New Version Available!</strong><br><small>Kuna version mpya! Refresh ili kuona mabadiliko.</small></div><button onclick="window.location.reload()" style="background:white;color:#2196F3;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-weight:bold;">Refresh</button><button onclick="this.parentElement.remove()" style="background:transparent;color:white;border:1px solid white;padding:8px 16px;border-radius:4px;cursor:pointer;margin-left:8px;">Later</button>';
+      div.innerHTML = '<div><strong>New Version Available!</strong><br><small>Refresh to see the latest changes.</small></div><button onclick="window.location.reload()" style="background:white;color:#2196F3;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-weight:bold;">Refresh</button><button onclick="this.parentElement.remove()" style="background:transparent;color:white;border:1px solid white;padding:8px 16px;border-radius:4px;cursor:pointer;margin-left:8px;">Later</button>';
       document.body.appendChild(div);
     }
     
@@ -166,7 +138,7 @@
       const div = document.createElement('div');
       div.id = 'installPrompt';
       div.style.cssText = 'position:fixed;bottom:20px;left:20px;right:20px;background:white;padding:20px;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,0.3);z-index:99999;font-family:system-ui;';
-      div.innerHTML = '<div style="display:flex;align-items:center;gap:16px;"><div style="background:#2196F3;width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="white" viewBox="0 0 24 24"><path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg></div><div style="flex:1;"><strong style="display:block;margin-bottom:4px;color:#333;">Install Sales App</strong><small style="color:#666;">Weka app kwenye simu yako kwa matumizi rahisi!</small></div></div><div style="display:flex;gap:12px;margin-top:16px;"><button onclick="installApp()" style="flex:1;background:#2196F3;color:white;border:none;padding:12px;border-radius:8px;font-weight:bold;cursor:pointer;">Install</button><button onclick="document.getElementById(\'installPrompt\').remove()" style="flex:1;background:#f5f5f5;color:#333;border:none;padding:12px;border-radius:8px;cursor:pointer;">Not Now</button></div>';
+      div.innerHTML = '<div style="display:flex;align-items:center;gap:16px;"><div style="background:#2196F3;width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="white" viewBox="0 0 24 24"><path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg></div><div style="flex:1;"><strong style="display:block;margin-bottom:4px;color:#333;">Install Sales App</strong><small style="color:#666;">Add app to your home screen for easy access!</small></div></div><div style="display:flex;gap:12px;margin-top:16px;"><button onclick="installApp()" style="flex:1;background:#2196F3;color:white;border:none;padding:12px;border-radius:8px;font-weight:bold;cursor:pointer;">Install</button><button onclick="document.getElementById(\'installPrompt\').remove()" style="flex:1;background:#f5f5f5;color:#333;border:none;padding:12px;border-radius:8px;cursor:pointer;">Not Now</button></div>';
       document.body.appendChild(div);
     }
     

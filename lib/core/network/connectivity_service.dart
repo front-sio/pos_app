@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
-import 'dart:html' as html show window;
+
+// Platform-specific imports
+import 'connectivity_service_web.dart' if (dart.library.io) 'connectivity_service_mobile.dart' as platform;
 
 class ConnectivityService {
   final Connectivity _connectivity = Connectivity();
@@ -25,7 +27,7 @@ class ConnectivityService {
   Future<void> _initConnectivity() async {
     try {
       if (kIsWeb) {
-        _isConnected = html.window.navigator.onLine ?? true;
+        _isConnected = platform.isOnline();
         _connectionStatusController.add(_isConnected);
       } else {
         final result = await _connectivity.checkConnectivity();
@@ -45,13 +47,12 @@ class ConnectivityService {
   }
   
   void _listenToBrowserEvents() {
-    // Listen to browser's online event
-    html.window.addEventListener('online', (event) {
+    // Listen to browser's online/offline events via platform-specific implementation
+    platform.addOnlineListener(() {
       _handleConnectionChange(true);
     });
     
-    // Listen to browser's offline event  
-    html.window.addEventListener('offline', (event) {
+    platform.addOfflineListener(() {
       _handleConnectionChange(false);
     });
   }
@@ -84,7 +85,7 @@ class ConnectivityService {
   Future<bool> checkConnection() async {
     try {
       if (kIsWeb) {
-        return html.window.navigator.onLine ?? true;
+        return platform.isOnline();
       } else {
         final result = await _connectivity.checkConnectivity();
         return result.isNotEmpty && result.any((r) => r != ConnectivityResult.none);
