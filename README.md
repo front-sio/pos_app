@@ -4,7 +4,10 @@ A comprehensive Point of Sale (POS) and Sales Management System built with Flutt
 
 ## Recent Updates (Nov 15, 2025)
 
-### Web App Refresh Loop Fix (Nov 15, 2025)
+### Service Worker Bootstrap Error Fix (Nov 15, 2025)
+- ✅ **Fixed flutter_bootstrap.js Async Error** - Removed duplicate service worker registration
+- ✅ **Single Service Worker Registration** - Flutter bootstrap handles SW automatically
+- ✅ **Cleaner Error Handling** - Eliminated async timeout errors in bootstrap
 - ✅ **Fixed Service Worker Refresh Loop** - Removed auto-reload that caused infinite refresh on blue screen
 - ✅ **Removed PWA Auto-Install Prompt** - Eliminated intrusive install prompts and update notifications
 - ✅ **Fixed dart:html Import Issue** - Migrated to conditional imports for better web compatibility
@@ -13,6 +16,9 @@ A comprehensive Point of Sale (POS) and Sales Management System built with Flutt
 - ✅ **Clean Service Worker** - Simplified registration without version detection polling
 
 **Changes:**
+- Removed duplicate service worker registration from `web/index.html`
+- Flutter's `flutter_bootstrap.js` now handles SW registration exclusively
+- Fixed async timeout error in service worker loader
 - Service worker now registers without `controllerchange` auto-reload
 - Removed update notification and PWA install prompt functions
 - Split connectivity service into web/mobile platform-specific modules
@@ -20,6 +26,8 @@ A comprehensive Point of Sale (POS) and Sales Management System built with Flutt
 - All `dart:html` imports moved to conditional platform-specific files
 
 **Web Performance:**
+- No more flutter_bootstrap.js async errors
+- No duplicate service worker registrations
 - No more infinite refresh loops on blue screen
 - Faster initial load (3s vs 4s splash)
 - Better error handling for geolocation on web

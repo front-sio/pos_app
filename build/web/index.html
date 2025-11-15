@@ -71,21 +71,6 @@
         console.log('🔴 Network: OFFLINE');
       });
     })();
-    
-    // Service Worker Registration (without auto-reload)
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', function() {
-        navigator.serviceWorker.register('/flutter_service_worker.js').then(function(registration) {
-          console.log('ServiceWorker registration successful');
-        }).catch(function(err) {
-          console.log('ServiceWorker registration failed:', err);
-        });
-      });
-    }
-    
-
-    
-
   </script>
 </body>
 </html>
