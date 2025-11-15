@@ -7,6 +7,8 @@ import 'package:sales_app/features/notitications/data/notification_model.dart';
 
 class NotificationSocketService {
   io.Socket? _socket;
+  int _errorCount = 0;
+  static const int _maxErrors = 3;
 
   final _notifController = StreamController<AppNotification>.broadcast();
   final _snapshotController = StreamController<NotificationSnapshot>.broadcast();
@@ -38,9 +40,11 @@ class NotificationSocketService {
         'path': '/socket.io-notifications',
         'autoConnect': true,
         'reconnection': true,
-        'reconnectionAttempts': 5,
-        'reconnectionDelay': 1000,
-        'timeout': 10000,
+        'reconnectionAttempts': 3,
+        'reconnectionDelay': 2000,
+        'reconnectionDelayMax': 5000,
+        'timeout': 20000,
+        'forceNew': true,
         // Browsers: handshake auth
         'auth': (secureToken != null && secureToken.isNotEmpty) ? {'token': secureToken} : {},
         // Native: attach Authorization header (ignored by web)
@@ -52,16 +56,25 @@ class NotificationSocketService {
 
       _socket!.onConnect((_) {
         if (kDebugMode) debugPrint('[NotificationSocket] connected');
+        _errorCount = 0; // Reset error count on successful connection
         // Request a snapshot (unreadCount + optional backlog)
         _socket!.emit('snapshot_request');
       });
 
       _socket!.onConnectError((err) {
-        if (kDebugMode) debugPrint('[NotificationSocket] connect_error: $err');
+        _errorCount++;
+        if (_errorCount <= _maxErrors && kDebugMode) {
+          debugPrint('[NotificationSocket] connect_error: $err');
+        }
+        if (_errorCount == _maxErrors && kDebugMode) {
+          debugPrint('[NotificationSocket] Max connection errors reached. Suppressing further logs.');
+        }
       });
 
       _socket!.onError((err) {
-        if (kDebugMode) debugPrint('[NotificationSocket] error: $err');
+        if (_errorCount <= _maxErrors && kDebugMode) {
+          debugPrint('[NotificationSocket] error: $err');
+        }
       });
 
       _socket!.onDisconnect((reason) {

@@ -20,7 +20,7 @@ class ReportsScreen extends StatefulWidget {
 }
 
 class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProviderStateMixin {
-  String _selectedPeriod = 'This Month';
+  String _selectedPeriod = 'Today';
   late final TabController _tabController;
 
   // Custom range (inclusive)

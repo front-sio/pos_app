@@ -11,11 +11,14 @@ A comprehensive Point of Sale (POS) and Sales Management System built with Flutt
 - ✅ **Cleaner Web App** - Simplified web deployment without PWA overhead
 - ✅ **No Install Prompts** - No more "Add to Home Screen" prompts
 - ✅ **No Offline Caching** - Service worker caching disabled
+- ✅ **Fixed Configuration Error** - Removed deprecated `window.flutterConfiguration`
 
 **Changes:**
 - Removed `manifest.json` link from `web/index.html`
-- Disabled service worker via `window.flutterConfiguration`
-- Set `serviceWorkerSettings: null` to prevent SW registration
+- Used `--pwa-strategy=none` flag during Flutter build
+- Removed deprecated `window.flutterConfiguration` approach
+- Flutter bootstrap now loads without service worker settings
+- Empty service worker file generated (0 bytes)
 - App now runs as regular web application
 - No PWA features or offline capabilities
 
@@ -24,6 +27,7 @@ A comprehensive Point of Sale (POS) and Sales Management System built with Flutt
 - No caching overhead
 - Simpler deployment and updates
 - No service worker conflicts
+- No deprecated configuration warnings
 
 ### Service Worker Bootstrap Error Fix (Nov 15, 2025)
 - ✅ **Fixed flutter_bootstrap.js Async Error** - Removed duplicate service worker registration
@@ -32,12 +36,12 @@ A comprehensive Point of Sale (POS) and Sales Management System built with Flutt
 - ℹ️ **PWA Features Removed** - Service worker completely disabled (see PWA section above)
 
 **Changes:**
-- **PWA disabled** - Set `serviceWorkerSettings: null` in flutter configuration
+- **PWA completely disabled** - Used `--pwa-strategy=none` build flag
 - Removed `manifest.json` link from index.html
+- Removed deprecated `window.flutterConfiguration` usage
 - App runs as standard web app without offline capabilities
-- Removed duplicate service worker registration from `web/index.html`
-- Flutter's `flutter_bootstrap.js` now handles SW (but disabled via config)
-- Fixed async timeout error in service worker loader
+- Flutter bootstrap loads without service worker settings
+- Empty service worker file (0 bytes)
 - Split connectivity service into web/mobile platform-specific modules
 - Added 3-second timeout for weather data loading on splash screen
 - All `dart:html` imports moved to conditional platform-specific files
@@ -45,8 +49,8 @@ A comprehensive Point of Sale (POS) and Sales Management System built with Flutt
 **Web Performance:**
 - No PWA overhead or caching
 - Faster initial load without service worker
-- No more flutter_bootstrap.js async errors
-- No duplicate service worker registrations
+- No deprecated configuration errors
+- No service worker conflicts
 - Better error handling for geolocation on web
 - Cleaner console logs without polling messages
 
@@ -146,7 +150,7 @@ class Customer {
 - ℹ️  **Notifications WebSocket** - Enabled on `/socket.io-notifications` path
 - ℹ️  **Port 3022** - Notifications service on dedicated port
 
-## Socket.IO Connection Errors - FIXED ✅
+## Socket.IO Connection Errors - UPDATED ✅
 
 ### Problem
 The Flutter app was showing Socket.IO connection errors:
@@ -156,24 +160,52 @@ The Flutter app was showing Socket.IO connection errors:
 ```
 
 ### Root Cause
-1. **Gateway Configuration Issue**: The API gateway was configured to route to Docker hostnames (e.g., `http://notifications-service:3022`) but services were running on `localhost`
-2. **Services Not Running**: Some microservices (products, notifications) weren't started
-3. **Missing Gateway Restart**: Gateway needed restart to apply new configuration
+1. **Notifications Service Not Running** - The notifications-service must be started manually
+2. **Gateway/Nginx Proxy** - The app connects via `https://app.stebofarm.co.tz` which requires proper routing
+3. **Missing Service Startup** - Notifications service needs to be started before app can connect
 
-### What Was Fixed
+### Solution
 
-#### 1. Gateway Configuration (`sales-gateway/config/gateway.config.yml`)
-**Changed service endpoints from Docker hostnames to localhost:**
-```yaml
-serviceEndpoints:
-  products-service:
-    url: http://localhost:3013        # Was: http://products-service:3013
-  notifications-service:
-    url: http://localhost:3022        # Was: http://notifications-service:3022
-  sales-service:
-    url: http://localhost:3014        # Was: http://sales-service:3014
-  # ... all other services updated
+#### 1. **Start Notifications Service**
+```bash
+# Navigate to notifications service directory
+cd sales-gateway/notifications-service
+
+# Start the service
+node dist/index.js &
+
+# Or use nohup for persistent running
+nohup node dist/index.js > /tmp/notifications.log 2>&1 &
+
+# Verify it's running
+curl http://localhost:3022/health
+# Should return: "Notifications Service is healthy"
 ```
+
+#### 2. **Check Service Status**
+```bash
+# Check if service is running
+ps aux | grep "node.*3022"
+
+# Test Socket.IO endpoint directly
+curl "http://localhost:3022/socket.io-notifications/?EIO=4&transport=polling"
+# Should return: 0{"sid":"...","upgrades":["websocket"],...}
+```
+
+#### 3. **Frontend Error Handling**
+- ✅ **Limited error logging** - Only shows first 3 connection errors
+- ✅ **Auto-retry with backoff** - Retries 3 times with 2-5 second delays
+- ✅ **Graceful degradation** - App works without notifications if service unavailable
+- ✅ **Clean console** - No spam after max errors reached
+
+### What Was Fixed (Nov 15, 2025)
+
+#### 1. **Frontend Error Handling**
+- Limited error logging to first 3 attempts
+- Increased timeout to 20 seconds
+- Reduced reconnection attempts to 3 (prevents spam)
+- Added error counter to suppress repeated logs
+- Better reconnection delays (2-5 seconds backoff)
 
 #### 2. Socket.IO Routing (Already Configured ✅)
 The gateway already has proper Socket.IO WebSocket proxying:
