@@ -44,7 +44,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     if (ok == true) {
       final name = nameCtrl.text.trim();
       if (name.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Name is required')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter a category name')),
+        );
         return;
       }
       context.read<CategoryBloc>().add(CreateCategory(name));
@@ -98,7 +100,10 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
         listener: (context, state) {
           if (state.error.isNotEmpty) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.error), backgroundColor: AppColors.kError),
+              SnackBar(
+                content: const Text('Unable to complete operation. Please try again.'),
+                backgroundColor: AppColors.kError,
+              ),
             );
           }
         },

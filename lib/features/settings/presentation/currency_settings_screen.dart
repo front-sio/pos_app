@@ -77,12 +77,15 @@ class _CurrencySettingsScreenState extends State<CurrencySettingsScreen> {
         listener: (context, state) {
           if (state is SettingsSaved) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Currency saved')),
+              const SnackBar(content: Text('Settings saved successfully')),
             );
           }
           if (state is SettingsError) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.message), backgroundColor: Theme.of(context).colorScheme.error),
+              SnackBar(
+                content: const Text('Unable to save settings. Please try again.'),
+                backgroundColor: Theme.of(context).colorScheme.error,
+              ),
             );
           }
           _syncFromState(state);

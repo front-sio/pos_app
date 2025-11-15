@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:sales_app/utils/responsive.dart';
+import 'package:sales_app/widgets/error_placeholder.dart';
 
 import 'package:sales_app/features/customers/bloc/customer_bloc.dart';
 import 'package:sales_app/features/customers/bloc/customer_event.dart';
@@ -202,26 +203,8 @@ class _CustomersScreenState extends State<CustomersScreen> with TickerProviderSt
 
         if (state is CustomersError) {
           return SliverFillRemaining(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.error_outline, color: cs.error, size: 56),
-                    const SizedBox(height: 12),
-                    Text('Failed to load customers', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    Text(state.message, style: theme.textTheme.bodyMedium, textAlign: TextAlign.center),
-                    const SizedBox(height: 16),
-                    ElevatedButton.icon(
-                      onPressed: () => context.read<CustomerBloc>().add(FetchCustomers()),
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Retry'),
-                    ),
-                  ],
-                ),
-              ),
+            child: ErrorPlaceholder(
+              onRetry: () => context.read<CustomerBloc>().add(FetchCustomersPage(_page, _limit)),
             ),
           );
         }
@@ -356,11 +339,49 @@ class _CustomersScreenState extends State<CustomersScreen> with TickerProviderSt
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Text(
-                        c.name,
-                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            c.name,
+                            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (c.email != null && c.email!.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(Icons.email_outlined, size: 14, color: cs.onSurface.withOpacity(0.6)),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    c.email!,
+                                    style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurface.withOpacity(0.7)),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          if (c.phone != null && c.phone!.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Row(
+                              children: [
+                                Icon(Icons.phone_outlined, size: 14, color: cs.onSurface.withOpacity(0.6)),
+                                const SizedBox(width: 4),
+                                Text(
+                                  c.phone!,
+                                  style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurface.withOpacity(0.7)),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                     menu,
@@ -388,6 +409,38 @@ class _CustomersScreenState extends State<CustomersScreen> with TickerProviderSt
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
+                    if (c.email != null && c.email!.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Icon(Icons.email_outlined, size: 14, color: cs.onSurface.withOpacity(0.6)),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              c.email!,
+                              style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurface.withOpacity(0.7)),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    if (c.phone != null && c.phone!.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(Icons.phone_outlined, size: 14, color: cs.onSurface.withOpacity(0.6)),
+                          const SizedBox(width: 4),
+                          Text(
+                            c.phone!,
+                            style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurface.withOpacity(0.7)),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
         ),

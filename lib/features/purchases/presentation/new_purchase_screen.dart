@@ -221,13 +221,21 @@ class _NewPurchaseScreenState extends State<NewPurchaseScreen> {
       body: BlocConsumer<PurchaseBloc, dynamic>(
         listener: (context, state) {
           if (state is PurchaseError) {
-            ScaffoldMessenger.of(context)
-                .showSnackBar(SnackBar(content: Text(state.message), backgroundColor: AppColors.kError));
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Unable to complete operation. Please try again.'),
+                backgroundColor: AppColors.kError,
+              ),
+            );
             setState(() => _submitting = false);
           }
           if (state is PurchaseOperationSuccess) {
-            ScaffoldMessenger.of(context)
-                .showSnackBar(SnackBar(content: Text(state.message), backgroundColor: AppColors.kSuccess));
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Purchase saved successfully'),
+                backgroundColor: AppColors.kSuccess,
+              ),
+            );
             setState(() => _submitting = false);
             widget.onSaved?.call();
           }

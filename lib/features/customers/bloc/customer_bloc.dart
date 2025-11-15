@@ -21,7 +21,9 @@ class CustomerBloc extends Bloc<CustomerEvent, CustomerState> {
     on<FetchCustomersPage>(_onFetchPage);
     on<SearchCustomers>(_onSearch);
     on<AddCustomer>(_onAdd);
+    on<AddCustomerWithDetails>(_onAddWithDetails);
     on<UpdateCustomerEvent>(_onUpdate);
+    on<UpdateCustomerWithDetails>(_onUpdateWithDetails);
     on<DeleteCustomerEvent>(_onDelete);
   }
 
@@ -119,14 +121,28 @@ class CustomerBloc extends Bloc<CustomerEvent, CustomerState> {
     final all = _list();
     final filtered = q.isEmpty
         ? all
-        : all.where((c) => c.name.toLowerCase().contains(q)).toList();
+        : all.where((c) {
+            return c.name.toLowerCase().contains(q) ||
+                (c.email?.toLowerCase().contains(q) ?? false) ||
+                (c.phone?.toLowerCase().contains(q) ?? false);
+          }).toList();
     emit(CustomersLoaded(filtered, searchQuery: event.query, hasMore: _hasMore));
   }
 
   Future<void> _onAdd(AddCustomer event, Emitter<CustomerState> emit) async {
     try {
       final created = await service.createCustomer(event.name);
-      // Upsert and move to top, removing any older duplicate
+      _upsertOne(created, toTop: true);
+      emit(CustomersLoaded(_list(), hasMore: _hasMore));
+    } catch (e) {
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(CustomersError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
+    }
+  }
+
+  Future<void> _onAddWithDetails(AddCustomerWithDetails event, Emitter<CustomerState> emit) async {
+    try {
+      final created = await service.createCustomerWithDetails(event.customer);
       _upsertOne(created, toTop: true);
       emit(CustomersLoaded(_list(), hasMore: _hasMore));
     } catch (e) {
@@ -139,6 +155,18 @@ class CustomerBloc extends Bloc<CustomerEvent, CustomerState> {
     try {
       await service.updateCustomer(event.id, event.name);
       final updated = await service.getCustomerById(event.id);
+      _upsertOne(updated, toTop: false);
+      emit(CustomersLoaded(_list(), hasMore: _hasMore));
+    } catch (e) {
+      final errorMessage = e is ApiException ? e.message : ApiErrorHandler.getErrorMessage(e);
+      emit(CustomersError(errorMessage, isNetworkError: e is ApiException && e.isNetworkError));
+    }
+  }
+
+  Future<void> _onUpdateWithDetails(UpdateCustomerWithDetails event, Emitter<CustomerState> emit) async {
+    try {
+      await service.updateCustomerWithDetails(event.customer);
+      final updated = await service.getCustomerById(event.customer.id);
       _upsertOne(updated, toTop: false);
       emit(CustomersLoaded(_list(), hasMore: _hasMore));
     } catch (e) {

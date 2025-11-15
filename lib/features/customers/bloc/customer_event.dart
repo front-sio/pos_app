@@ -1,3 +1,5 @@
+import 'package:sales_app/features/customers/data/customer_model.dart';
+
 abstract class CustomerEvent {}
 
 class FetchCustomers extends CustomerEvent {
@@ -22,10 +24,20 @@ class AddCustomer extends CustomerEvent {
   AddCustomer(this.name);
 }
 
+class AddCustomerWithDetails extends CustomerEvent {
+  final Customer customer;
+  AddCustomerWithDetails(this.customer);
+}
+
 class UpdateCustomerEvent extends CustomerEvent {
   final int id;
   final String name;
   UpdateCustomerEvent(this.id, this.name);
+}
+
+class UpdateCustomerWithDetails extends CustomerEvent {
+  final Customer customer;
+  UpdateCustomerWithDetails(this.customer);
 }
 
 class DeleteCustomerEvent extends CustomerEvent {

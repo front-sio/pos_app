@@ -58,11 +58,36 @@ class CustomerService {
     throw Exception(_err(res));
   }
 
+  Future<Customer> createCustomerWithDetails(Customer customer) async {
+    final res = await _client.post(
+      _u('/customers'),
+      headers: _jsonHeaders,
+      body: json.encode(customer.toCreatePayload()),
+    );
+    if (res.statusCode == 201 || res.statusCode == 200) {
+      final body = json.decode(res.body) as Map<String, dynamic>;
+      final id = (body['id'] as num?)?.toInt() ?? int.tryParse('${body['id']}') ?? 0;
+      return getCustomerById(id);
+    }
+    throw Exception(_err(res));
+  }
+
   Future<void> updateCustomer(int id, String name) async {
     final res = await _client.put(
       _u('/customers/$id'),
       headers: _jsonHeaders,
       body: json.encode({'name': name}),
+    );
+    if (res.statusCode != 200) {
+      throw Exception(_err(res));
+    }
+  }
+
+  Future<void> updateCustomerWithDetails(Customer customer) async {
+    final res = await _client.put(
+      _u('/customers/${customer.id}'),
+      headers: _jsonHeaders,
+      body: json.encode(customer.toCreatePayload()),
     );
     if (res.statusCode != 200) {
       throw Exception(_err(res));

@@ -175,13 +175,13 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                               style: TextButton.styleFrom(
                                 padding: EdgeInsets.zero,
                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                foregroundColor: AppColors.kPrimary,
                               ),
-                              child: Text(
+                              child: const Text(
                                 "Forgot password?",
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: AppColors.kPrimary,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                           ),
@@ -194,19 +194,18 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                             child: BlocConsumer<AuthBloc, AuthState>(
                               listener: (context, state) {
                                 if (state is AuthFailure) {
-                                  // Show error immediately before navigation
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
+                                    const SnackBar(
                                       content: Row(
                                         children: [
-                                          const Icon(Icons.error_outline, color: Colors.white),
-                                          const SizedBox(width: 8),
-                                          Expanded(child: Text(state.error)),
+                                          Icon(Icons.error_outline, color: Colors.white),
+                                          SizedBox(width: 8),
+                                          Expanded(child: Text('Login failed. Please check your credentials and try again.')),
                                         ],
                                       ),
                                       backgroundColor: Colors.red,
                                       behavior: SnackBarBehavior.floating,
-                                      duration: const Duration(seconds: 4),
+                                      duration: Duration(seconds: 4),
                                     ),
                                   );
                                 }

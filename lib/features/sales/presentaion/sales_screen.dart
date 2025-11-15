@@ -674,7 +674,9 @@ class _SaleDetailsSheetState extends State<_SaleDetailsSheet> {
   Future<void> _promptReturn(SaleItem item) async {
     if (item.id == null) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot return: missing sale item id')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to process return. Please try again.')),
+      );
       return;
     }
 
@@ -723,11 +725,15 @@ class _SaleDetailsSheetState extends State<_SaleDetailsSheet> {
 
     final int qty = int.tryParse(qtyController.text) ?? 0;
     if (qty <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a valid quantity')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid quantity')),
+      );
       return;
     }
     if (qty > maxQty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Quantity cannot exceed $maxQty')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Maximum quantity is $maxQty')),
+      );
       return;
     }
 
@@ -746,7 +752,12 @@ class _SaleDetailsSheetState extends State<_SaleDetailsSheet> {
       await _loadAuxiliaryData();
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Return recorded')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Return recorded successfully'),
+          backgroundColor: AppColors.kSuccess,
+        ),
+      );
       context.read<SalesBloc>().add(const LoadSales());
     } catch (e, st) {
       if (kDebugMode) {
@@ -754,7 +765,12 @@ class _SaleDetailsSheetState extends State<_SaleDetailsSheet> {
         debugPrintStack(stackTrace: st);
       }
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Return failed: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to record return. Please try again.'),
+          backgroundColor: AppColors.kError,
+        ),
+      );
     } finally {
       if (mounted) setState(() => _workingItemId = null);
     }

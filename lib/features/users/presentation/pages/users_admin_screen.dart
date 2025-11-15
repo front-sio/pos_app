@@ -494,9 +494,13 @@ class _UsersAdminScreenState extends State<UsersAdminScreen> {
       body: BlocConsumer<UsersBloc, UsersState>(
         listener: (context, state) {
           if (state is UsersActionSuccess) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(state.message)));
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Operation completed successfully')),
+            );
           } else if (state is UsersFailure) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${state.error}')));
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Unable to complete operation. Please try again.')),
+            );
           } else if (state is RolesPermissionsLoaded) {
             _lastRoles = state.roles;
             _lastPermissions = state.permissions;

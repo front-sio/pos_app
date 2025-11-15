@@ -4,6 +4,76 @@ A comprehensive Point of Sale (POS) and Sales Management System built with Flutt
 
 ## Recent Updates (Nov 14, 2025)
 
+### TextStyle Animation Fix (Nov 14, 2025)
+- ✅ **Fixed TextButton Animation Error** - Resolved "Failed to interpolate TextStyles with different inherit values"
+- ✅ **Theme Update** - Removed conflicting textStyle from TextButtonTheme and ElevatedButtonTheme
+- ✅ **Login Screen Fix** - Updated TextButton to use foregroundColor instead of Theme.of(context).textTheme
+- ✅ **Smooth Animations** - All button animations now work without errors
+- ✅ **Material 3 Compatibility** - Theme properly configured for Material 3 animations
+
+**Changes:**
+- Removed `textStyle` property from button themes (causes inherit conflicts)
+- Updated TextButton widgets to use simple TextStyle with inherit: true
+- Set color via `foregroundColor` in button style instead of text style
+
+### Customer Features Enhanced (Nov 14, 2025)
+- ✅ **Email & Phone Fields** - Customers now include contact information
+- ✅ **Customer Model Updated** - Added email and phone fields (nullable)
+- ✅ **Backend Support** - customers-service handles email/phone in create/update
+- ✅ **Enhanced UI Display** - Customer cards show email and phone with icons
+- ✅ **Form Validation** - Email format validation, phone optional
+- ✅ **Search Enhancement** - Search now includes email and phone fields
+- ✅ **View Screen Updated** - Customer details display all contact information
+- ✅ **Invoice Integration Ready** - Email field enables invoice sending to customers
+- ✅ **Notification Ready** - Contact fields support customer notifications
+- ✅ **Mobile & Desktop** - Both compact and grid views updated
+
+**Customer Data Structure:**
+```dart
+class Customer {
+  final int id;
+  final String name;
+  final String? email;    // NEW - For invoices & notifications
+  final String? phone;    // NEW - For SMS/WhatsApp features
+}
+```
+
+**Features:**
+- Create/Edit customers with email and phone
+- Email validation (format check)
+- Display contact info in customer list
+- Search by name, email, or phone
+- View complete customer details
+
+### User-Friendly Error Messages & Error Handling (Nov 14, 2025)
+- ✅ **Unified Error Screen** - All features now use `ErrorPlaceholder` widget for consistent error display
+- ✅ **User-Friendly Messages** - Replaced technical error messages with clear, actionable messages
+- ✅ **Network Error Handling** - Features distinguish between network and application errors
+- ✅ **Success Messages Improved** - Clear confirmation messages for completed operations
+- ✅ **Validation Messages** - Better form validation feedback for users
+- ✅ **Features Updated**:
+  - Customers - Uses ErrorPlaceholder, clean error messages
+  - Categories - User-friendly validation and error messages
+  - Units - Clear error feedback
+  - Invoices - Consistent error handling with ErrorPlaceholder
+  - Expenses - Unified error screen
+  - Sales - Improved return and cart error messages
+  - Products - Already using ErrorPlaceholder (reference implementation)
+  - Purchases - Clean error messages
+  - Auth - Simplified login error messages
+  - Users - Clear operation feedback
+  - Settings - Consistent error messages
+  - Profile - User-friendly update messages
+  - Reports - Clean error handling
+
+**Before:**
+- "Error: Failed to fetch data: SocketException: Connection refused"
+- "Exception: 401 Unauthorized"
+
+**After:**
+- "Oops! Something went wrong - We're having trouble loading this data. Please check your connection and try again."
+- "Login failed. Please check your credentials and try again."
+
 ### WebSocket & Realtime Features Fix (Nov 14, 2025)
 - ✅ **Notifications service FULLY STRUCTURED** - Express + Drizzle ORM + Socket.IO
 - ✅ **Proper package.json** - All dependencies and scripts configured
@@ -27,6 +97,269 @@ A comprehensive Point of Sale (POS) and Sales Management System built with Flutt
 - ℹ️  **Products WebSocket** - Enabled on `/socket.io-products` path
 - ℹ️  **Notifications WebSocket** - Enabled on `/socket.io-notifications` path
 - ℹ️  **Port 3022** - Notifications service on dedicated port
+
+## Socket.IO Connection Errors - FIXED ✅
+
+### Problem
+The Flutter app was showing Socket.IO connection errors:
+```
+[NotificationSocket] connect_error: {msg: websocket error, desc: null, type: TransportError}
+[RealtimeProducts] connect_error: {msg: websocket error, desc: null, type: TransportError}
+```
+
+### Root Cause
+1. **Gateway Configuration Issue**: The API gateway was configured to route to Docker hostnames (e.g., `http://notifications-service:3022`) but services were running on `localhost`
+2. **Services Not Running**: Some microservices (products, notifications) weren't started
+3. **Missing Gateway Restart**: Gateway needed restart to apply new configuration
+
+### What Was Fixed
+
+#### 1. Gateway Configuration (`sales-gateway/config/gateway.config.yml`)
+**Changed service endpoints from Docker hostnames to localhost:**
+```yaml
+serviceEndpoints:
+  products-service:
+    url: http://localhost:3013        # Was: http://products-service:3013
+  notifications-service:
+    url: http://localhost:3022        # Was: http://notifications-service:3022
+  sales-service:
+    url: http://localhost:3014        # Was: http://sales-service:3014
+  # ... all other services updated
+```
+
+#### 2. Socket.IO Routing (Already Configured ✅)
+The gateway already has proper Socket.IO WebSocket proxying:
+```yaml
+socketio-notifications-pipeline:
+  apiEndpoints: [socketio_notifications]
+  policies:
+    - proxy:
+        serviceEndpoint: notifications-service
+        ws: true                       # WebSocket support enabled
+        stripPath: false
+        preserveHostHdr: true
+
+socketio-products-pipeline:
+  apiEndpoints: [socketio_products]
+  policies:
+    - proxy:
+        serviceEndpoint: products-service
+        ws: true                       # WebSocket support enabled
+```
+
+### How to Start Services
+
+#### Option 1: Start All Services (Recommended)
+```bash
+cd /home/masanja/API\ GATEWAY/sales-microservices
+./start-all-services.sh
+```
+
+#### Option 2: Start Individual Services
+```bash
+# Start Products Service
+cd sales-gateway/products-service
+npm run dev &
+
+# Start Notifications Service  
+cd sales-gateway/notifications-service
+node dist/index.js &
+
+# Start Sales Service
+cd sales-gateway/sales-service
+npm run dev &
+```
+
+#### Option 3: Use Individual Service Scripts
+```bash
+./start-notifications.sh    # Start notifications only
+```
+
+### Verify Services Are Running
+
+**Check all services:**
+```bash
+curl http://localhost:3013/health   # Products
+curl http://localhost:3014/health   # Sales  
+curl http://localhost:3022/health   # Notifications
+curl http://localhost:8080/health   # Gateway
+```
+
+**Test Socket.IO through gateway:**
+```bash
+# Test notifications socket
+curl -i http://localhost:8080/socket.io-notifications/?EIO=4&transport=polling
+
+# Test products socket
+curl -i http://localhost:8080/socket.io-products/?EIO=4&transport=polling
+```
+
+### Restart Gateway (If Needed)
+
+**If you updated the gateway config, restart it:**
+```bash
+sudo systemctl restart sales-gateway
+# OR
+sudo pkill -f "node server.js"
+cd sales-gateway && sudo node server.js &
+```
+
+### Testing Socket.IO Connections
+
+**From Flutter app:**
+1. Ensure services are running (use start-all-services.sh)
+2. Ensure gateway is running on port 8080
+3. App should connect to `https://app.stebofarm.co.tz/socket.io-notifications`
+4. Gateway proxies to `http://localhost:3022/socket.io-notifications`
+5. Check logs for successful connection
+
+**Manual test:**
+```bash
+# Install wscat if needed
+npm install -g wscat
+
+# Test WebSocket connection
+wscat -c "ws://localhost:8080/socket.io-notifications/?EIO=4&transport=websocket"
+```
+
+### Architecture Overview
+
+```
+Flutter App (https://app.stebofarm.co.tz)
+           ↓
+    Nginx/Reverse Proxy
+           ↓
+    API Gateway :8080
+     ├─ /products → localhost:3013
+     ├─ /sales → localhost:3014
+     ├─ /notifications → localhost:3022
+     ├─ /socket.io-products → localhost:3013 (WebSocket)
+     ├─ /socket.io-notifications → localhost:3022 (WebSocket)
+     └─ /socket.io → localhost:3014 (WebSocket)
+           ↓
+    Microservices (running on localhost)
+     ├─ products-service :3013
+     ├─ sales-service :3014
+     ├─ notifications-service :3022
+     └─ ... other services
+```
+
+### Troubleshooting
+
+**If Socket.IO still fails:**
+
+1. **Check services are running:**
+   ```bash
+   ps aux | grep -E "products-service|notifications-service|sales-service"
+   ```
+
+2. **Check service logs:**
+   ```bash
+   tail -f /tmp/products-service.log
+   tail -f /tmp/notifications-service.log
+   ```
+
+3. **Test service directly:**
+   ```bash
+   curl http://localhost:3013/health
+   ```
+
+4. **Test through gateway:**
+   ```bash
+   curl http://localhost:8080/products
+   ```
+
+5. **Check gateway logs:**
+   ```bash
+   tail -f /tmp/gateway.log
+   ```
+
+6. **Verify gateway config:**
+   ```bash
+   cat sales-gateway/config/gateway.config.yml | grep -A2 "serviceEndpoints:"
+   ```
+
+**Common Issues:**
+
+- ❌ **"Connection refused"** → Service not running, start it
+- ❌ **"EADDRINUSE"** → Port already in use, kill existing process
+- ❌ **"404 Not Found"** → Gateway routing issue, check gateway.config.yml
+- ❌ **"websocket error"** → Gateway not proxying WebSocket, ensure `ws: true` in config
+- ❌ **"ECONNREFUSED"** → Gateway can't reach service, check service URL in config
+
+## Summary of Changes
+
+### ✅ Customer Email Field Added
+- **File**: `customers-service/src/db/schema/accounts_customer.ts`
+- **Changes**: Added `email` (VARCHAR 255) and `phone` (VARCHAR 50) fields
+- **Database**: Columns added to `accounts_customer` table in `customersdb`
+- **Usage**: Can now send invoices to customer email addresses
+
+### ✅ Notification Service Setup
+- **Database**: Created dedicated `notificationsdb` (following microservices pattern)
+- **Port**: Service runs on 3022
+- **Table**: notifications table created with proper schema
+- **Status**: Service configured and tested (database connections working)
+
+### ✅ Webhook Integration Status
+- **Sales Service**: ✓ Configured to trigger notifications
+- **Products Service**: ✓ Configured to trigger notifications  
+- **Webhooks Available**:
+  - `/webhooks/sale-completed` - Sale notifications
+  - `/webhooks/product-created` - Product creation
+  - `/webhooks/low-stock` - Low stock alerts
+  - `/webhooks/stock-out` - Out of stock alerts
+
+### 🔧 Starting the Notification Service
+
+**Option 1: Using startup script**
+```bash
+cd /home/masanja/API\ GATEWAY/sales-microservices
+./start-notifications.sh
+```
+
+**Option 2: Manual start**
+```bash
+cd sales-gateway/notifications-service
+node dist/index.js &
+```
+
+**Verify service is running:**
+```bash
+curl http://localhost:3022/health
+# Should return: "Notifications Service is healthy"
+```
+
+### 🧪 Testing Notifications
+
+**Test via webhook:**
+```bash
+curl -X POST http://localhost:3022/webhooks/sale-completed \
+  -H "Content-Type: application/json" \
+  -d '{"saleId": 123, "total": 50000, "userId": 1}'
+```
+
+**Check database:**
+```bash
+PGPASSWORD=password psql -h 74.50.97.22 -p 5438 -U postgres -d notificationsdb \
+  -c "SELECT * FROM notifications ORDER BY created_at DESC LIMIT 5;"
+```
+
+### 📊 Architecture Summary
+
+**Microservices Database Pattern:**
+- Each service has its own database (following best practices)
+- `customersdb` (port 5441) - Customer data with email/phone
+- `notificationsdb` (port 5438) - Notification data
+- `productsdb` (port 5438) - Product data
+- `salesdb` (port 5436) - Sales data
+
+**Why Separate Databases:**
+1. ✓ Data Isolation - Services don't share data
+2. ✓ Independent Scaling - Scale services independently
+3. ✓ Schema Autonomy - Update schemas without coordination
+4. ✓ Fault Tolerance - Failures are isolated
+5. ✓ Security - Separate access controls
 
 ## Notifications Service Setup
 

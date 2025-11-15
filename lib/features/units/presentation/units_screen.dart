@@ -44,7 +44,9 @@ class _UnitsScreenState extends State<UnitsScreen> {
     if (ok == true) {
       final name = nameCtrl.text.trim();
       if (name.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Name is required')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter a unit name')),
+        );
         return;
       }
       context.read<UnitBloc>().add(CreateUnit(name));
@@ -98,7 +100,10 @@ class _UnitsScreenState extends State<UnitsScreen> {
         listener: (context, state) {
           if (state.error.isNotEmpty) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.error), backgroundColor: AppColors.kError),
+              const SnackBar(
+                content: Text('Unable to complete operation. Please try again.'),
+                backgroundColor: AppColors.kError,
+              ),
             );
           }
         },

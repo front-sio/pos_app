@@ -7,7 +7,7 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
-NC='\033[0m'
+NC='\033[0;m'
 
 print_header() {
     echo ""
@@ -41,12 +41,47 @@ ask_confirmation() {
     fi
 }
 
+check_service() {
+    local service_name=$1
+    local port=$2
+    
+    if curl -s "http://localhost:$port/health" > /dev/null 2>&1; then
+        print_success "$service_name is running on port $port"
+        return 0
+    else
+        print_error "$service_name is NOT running on port $port"
+        return 1
+    fi
+}
+
 clear
 echo ""
 echo "╔══════════════════════════════════════════════════════════════╗"
 echo "║       Sales Management Flutter App - Feature Testing        ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo ""
+
+# Check backend services first
+print_header "Backend Services Status Check"
+print_step "Checking if microservices are running..."
+echo ""
+
+check_service "Gateway" "8080"
+check_service "Products Service" "3013"
+check_service "Sales Service" "3014"
+check_service "Notifications Service" "3022"
+check_service "Customers Service" "3019"
+check_service "Auth Service" "3012"
+
+echo ""
+if ! curl -s http://localhost:8080/health > /dev/null 2>&1; then
+    print_error "Gateway is not running! Services must be started first."
+    echo ""
+    echo "Run: ./start-all-services.sh"
+    echo ""
+    read -p "Press Enter to continue anyway or Ctrl+C to exit..."
+fi
+
 
 # Pre-requisites
 print_header "Pre-requisites Check"
@@ -63,7 +98,15 @@ echo "   - Sales patterns: cash register, $ symbols, receipt, chart, cart"
 echo "   - All patterns animate smoothly (float/bounce)"
 echo "   - Button shows 'Logging in...' when submitting"
 echo "   - Invalid credentials show error immediately"
+echo "   - 'Forgot password?' button should NOT show any TextStyle errors"
+echo "   - No console errors about 'Failed to interpolate TextStyles'"
 ask_confirmation "Are you logged in with credentials (masanja/Password123!)?"
+
+print_step "4. UI/Theme Check - Fixed TextStyle Animation"
+echo "   - All buttons animate smoothly without errors"
+echo "   - No 'Failed to interpolate TextStyles' errors in console"
+echo "   - TextButton color changes work correctly on hover/press"
+ask_confirmation "Are button animations working without errors?"
 
 # Products Module
 print_header "📦 Products Module Testing"
@@ -217,10 +260,43 @@ print_header "📊 Additional Features Testing"
 print_step "1. Dashboard"
 ask_confirmation "Is the dashboard showing analytics correctly? (Check for weekly weather widget)"
 
-print_step "2. Customers Module"
+print_step "2. Customers Module (ENHANCED - Nov 14, 2025)"
 echo "   - Customers load from backend API"
 echo "   - No mock data is used"
-ask_confirmation "Can you manage customers from backend (view/add/edit/delete)?"
+echo "   - Email and phone fields now available"
+echo ""
+echo "   TESTING CHECKLIST:"
+echo "   a) Create New Customer:"
+echo "      - Click 'Add Customer' button"
+echo "      - Enter customer name (required)"
+echo "      - Enter email (optional but validated)"
+echo "      - Enter phone number (optional)"
+echo "      - Save and verify customer appears in list"
+echo ""
+echo "   b) View Customer Details:"
+echo "      - Click on a customer card"
+echo "      - Verify name, email, and phone are displayed"
+echo "      - Email and phone should have appropriate icons"
+echo ""
+echo "   c) Edit Customer:"
+echo "      - Open customer options menu (3 dots)"
+echo "      - Click 'Edit'"
+echo "      - Update email or phone"
+echo "      - Save and verify changes appear"
+echo ""
+echo "   d) Search Functionality:"
+echo "      - Use search bar at top"
+echo "      - Search by customer name"
+echo "      - Search by email address"
+echo "      - Search by phone number"
+echo "      - Verify all searches work correctly"
+echo ""
+echo "   e) Customer List Display:"
+echo "      - Mobile view: Compact cards with email/phone below name"
+echo "      - Desktop view: Grid cards with contact info"
+echo "      - Icons: email (envelope), phone (phone icon)"
+echo ""
+ask_confirmation "Can you manage customers with email/phone fields (view/add/edit/search)?"
 
 print_step "3. Suppliers Module"
 ask_confirmation "Can you manage suppliers (view/add/edit/delete)?"
@@ -576,3 +652,64 @@ echo "   - Product: POST /webhooks/product-created"
 ask_confirmation "Are WebSocket connections and notification UI working?"
 
 
+
+# ═══════════════════════════════════════════════════════════════
+# 14. ERROR HANDLING & USER MESSAGES
+# ═══════════════════════════════════════════════════════════════
+print_header "14. ERROR HANDLING & USER MESSAGES"
+echo "Testing error handling and user-friendly messages:"
+echo ""
+echo "   TEST SCENARIOS:"
+echo "   1. Network Errors:"
+echo "      - Stop a microservice (e.g., products-service)"
+echo "      - Navigate to that feature in the app"
+echo "      - Should show clean error message with retry button"
+echo "      - No technical error details visible"
+echo ""
+echo "   2. Validation Errors:"
+echo "      - Try to create product/customer without required fields"
+echo "      - Should show clear, actionable validation messages"
+echo ""
+echo "   3. Success Messages:"
+echo "      - Complete any operation (create, update, delete)"
+echo "      - Should show clear success confirmation"
+echo ""
+echo "   EXPECTED BEHAVIOR:"
+echo "   ✓ No technical error messages (SocketException, 401, etc.)"
+echo "   ✓ User-friendly error descriptions"
+echo "   ✓ Clear action buttons (Try Again, Retry)"
+echo "   ✓ Consistent error UI across all features"
+echo "   ✓ Network errors show ErrorPlaceholder widget"
+echo "   ✓ Success messages are positive and clear"
+echo ""
+ask_confirmation "Are error messages user-friendly and consistent?"
+
+print_header "✅ ALL FEATURES CHECKED!"
+echo ""
+echo -e "${GREEN}Congratulations! You have tested all major features of the Sales App.${NC}"
+echo ""
+echo "Summary of tested features:"
+echo "  ✓ Dashboard and Analytics"
+echo "  ✓ Product Management (CRUD + Categories + Units)"
+echo "  ✓ Sales & POS System"
+echo "  ✓ Customer Management (with Email & Phone)"
+echo "  ✓ Invoice Management"
+echo "  ✓ Purchase Orders"
+echo "  ✓ Expenses Tracking"
+echo "  ✓ Stock Management"
+echo "  ✓ Suppliers Management"
+echo "  ✓ Reports & Analytics"
+echo "  ✓ User Management & RBAC"
+echo "  ✓ Settings & Configuration"
+echo "  ✓ Notifications & Realtime Updates"
+echo "  ✓ Error Handling & User Messages"
+echo ""
+echo -e "${BLUE}Notes:${NC}"
+echo "  • All features now use consistent error handling"
+echo "  • User-friendly messages replace technical errors"
+echo "  • Network errors are handled gracefully"
+echo "  • Success messages are clear and actionable"
+echo "  • Customer contacts (email/phone) ready for invoices & notifications"
+echo ""
+echo -e "${YELLOW}If you found any issues, please document them for the development team.${NC}"
+echo ""

@@ -85,9 +85,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
       body: BlocConsumer<ProfileBloc, ProfileState>(
         listener: (context, state) {
           if (state is ProfileError) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(state.error)));
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Unable to complete operation. Please try again.')),
+            );
           } else if (state is ProfileUpdated) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(state.message)));
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Profile updated successfully')),
+            );
           }
         },
         builder: (context, state) {

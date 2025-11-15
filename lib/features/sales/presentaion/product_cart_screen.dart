@@ -442,7 +442,10 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
             final fallbackAdded = _tryAddFromLocalProducts(_lastScanned!);
             if (fallbackAdded) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Added item matched by barcode: $_lastScanned'), backgroundColor: AppColors.kSuccess),
+                const SnackBar(
+                  content: Text('Product added to cart'),
+                  backgroundColor: AppColors.kSuccess,
+                ),
               );
               return; // don't show error toast
             }
@@ -455,7 +458,10 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
           _closeAnyDialogSafely();
           ScaffoldMessenger.of(context).clearSnackBars();
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(state.message), backgroundColor: AppColors.kSuccess),
+            const SnackBar(
+              content: Text('Sale completed successfully'),
+              backgroundColor: AppColors.kSuccess,
+            ),
           );
           widget.onCheckout?.call();
         }
@@ -722,8 +728,8 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
       _closeAnyDialogSafely();
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(error.toString().isEmpty ? 'Unexpected error' : error.toString()),
+        const SnackBar(
+          content: Text('Unable to complete operation. Please try again.'),
           backgroundColor: AppColors.kError,
         ),
       );

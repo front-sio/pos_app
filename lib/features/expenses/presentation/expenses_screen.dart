@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:sales_app/constants/colors.dart';
 import 'package:sales_app/constants/sizes.dart';
 import 'package:sales_app/utils/currency.dart';
+import 'package:sales_app/widgets/error_placeholder.dart';
 
 import 'package:sales_app/features/expenses/bloc/expense_bloc.dart';
 import 'package:sales_app/features/expenses/bloc/expense_event.dart';
@@ -68,12 +69,18 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
       listener: (context, state) {
         if (state is ExpenseOperationSuccess) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(state.message), backgroundColor: AppColors.kSuccess),
+            const SnackBar(
+              content: Text('Operation completed successfully'),
+              backgroundColor: AppColors.kSuccess,
+            ),
           );
         }
-        if (state is ExpensesError) {
+        if (state is ExpensesError && !state.isNetworkError) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(state.message), backgroundColor: AppColors.kError),
+            const SnackBar(
+              content: Text('Unable to complete operation. Please try again.'),
+              backgroundColor: AppColors.kError,
+            ),
           );
         }
       },
@@ -92,11 +99,16 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
           showRefreshingBar = true;
         } else if (state is ExpensesError) {
           if (_lastKnown.isEmpty) {
-            return _TopLevelError(message: state.message, onRetry: _refresh);
+            return ErrorPlaceholder(
+              onRetry: () async => await _refresh(),
+            );
           } else {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(state.message), backgroundColor: AppColors.kError),
+                const SnackBar(
+                  content: Text('Unable to refresh data. Please try again.'),
+                  backgroundColor: AppColors.kError,
+                ),
               );
             });
             source = _lastKnown;
@@ -202,32 +214,6 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
           ],
         );
       },
-    );
-  }
-}
-
-class _TopLevelError extends StatelessWidget {
-  final String message;
-  final Future<void> Function() onRetry;
-  const _TopLevelError({required this.message, required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSizes.padding),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.error_outline, size: 36, color: cs.error),
-            const SizedBox(height: 8),
-            Text(message, textAlign: TextAlign.center),
-            const SizedBox(height: 12),
-            FilledButton(onPressed: onRetry, child: const Text('Retry')),
-          ],
-        ),
-      ),
     );
   }
 }

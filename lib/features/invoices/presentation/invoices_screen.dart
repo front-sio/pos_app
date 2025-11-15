@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:sales_app/constants/colors.dart';
 import 'package:sales_app/constants/sizes.dart';
 import 'package:sales_app/utils/currency.dart';
+import 'package:sales_app/widgets/error_placeholder.dart';
 
 import 'package:sales_app/features/customers/services/customer_services.dart';
 import 'package:sales_app/features/customers/data/customer_model.dart';
@@ -132,12 +133,18 @@ class _InvoicesScreenState extends State<InvoicesScreen> with SingleTickerProvid
       listener: (context, state) {
         if (state is InvoiceOperationSuccess) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(state.message), backgroundColor: AppColors.kSuccess),
+            const SnackBar(
+              content: Text('Operation completed successfully'),
+              backgroundColor: AppColors.kSuccess,
+            ),
           );
         }
-        if (state is InvoicesError) {
+        if (state is InvoicesError && !state.isNetworkError) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(state.message), backgroundColor: AppColors.kError),
+            const SnackBar(
+              content: Text('Unable to complete operation. Please try again.'),
+              backgroundColor: AppColors.kError,
+            ),
           );
         }
       },
@@ -156,11 +163,16 @@ class _InvoicesScreenState extends State<InvoicesScreen> with SingleTickerProvid
           showRefreshingBar = true;
         } else if (state is InvoicesError) {
           if (_lastKnown.isEmpty) {
-            return _TopLevelError(message: state.message, onRetry: _refresh);
+            return ErrorPlaceholder(
+              onRetry: () async => await _refresh(),
+            );
           } else {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(state.message), backgroundColor: AppColors.kError),
+                const SnackBar(
+                  content: Text('Unable to refresh data. Please try again.'),
+                  backgroundColor: AppColors.kError,
+                ),
               );
             });
             source = _lastKnown;
@@ -624,55 +636,6 @@ class _InvoiceCardState extends State<_InvoiceCard> {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TopLevelError extends StatelessWidget {
-  final String message;
-  final Future<void> Function() onRetry;
-
-  const _TopLevelError({required this.message, required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final theme = Theme.of(context);
-
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSizes.padding),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: cs.error.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Icon(Icons.error_outline, size: 32, color: cs.error),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Oops! Something went wrong',
-              style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey.shade700),
-            ),
-            const SizedBox(height: 20),
-            FilledButton(
-              onPressed: onRetry,
-              child: const Text('Try Again'),
-            ),
-          ],
         ),
       ),
     );

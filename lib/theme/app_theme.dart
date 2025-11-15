@@ -153,13 +153,11 @@ class AppTheme {
             borderRadius: BorderRadius.circular(12),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          textStyle: getTextStyle(16, FontWeight.w600, Colors.white),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: color,
-          textStyle: getTextStyle(16, FontWeight.w600, color),
         ),
       ),
 

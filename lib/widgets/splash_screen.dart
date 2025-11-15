@@ -115,7 +115,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
         width: double.infinity,
         height: double.infinity,
         decoration: const BoxDecoration(
-          color: Color(0xFF1976D2), // Solid soft blue
+          color: Color.fromARGB(255, 5, 49, 107), // Solid soft blue
         ),
         child: SafeArea(
           child: Column(
@@ -147,12 +147,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                 ),
               ),
               
-              const SizedBox(height: 40),
+              const SizedBox(height: 20),
               
-            
-              
-              
-              const SizedBox(height: 30),
               
               // App Title
               SlideTransition(
@@ -161,22 +157,6 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                   opacity: _fadeAnimation,
                   child: Column(
                     children: [
-                      Text(
-                        'Sales Management',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          letterSpacing: 1.2,
-                          shadows: [
-                            Shadow(
-                              color: Colors.black.withOpacity(0.2),
-                              offset: const Offset(1, 1),
-                              blurRadius: 3,
-                            ),
-                          ],
-                        ),
-                      ),
                       const SizedBox(height: 8),
                       Text(
                         'Your Business, Simplified',
@@ -192,7 +172,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                 ),
               ),
               
-              const SizedBox(height: 50),
+              const SizedBox(height: 10),
               
               // Animated Loading Indicator
               FadeTransition(

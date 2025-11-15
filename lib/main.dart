@@ -234,7 +234,7 @@ class _AuthenticatedAppState extends State<_AuthenticatedApp> {
               context.read<CustomerBloc>().add(FetchCustomersPage(1, 20));
               context.read<SupplierBloc>().add(FetchSuppliersPage(1, 20));
               context.read<InvoiceBloc>().add(const LoadInvoices());
-              context.read<ProfitBloc>().add(LoadProfit(period: 'This Month', view: 'Daily'));
+              context.read<ProfitBloc>().add(LoadProfit(period: 'Today', view: 'Daily'));
               context.read<ReportsBloc>().add(LoadDailyReport(DateTime.now()));
               context.read<UsersBloc>().add(LoadUsers());
               context.read<SettingsBloc>().add(const LoadSettings());

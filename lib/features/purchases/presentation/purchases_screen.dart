@@ -49,15 +49,18 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
                   listener: (context, state) {
                     if (state is PurchaseOperationSuccess) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(state.message), backgroundColor: AppColors.kSuccess),
+                        const SnackBar(
+                          content: Text('Operation completed successfully'),
+                          backgroundColor: AppColors.kSuccess,
+                        ),
                       );
                     }
                     if (state is PurchaseError && !state.isNetworkError) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(state.message), 
+                        const SnackBar(
+                          content: Text('Unable to complete operation. Please try again.'),
                           backgroundColor: AppColors.kError,
-                          duration: const Duration(seconds: 4),
+                          duration: Duration(seconds: 4),
                         ),
                       );
                     }

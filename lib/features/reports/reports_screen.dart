@@ -584,7 +584,10 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
         if (state is ReportsError) {
           ScaffoldMessenger.of(context).clearSnackBars();
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(state.message), backgroundColor: AppColors.kError),
+            const SnackBar(
+              content: Text('Unable to load data. Please try again.'),
+              backgroundColor: AppColors.kError,
+            ),
           );
         }
       },
