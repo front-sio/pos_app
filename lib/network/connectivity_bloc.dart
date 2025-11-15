@@ -3,7 +3,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:equatable/equatable.dart';
-import 'dart:html' as html show window;
+
+// Platform-specific imports
+import '../core/network/connectivity_service_web.dart' if (dart.library.io) '../core/network/connectivity_service_mobile.dart' as platform;
 
 // Events
 abstract class ConnectivityEvent extends Equatable {
@@ -68,12 +70,12 @@ class ConnectivityBloc extends Bloc<ConnectivityEvent, ConnectivityState> {
   }
 
   void _listenToWebEvents() {
-    // Listen to browser's online/offline events
-    html.window.addEventListener('online', (event) {
+    // Listen to browser's online/offline events via platform-specific implementation
+    platform.addOnlineListener(() {
       _handleConnectionChange(true);
     });
     
-    html.window.addEventListener('offline', (event) {
+    platform.addOfflineListener(() {
       _handleConnectionChange(false);
     });
   }
@@ -102,7 +104,7 @@ class ConnectivityBloc extends Bloc<ConnectivityEvent, ConnectivityState> {
     Emitter<ConnectivityState> emit,
   ) async {
     if (kIsWeb) {
-      final isOnline = html.window.navigator.onLine ?? true;
+      final isOnline = platform.isOnline();
       emit(isOnline ? ConnectivityOnline() : ConnectivityOffline());
     } else {
       final result = await _connectivity.checkConnectivity();

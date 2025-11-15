@@ -2,7 +2,30 @@
 
 A comprehensive Point of Sale (POS) and Sales Management System built with Flutter. This mobile/desktop application provides a complete interface for managing sales, inventory, customers, and business operations.
 
-## Recent Updates (Nov 14, 2025)
+## Recent Updates (Nov 15, 2025)
+
+### Web App Refresh Loop Fix (Nov 15, 2025)
+- ✅ **Fixed Service Worker Refresh Loop** - Removed auto-reload that caused infinite refresh on blue screen
+- ✅ **Removed PWA Auto-Install Prompt** - Eliminated intrusive install prompts and update notifications
+- ✅ **Fixed dart:html Import Issue** - Migrated to conditional imports for better web compatibility
+- ✅ **Connectivity Service Fix** - Platform-specific implementations for web/mobile connectivity checks
+- ✅ **Splash Screen Optimization** - Reduced splash duration to 3 seconds and added weather loading timeout
+- ✅ **Clean Service Worker** - Simplified registration without version detection polling
+
+**Changes:**
+- Service worker now registers without `controllerchange` auto-reload
+- Removed update notification and PWA install prompt functions
+- Split connectivity service into web/mobile platform-specific modules
+- Added 3-second timeout for weather data loading on splash screen
+- All `dart:html` imports moved to conditional platform-specific files
+
+**Web Performance:**
+- No more infinite refresh loops on blue screen
+- Faster initial load (3s vs 4s splash)
+- Better error handling for geolocation on web
+- Cleaner console logs without polling messages
+
+## Previous Updates (Nov 14, 2025)
 
 ### TextStyle Animation Fix (Nov 14, 2025)
 - ✅ **Fixed TextButton Animation Error** - Resolved "Failed to interpolate TextStyles with different inherit values"
