@@ -76,7 +76,7 @@ class _PosBusinessAppState extends State<PosBusinessApp> {
       title: "Business App",
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
-      initialRoute: _initialRoute,
+      initialRoute: _initialRoute ?? '/',
       routes: {
         '/': (_) => ConnectivityWrapper(
           child: BlocConsumer<AuthBloc, AuthState>(
