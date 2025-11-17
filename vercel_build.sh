@@ -18,3 +18,7 @@ flutter config --no-analytics
 flutter config --enable-web
 flutter pub get
 flutter build web --release
+
+# Remove source map references to prevent console errors
+chmod +x remove_sourcemaps.sh
+./remove_sourcemaps.sh

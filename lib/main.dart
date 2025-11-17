@@ -188,8 +188,8 @@ void main() async {
             create: (context) => NotificationBloc(service: context.read<NotificationSocketService>()),
           ),
           // New blocs
-          BlocProvider<CategoryBloc>(create: (context) => CategoryBloc(service: context.read<CategoryService>())..add(const LoadCategories())),
-          BlocProvider<UnitBloc>(create: (context) => UnitBloc(service: context.read<UnitService>())..add(const LoadUnits())),
+          BlocProvider<CategoryBloc>(create: (context) => CategoryBloc(service: context.read<CategoryService>())),
+          BlocProvider<UnitBloc>(create: (context) => UnitBloc(service: context.read<UnitService>())),
         ],
         child: _AuthenticatedApp(httpClient: httpClient),
       ),
@@ -300,6 +300,18 @@ class _AuthenticatedAppState extends State<_AuthenticatedApp> {
                   context.read<ExpenseBloc>().add(const LoadExpenses());
                 } catch (e) {
                   print('Error loading expenses: $e');
+                }
+                
+                try {
+                  context.read<CategoryBloc>().add(const LoadCategories());
+                } catch (e) {
+                  print('Error loading categories: $e');
+                }
+                
+                try {
+                  context.read<UnitBloc>().add(const LoadUnits());
+                } catch (e) {
+                  print('Error loading units: $e');
                 }
               });
             }
