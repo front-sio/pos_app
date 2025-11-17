@@ -105,7 +105,8 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
 
   int? _invoiceOverlayId;
 
-  late final ProductsBloc _productsBloc;
+  ProductsBloc? _productsBloc;
+  bool _didInitDependencies = false;
 
   late final AnimationController _overlayCtrl;
   late final Animation<double> _backdropOpacity;
@@ -127,9 +128,6 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
       appIconUrl: null,
     );
 
-    final productService = context.read<ProductService>();
-    _productsBloc = ProductsBloc(productService: productService)..add(FetchProductsPage(1, 20));
-
     _overlayCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 280),
@@ -150,6 +148,16 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
     _rootKeyFocus = FocusNode(debugLabel: 'AdminScaffoldRootKeyFocus');
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_didInitDependencies) {
+      _didInitDependencies = true;
+      final productService = context.read<ProductService>();
+      _productsBloc = ProductsBloc(productService: productService)..add(FetchProductsPage(1, 20));
+    }
+  }
+
   Future<void> _loadSavedPage() async {
     final prefs = await SharedPreferences.getInstance();
     final savedPage = prefs.getString('active_menu');
@@ -168,7 +176,7 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
     _overlayCtrl.dispose();
     _overlayFocusScope.dispose();
     _rootKeyFocus.dispose();
-    _productsBloc.close();
+    _productsBloc?.close();
     super.dispose();
   }
 
@@ -200,9 +208,9 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
       case "Suppliers":
         return _can("suppliers:view") ? SuppliersScreen(onOpenOverlay: _openSupplierOverlay) : _forbidden();
       case "Products":
-        return _can("products:view")
+        return _can("products:view") && _productsBloc != null
             ? BlocProvider.value(
-                value: _productsBloc,
+                value: _productsBloc!,
                 child: ProductsScreen(onOpenOverlay: _openProductOverlay),
               )
             : _forbidden();
@@ -609,9 +617,9 @@ class _AdminScaffoldState extends State<AdminScaffold> with TickerProviderStateM
                               ),
                             ),
 
-                          if (_showProductOverlay && activeMenu == "Products")
+                          if (_showProductOverlay && activeMenu == "Products" && _productsBloc != null)
                             BlocProvider.value(
-                              value: _productsBloc,
+                              value: _productsBloc!,
                               child: _OverlaySheet(
                                 controller: _overlayCtrl,
                                 backdropOpacity: _backdropOpacity,
