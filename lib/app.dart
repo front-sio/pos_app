@@ -78,6 +78,28 @@ class _PosBusinessAppState extends State<PosBusinessApp> {
       theme: AppTheme.lightTheme,
       initialRoute: _initialRoute,
       routes: {
+        '/': (_) => ConnectivityWrapper(
+          child: BlocConsumer<AuthBloc, AuthState>(
+            listenWhen: (previous, current) {
+              return previous is! AuthAuthenticated && current is AuthAuthenticated;
+            },
+            listener: (context, state) {
+              // No navigation needed - we're already at '/'
+            },
+            builder: (context, state) {
+              if (state is AuthAuthenticated) {
+                return const NetworkAwareWrapper(
+                  child: AdminScaffold(),
+                );
+              } else if (state is AuthUnauthenticated || state is AuthLoading || state is AuthFailure) {
+                return const LoginScreen();
+              }
+              return const Scaffold(
+                body: AppLoader.fullscreen(message: 'Preparing app...'),
+              );
+            },
+          ),
+        ),
         '/notifications': (_) => const NotificationsScreen(),
         '/settings': (_) => const CurrencySettingsScreen(),
         '/categories': (_) => const _ScopedCategoriesScreen(),
@@ -119,34 +141,6 @@ class _PosBusinessAppState extends State<PosBusinessApp> {
         builder: (_) => const _UnknownRouteScreen(),
         settings: settings,
       ),
-      home: _initialRoute == null ? ConnectivityWrapper(
-        child: BlocConsumer<AuthBloc, AuthState>(
-          listenWhen: (previous, current) {
-            // Only listen when transitioning to authenticated
-            return previous is! AuthAuthenticated && current is AuthAuthenticated;
-          },
-          listener: (context, state) {
-            // When user logs in, navigate to root and clear history
-            if (state is AuthAuthenticated) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
-              });
-            }
-          },
-          builder: (context, state) {
-            if (state is AuthAuthenticated) {
-              return const NetworkAwareWrapper(
-                child: AdminScaffold(),
-              );
-            } else if (state is AuthUnauthenticated || state is AuthLoading || state is AuthFailure) {
-              return const LoginScreen();
-            }
-            return const Scaffold(
-              body: AppLoader.fullscreen(message: 'Preparing app...'),
-            );
-          },
-        ),
-      ) : null,
     );
 
     return mainApp;
