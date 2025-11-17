@@ -120,18 +120,20 @@ class _PosBusinessAppState extends State<PosBusinessApp> {
         settings: settings,
       ),
       home: _initialRoute == null ? ConnectivityWrapper(
-        child: BlocBuilder<AuthBloc, AuthState>(
-          builder: (context, state) {
-            // Update URL when auth state changes
-            if (state is AuthAuthenticated || state is AuthUnauthenticated) {
+        child: BlocConsumer<AuthBloc, AuthState>(
+          listenWhen: (previous, current) {
+            // Only listen when transitioning to authenticated
+            return previous is! AuthAuthenticated && current is AuthAuthenticated;
+          },
+          listener: (context, state) {
+            // When user logs in, navigate to root and clear history
+            if (state is AuthAuthenticated) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (Navigator.of(context).canPop()) {
-                  // If we're on a different route (like /reset-password), go to root
-                  Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
-                }
+                Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
               });
             }
-            
+          },
+          builder: (context, state) {
             if (state is AuthAuthenticated) {
               return const NetworkAwareWrapper(
                 child: AdminScaffold(),
