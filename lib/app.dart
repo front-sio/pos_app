@@ -108,7 +108,7 @@ class _PosBusinessAppState extends State<PosBusinessApp> {
           
           if (token != null && token.isNotEmpty) {
             return MaterialPageRoute(
-              builder: (_) => ResetPasswordScreen(token: token),
+              builder: (_) => ResetPasswordScreen(token: token!),
               settings: settings,
             );
           }
