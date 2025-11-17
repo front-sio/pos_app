@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_web_plugins/url_strategy.dart';
 
 import 'package:sales_app/app.dart';
 import 'package:sales_app/config/config.dart';
@@ -102,9 +101,6 @@ import 'package:sales_app/widgets/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Use path-based URLs instead of hash (#) URLs for web
-  usePathUrlStrategy();
 
   final baseUrl = AppConfig.baseUrl;
   final httpClient = AuthHttpClient();
@@ -123,7 +119,7 @@ void main() async {
   final invoiceService = InvoiceService(baseUrl: baseUrl, client: httpClient);
   final reportsService = ReportsService(baseUrl: baseUrl);
   final reportsRepository = ReportsRepository(service: reportsService);
-  final usersApiService = UsersApiService(baseUrl: baseUrl, httpClient: httpClient);
+  final usersApiService = UsersApiService(baseUrl: baseUrl);
   final usersRepository = UsersRepository(api: usersApiService, auth: authRepository);
   final purchaseService = PurchaseService(baseUrl: baseUrl, client: httpClient);
   final dashboardService = DashboardService(purchaseService: purchaseService, salesService: salesService);
@@ -230,85 +226,23 @@ class _AuthenticatedAppState extends State<_AuthenticatedApp> {
           listener: (context, state) {
             if (state is AuthAuthenticated) {
               // Start notifications with token
-              try {
-                context.read<NotificationBloc>().add(StartNotifications(token: state.token));
-              } catch (e) {
-                print('Error starting notifications: $e');
-              }
+              context.read<NotificationBloc>().add(StartNotifications(token: state.token));
               
-              // Delay data loading to ensure AdminScaffold is ready
-              Future.delayed(const Duration(milliseconds: 100), () {
-                if (!context.mounted) return;
-                
-                // Wrap all data loading in try-catch to prevent crashes
-                try {
-                  context.read<ProductsBloc>().add(FetchProducts());
-                } catch (e) {
-                  print('Error loading products: $e');
-                }
-                
-                try {
-                  context.read<StockBloc>().add(const LoadProducts(page: 1));
-                } catch (e) {
-                  print('Error loading stock: $e');
-                }
-                
-                try {
-                  context.read<CustomerBloc>().add(FetchCustomersPage(1, 20));
-                } catch (e) {
-                  print('Error loading customers: $e');
-                }
-                
-                try {
-                  context.read<SupplierBloc>().add(FetchSuppliersPage(1, 20));
-                } catch (e) {
-                  print('Error loading suppliers: $e');
-                }
-                
-                try {
-                  context.read<InvoiceBloc>().add(const LoadInvoices());
-                } catch (e) {
-                  print('Error loading invoices: $e');
-                }
-                
-                try {
-                  context.read<ProfitBloc>().add(LoadProfit(period: 'Today', view: 'Daily'));
-                } catch (e) {
-                  print('Error loading profits: $e');
-                }
-                
-                try {
-                  context.read<ReportsBloc>().add(LoadDailyReport(DateTime.now()));
-                } catch (e) {
-                  print('Error loading reports: $e');
-                }
-                
-                try {
-                  context.read<UsersBloc>().add(LoadUsers());
-                } catch (e) {
-                  print('Error loading users: $e');
-                }
-                
-                try {
-                  context.read<SettingsBloc>().add(const LoadSettings());
-                  context.read<SettingsBloc>().add(const LoadCurrencies());
-                } catch (e) {
-                  print('Error loading settings: $e');
-                }
-                
-                try {
-                  context.read<ExpenseBloc>().add(const LoadExpenses());
-                } catch (e) {
-                  print('Error loading expenses: $e');
-                }
-              });
+              // Load other data
+              context.read<ProductsBloc>().add(FetchProducts());
+              context.read<StockBloc>().add(const LoadProducts(page: 1));
+              context.read<CustomerBloc>().add(FetchCustomersPage(1, 20));
+              context.read<SupplierBloc>().add(FetchSuppliersPage(1, 20));
+              context.read<InvoiceBloc>().add(const LoadInvoices());
+              context.read<ProfitBloc>().add(LoadProfit(period: 'Today', view: 'Daily'));
+              context.read<ReportsBloc>().add(LoadDailyReport(DateTime.now()));
+              context.read<UsersBloc>().add(LoadUsers());
+              context.read<SettingsBloc>().add(const LoadSettings());
+              context.read<SettingsBloc>().add(const LoadCurrencies());
+              context.read<ExpenseBloc>().add(const LoadExpenses());
             }
             if (state is AuthUnauthenticated) {
-              try {
-                context.read<NotificationBloc>().add(const StopNotifications());
-              } catch (e) {
-                print('Error stopping notifications: $e');
-              }
+              context.read<NotificationBloc>().add(const StopNotifications());
             }
           },
           child: const PosBusinessApp(),
