@@ -22,6 +22,10 @@ COPY --chown=ubuntu:ubuntu . .
 # Build Flutter web
 RUN flutter build web --release --no-tree-shake-icons
 
+# Remove source map references to prevent console errors
+COPY --chown=ubuntu:ubuntu remove_sourcemaps.sh ./
+RUN chmod +x remove_sourcemaps.sh && ./remove_sourcemaps.sh
+
 # Stage 2: Serve with Nginx
 FROM nginx:alpine
 
