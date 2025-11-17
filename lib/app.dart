@@ -100,12 +100,9 @@ class _PosBusinessAppState extends State<PosBusinessApp> {
                     return const NetworkAwareWrapper(
                       child: AdminScaffold(),
                     );
-                  } else if (state is AuthUnauthenticated || state is AuthLoading || state is AuthFailure) {
-                    return const LoginScreen();
                   }
-                  return const Scaffold(
-                    body: AppLoader.fullscreen(message: 'Preparing app...'),
-                  );
+                  // Show login screen for any non-authenticated state
+                  return const LoginScreen();
                 },
               ),
             ),
