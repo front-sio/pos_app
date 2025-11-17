@@ -4,6 +4,32 @@ A comprehensive Point of Sale (POS) and Sales Management System built with Flutt
 
 ## Recent Updates (Nov 17, 2025)
 
+### Flutter Web Build Errors Fixed (Nov 17, 2025)
+- ✅ **Source Map Console Errors Fixed** - Removed invalid source map references from production builds
+- ✅ **Null Check Error Fixed** - Deferred CategoryBloc and UnitBloc data loading until after authentication
+- ✅ **Build Pipeline Updated** - Integrated sourcemap cleanup into Docker and Vercel builds
+
+**Problems Fixed:**
+1. Browser console showed source map error: `Error: JSON.parse: unexpected character at line 1 column 1 of the JSON data` when trying to load `flutter.js.map`
+2. Runtime error "Null check operator used on a null value" occurring after session restoration
+
+**Solutions:**
+1. Created `remove_sourcemaps.sh` script that strips source map references from Flutter-generated JavaScript files
+   - Integrated into Docker build process (Dockerfile)
+   - Integrated into Vercel build process (vercel_build.sh)
+   - Can be run manually after `flutter build web`
+
+2. Fixed null check error by deferring data loading:
+   - Removed immediate `.add(LoadCategories())` and `.add(LoadUnits())` from bloc initialization
+   - Moved data loading to post-authentication callback where all other data loading occurs
+   - Wrapped in try-catch blocks to prevent crashes on error
+
+**Technical Details:**
+- Flutter generates `flutter_bootstrap.js` with a sourcemap comment `//# sourceMappingURL=flutter.js.map`
+- However, Flutter doesn't generate actual source map files in release builds
+- This causes harmless but annoying console errors in browser developer tools
+- The script removes these references after the build completes
+
 ### Product Cart Refresh Fix (Nov 17, 2025)
 - ✅ **Fixed Product Visibility in Cart** - New products now appear immediately in cart selector
 - ✅ **Removed Conditional Loading** - Cart screen now always refreshes product list on entry
