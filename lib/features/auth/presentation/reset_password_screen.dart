@@ -106,11 +106,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       await Future.delayed(const Duration(seconds: 3));
       if (!mounted) return;
       
-      // Navigate to login screen by replacing all routes
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
-        (route) => false,
-      );
+      // Navigate to login screen and update URL
+      Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
     } catch (e) {
       setState(() {
         _errorMessage = e.toString();

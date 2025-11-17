@@ -122,6 +122,16 @@ class _PosBusinessAppState extends State<PosBusinessApp> {
       home: _initialRoute == null ? ConnectivityWrapper(
         child: BlocBuilder<AuthBloc, AuthState>(
           builder: (context, state) {
+            // Update URL when auth state changes
+            if (state is AuthAuthenticated || state is AuthUnauthenticated) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (Navigator.of(context).canPop()) {
+                  // If we're on a different route (like /reset-password), go to root
+                  Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+                }
+              });
+            }
+            
             if (state is AuthAuthenticated) {
               return const NetworkAwareWrapper(
                 child: AdminScaffold(),
