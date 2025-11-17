@@ -232,18 +232,22 @@ class _AuthenticatedAppState extends State<_AuthenticatedApp> {
               // Start notifications with token
               context.read<NotificationBloc>().add(StartNotifications(token: state.token));
               
-              // Load other data
-              context.read<ProductsBloc>().add(FetchProducts());
-              context.read<StockBloc>().add(const LoadProducts(page: 1));
-              context.read<CustomerBloc>().add(FetchCustomersPage(1, 20));
-              context.read<SupplierBloc>().add(FetchSuppliersPage(1, 20));
-              context.read<InvoiceBloc>().add(const LoadInvoices());
-              context.read<ProfitBloc>().add(LoadProfit(period: 'Today', view: 'Daily'));
-              context.read<ReportsBloc>().add(LoadDailyReport(DateTime.now()));
-              context.read<UsersBloc>().add(LoadUsers());
-              context.read<SettingsBloc>().add(const LoadSettings());
-              context.read<SettingsBloc>().add(const LoadCurrencies());
-              context.read<ExpenseBloc>().add(const LoadExpenses());
+              // Delay data loading to ensure AdminScaffold is ready
+              Future.delayed(const Duration(milliseconds: 100), () {
+                if (context.mounted) {
+                  context.read<ProductsBloc>().add(FetchProducts());
+                  context.read<StockBloc>().add(const LoadProducts(page: 1));
+                  context.read<CustomerBloc>().add(FetchCustomersPage(1, 20));
+                  context.read<SupplierBloc>().add(FetchSuppliersPage(1, 20));
+                  context.read<InvoiceBloc>().add(const LoadInvoices());
+                  context.read<ProfitBloc>().add(LoadProfit(period: 'Today', view: 'Daily'));
+                  context.read<ReportsBloc>().add(LoadDailyReport(DateTime.now()));
+                  context.read<UsersBloc>().add(LoadUsers());
+                  context.read<SettingsBloc>().add(const LoadSettings());
+                  context.read<SettingsBloc>().add(const LoadCurrencies());
+                  context.read<ExpenseBloc>().add(const LoadExpenses());
+                }
+              });
             }
             if (state is AuthUnauthenticated) {
               context.read<NotificationBloc>().add(const StopNotifications());

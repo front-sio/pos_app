@@ -96,20 +96,40 @@ class _PosBusinessAppState extends State<PosBusinessApp> {
                   // No navigation needed - we're already at '/'
                 },
                 builder: (context, state) {
+                  // Show authenticated scaffold
                   if (state is AuthAuthenticated) {
                     return const NetworkAwareWrapper(
                       child: AdminScaffold(),
                     );
                   }
+                  
+                  // Show loading during auth check
                   if (state is AuthInitial || state is AuthLoading) {
-                    // Show loading while checking auth status
-                    return const Scaffold(
+                    return Scaffold(
+                      backgroundColor: const Color.fromARGB(255, 5, 49, 107),
                       body: Center(
-                        child: CircularProgressIndicator(),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                            const SizedBox(height: 24),
+                            Text(
+                              'Loading...',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.9),
+                                fontSize: 14,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   }
-                  // Show login screen for unauthenticated state
+                  
+                  // Show login screen for unauthenticated
                   return const LoginScreen();
                 },
               ),
