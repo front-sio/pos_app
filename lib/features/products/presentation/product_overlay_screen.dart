@@ -801,6 +801,12 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
 
     context.read<ProductsBloc>().add(AddProduct(data));
     _snack('Creating product...');
+    // Refresh products list after adding to ensure all screens see the new product
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) {
+        context.read<ProductsBloc>().add(FetchProducts());
+      }
+    });
     widget.onSaved?.call();
   }
 
@@ -823,6 +829,12 @@ class _ProductOverlayScreenState extends State<ProductOverlayScreen> {
 
     context.read<ProductsBloc>().add(UpdateProductEvent(product.id, updated));
     _snack('Saving changes...');
+    // Refresh products list after updating to ensure all screens see the changes
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) {
+        context.read<ProductsBloc>().add(FetchProducts());
+      }
+    });
     widget.onSaved?.call();
   }
 }
