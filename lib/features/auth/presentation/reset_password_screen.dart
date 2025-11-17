@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:html' as html show window;
 import 'package:sales_app/config/config.dart';
 import 'package:sales_app/features/auth/data/auth_api_service.dart';
-import 'package:sales_app/features/auth/presentation/login_screen.dart';
 import 'package:sales_app/constants/colors.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
@@ -106,7 +107,12 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       await Future.delayed(const Duration(seconds: 3));
       if (!mounted) return;
       
-      // Navigate to login screen and update URL
+      // Update browser URL on web to clear the reset-password token
+      if (kIsWeb) {
+        html.window.history.pushState(null, 'Login', '/');
+      }
+      
+      // Navigate to login screen
       Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
     } catch (e) {
       setState(() {
