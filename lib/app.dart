@@ -101,7 +101,15 @@ class _PosBusinessAppState extends State<PosBusinessApp> {
                       child: AdminScaffold(),
                     );
                   }
-                  // Show login screen for any non-authenticated state
+                  if (state is AuthInitial || state is AuthLoading) {
+                    // Show loading while checking auth status
+                    return const Scaffold(
+                      body: Center(
+                        child: CircularProgressIndicator(),
+                      ),
+                    );
+                  }
+                  // Show login screen for unauthenticated state
                   return const LoginScreen();
                 },
               ),
