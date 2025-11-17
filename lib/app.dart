@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:html' as html show window;
 import 'package:sales_app/features/auth/logic/auth_bloc.dart';
 import 'package:sales_app/features/auth/logic/auth_state.dart';
 import 'package:sales_app/features/auth/presentation/login_screen.dart';
@@ -84,8 +86,26 @@ class _PosBusinessAppState extends State<PosBusinessApp> {
       onGenerateRoute: (settings) {
         // Handle reset-password route with query parameters
         if (settings.name != null && settings.name!.startsWith('/reset-password')) {
-          final uri = Uri.parse(settings.name!);
-          final token = uri.queryParameters['token'];
+          String? token;
+          
+          // Try to parse from settings.name first
+          try {
+            final uri = Uri.parse(settings.name!);
+            token = uri.queryParameters['token'];
+          } catch (e) {
+            // Ignore parsing errors
+          }
+          
+          // If no token found and we're on web, check browser URL
+          if ((token == null || token.isEmpty) && kIsWeb) {
+            try {
+              final browserUri = Uri.parse(html.window.location.href);
+              token = browserUri.queryParameters['token'];
+            } catch (e) {
+              // Ignore parsing errors
+            }
+          }
+          
           if (token != null && token.isNotEmpty) {
             return MaterialPageRoute(
               builder: (_) => ResetPasswordScreen(token: token),
