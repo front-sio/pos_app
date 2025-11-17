@@ -160,4 +160,13 @@ class SalesService {
     if (v is String) return int.tryParse(v);
     return null;
   }
+
+  // Delete sale
+  Future<void> deleteSale(int saleId) async {
+    final uri = Uri.parse('$baseUrl/sales/$saleId');
+    final res = await http.delete(uri, headers: {'Accept': 'application/json'});
+    if (res.statusCode != 200 && res.statusCode != 204) {
+      throw Exception('Failed to delete sale (${res.statusCode}): ${res.body}');
+    }
+  }
 }

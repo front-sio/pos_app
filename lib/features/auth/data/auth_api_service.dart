@@ -196,4 +196,54 @@ class AuthApiService {
     }
     return null;
   }
+
+  Future<Map<String, dynamic>> resetPassword(String token, String newPassword, {String? newUsername}) async {
+    try {
+      final body = {
+        "token": token,
+        "new_password": newPassword,
+      };
+      if (newUsername != null && newUsername.trim().isNotEmpty) {
+        body["new_username"] = newUsername.trim();
+      }
+
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/auth/reset-password'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        return _safeDecode(response.body);
+      }
+
+      final Map<String, dynamic> responseBody = _safeDecode(response.body);
+      final serverMessage = _extractMessage(responseBody);
+
+      throw ApiException(
+        serverMessage ?? 'Imeshindwa kubadilisha nywila. Tafadhali jaribu tena.',
+        statusCode: response.statusCode,
+        type: ApiErrorType.http,
+      );
+    } on SocketException {
+      throw ApiException(
+        'Imeshindwa kuunganisha na server. Angalia muunganisho wako wa mtandao.',
+        type: ApiErrorType.network,
+      );
+    } on TimeoutException {
+      throw ApiException(
+        'Muda umeisha. Tafadhali jaribu tena.',
+        type: ApiErrorType.timeout,
+      );
+    } catch (e) {
+      if (e is ApiException) rethrow;
+      throw ApiException(
+        'Tatizo limetokea. Tafadhali jaribu tena.',
+        type: ApiErrorType.unknown,
+        originalError: e,
+      );
+    }
+  }
 }

@@ -119,7 +119,7 @@ void main() async {
   final invoiceService = InvoiceService(baseUrl: baseUrl, client: httpClient);
   final reportsService = ReportsService(baseUrl: baseUrl);
   final reportsRepository = ReportsRepository(service: reportsService);
-  final usersApiService = UsersApiService(baseUrl: baseUrl);
+  final usersApiService = UsersApiService(baseUrl: baseUrl, httpClient: httpClient);
   final usersRepository = UsersRepository(api: usersApiService, auth: authRepository);
   final purchaseService = PurchaseService(baseUrl: baseUrl, client: httpClient);
   final dashboardService = DashboardService(purchaseService: purchaseService, salesService: salesService);

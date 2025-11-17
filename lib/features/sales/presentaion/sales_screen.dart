@@ -259,6 +259,54 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
     );
   }
 
+  Future<void> _deleteSale(Sale sale) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Sale?'),
+        content: Text(
+          'Are you sure you want to delete Sale #${sale.id}?\n\n'
+          'This action cannot be undone and will permanently remove the sale record.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await SalesService().deleteSale(sale.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Sale #${sale.id} deleted successfully'),
+            backgroundColor: AppColors.kSuccess,
+          ),
+        );
+        context.read<SalesBloc>().add(const LoadSales());
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete sale: $e'),
+            backgroundColor: AppColors.kError,
+          ),
+        );
+      }
+    }
+  }
+
   Widget _buildSummary(List<Sale> sales) {
     double totalItemsQty = 0;
     int paid = 0, credited = 0, unpaid = 0;
@@ -468,6 +516,11 @@ class _SalesScreenState extends State<SalesScreen> with WidgetsBindingObserver {
                                           ),
                                         ],
                                       ),
+                                    ),
+                                    IconButton(
+                                      icon: Icon(Icons.delete_outline, color: Colors.red.shade400, size: 22),
+                                      onPressed: () => _deleteSale(sale),
+                                      tooltip: 'Delete Sale',
                                     ),
                                   ],
                                 ),

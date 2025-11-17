@@ -2,7 +2,172 @@
 
 A comprehensive Point of Sale (POS) and Sales Management System built with Flutter. This mobile/desktop application provides a complete interface for managing sales, inventory, customers, and business operations.
 
-## Recent Updates (Nov 15, 2025)
+## Recent Updates (Nov 17, 2025)
+
+### Product Cart Refresh Fix (Nov 17, 2025)
+- ✅ **Fixed Product Visibility in Cart** - New products now appear immediately in cart selector
+- ✅ **Removed Conditional Loading** - Cart screen now always refreshes product list on entry
+- ✅ **No Login Required** - Products created immediately visible without logout/login cycle
+
+**Problem Fixed:**
+When creating a new product and immediately going to sale → new sale → add item, the new product was not visible in the cart's product selector until logout/login. This was because the cart screen only loaded products if they weren't already loaded, so newly created products weren't fetched.
+
+**Solution:**
+Modified `_loadProducts()` in `product_cart_screen.dart` to always call `FetchProducts()` when the cart screen initializes, ensuring the latest products are always available.
+
+### Email Templates & Reset Password (Nov 15, 2025)
+- ✅ **Simplified Email Templates** - Clean table-based layouts that render properly in all email clients
+- ✅ **Reset Password Deep Links FIXED** - Email links now properly route to reset password page
+- ✅ **Skip Splash for Reset Links** - App detects reset links and bypasses splash screen
+- ✅ **Initial Route Handling** - App correctly handles /reset-password?token=xxx URLs on page load
+- ✅ **Beautiful Welcome Emails** - Simple, professional design with credentials clearly displayed
+- ✅ **Mobile-Responsive Emails** - Table-based layouts work on all devices and email clients
+- ✅ **Invoice PDF Attachments** - Invoices automatically sent as PDF attachments via email
+- ✅ **Auto-resend on Changes** - Invoice emails resent when payment/discount applied
+
+**Email Improvements:**
+- Removed CSS that breaks in some email clients (gradients, transforms, complex selectors)
+- Using inline styles and table-based layouts for maximum compatibility
+- Clear credential display with code formatting
+- Prominent call-to-action buttons
+- Clean, professional design that works everywhere
+
+**Reset Password Fix (CRITICAL):**
+- ✅ Detects reset-password URL on app initialization
+- ✅ Skips splash screen if reset link detected
+- ✅ Sets `initialRoute` parameter correctly
+- ✅ Removes `home` widget when `initialRoute` is set (they conflict!)
+- ✅ Users clicking email links now land directly on reset password page
+- ✅ No more redirect to login screen on initial link click
+- ✅ **After successful password reset, properly redirects to login page**
+- ✅ Uses `MaterialPageRoute` instead of named routes for reliability
+- ✅ Shows success message with "Redirecting to login page..." notification
+
+**Invoice PDF Email Attachments (IMPLEMENTED):**
+- ✅ **Professional billing-style email format** - Clear, direct communication
+- ✅ **Fast PDF generation** - Simplified template for quick delivery
+- ✅ **Automatic on sale completion** - PDF generated and emailed immediately
+- ✅ Backend timeout increased to 30s (from 10s) for large invoices
+- ✅ **Email format like professional billing services:**
+  - Header: "[Company Name] - Billing Team"
+  - Clear greeting with customer name
+  - Invoice details in highlighted box (Number, Date, Status, Amount)
+  - **"📎 INVOICE PDF ATTACHED"** notice in green box
+  - Payment instructions (for unpaid invoices)
+  - Professional footer with company info
+- ✅ **PDF attachment** (invoice-{id}.pdf) with complete line items
+- ✅ Customer can download PDF for printing/records
+- ✅ Subject line indicates status: "Invoice #123" or "Invoice #123 - PAID"
+- ✅ Different messages for paid/unpaid invoices
+- ✅ Sent automatically on: invoice creation, payment, discount
+- ✅ Graceful fallback if PDF generation fails
+
+### Enhanced RBAC & User Management (Nov 15, 2025)
+- ✅ **Role-Based Permission Assignment** - Assign permissions to roles dynamically
+- ✅ **Create Permissions from UI** - Users with manager/superuser can create new permissions
+- ✅ **Assign Roles to Users** - Manager can assign roles to users
+- ✅ **Role Management UI** - View roles with expandable permission lists
+- ✅ **Permission Management** - Assign/revoke permissions from roles
+- ✅ **User Registration Email** - Users created by manager receive welcome email with reset link
+- ✅ **Password Reset for All Users** - Users registered from UI can reset password via email
+- ✅ **Invoice Email Notifications** - Customers receive invoice emails automatically
+- ✅ **Manual Invoice Email** - Send invoice emails manually via API endpoint
+- ✅ **Delete Operations (Manager/Superuser):**
+  - Delete invoices (DELETE /invoices/:id) - **Frontend: deleteInvoice()**
+  - Delete sales (DELETE /sales/:id) - **Frontend: deleteSale()**
+  - Deactivate users (DELETE /auth/users/:id/deactivate) - **Frontend: deactivateUser()**
+  - Delete users permanently (DELETE /auth/users/:id) - **Frontend: deleteUser()**
+  - Delete roles (DELETE /auth/roles/:id) - **Frontend: deleteRole()**
+  - Delete permissions (DELETE /auth/permissions/:id) - **Frontend: deletePermission()**
+- ✅ **Edit Operations (Manager/Superuser):**
+  - Edit roles (PUT /auth/roles/:id) - **Frontend: updateRole()**
+  - Edit permissions (PUT /auth/permissions/:id) - **Frontend: updatePermission()**
+  - Update invoices (PUT /invoices/:id)
+- ✅ **Permission-based access control** - All operations require proper permissions
+- ✅ **Frontend API Services Updated:**
+  - InvoiceService: Added deleteInvoice()
+  - SalesService: Added deleteSale()
+  - UsersApiService: Added deactivateUser(), deleteUser(), deleteRole(), deletePermission(), updateRole(), updatePermission()
+- ✅ **UI Delete Buttons Added:**
+  - **Invoices Screen**: Delete button appears on hover for each invoice card
+  - **Sales Screen**: Delete button visible on each sale card
+  - **Confirmation dialogs** with clear warnings before deletion
+  - **Success/error notifications** after delete operations
+  - **Auto-refresh** of lists after successful deletion
+
+**Features:**
+- Manager and superuser roles can create roles and permissions
+- Assign multiple permissions to roles with visual UI
+- Users receive email with temporary credentials and password reset link
+- Password reset works for both self-registered and manager-created users
+- Invoice emails sent automatically when invoice is created
+- Manual invoice email sending available via `/invoices/:id/send-email` endpoint
+
+**User Management:**
+- View Users, Roles, and Permissions in separate tabs
+- Create users with role assignment
+- Resend password reset links for any user
+- Assign/revoke roles from users
+- Expandable role cards showing assigned permissions
+- Easy permission assignment/revocation with visual feedback
+- **Detailed success messages showing email status and recipient**
+- **UI shows whether email was sent or logged to console**
+
+**Email Features:**
+- Welcome emails with initial credentials for new users
+- Password reset links with expiration
+- Invoice emails with formatted HTML templates
+- Customer invoice notifications on creation
+- SMTP configuration via environment variables
+- **Beautiful, responsive HTML email templates with gradients and modern design**
+- Client host URL automatically detected for correct reset links
+
+**📧 Email Configuration (Optional):**
+
+Email features are **optional** and work without configuration. If SMTP is not configured:
+- The system logs credentials and reset tokens to the console
+- All other features continue to work normally
+- Users can still be created and managed
+
+**Default Password for Manager-Created Users:**
+- Users created by managers get a default password: `Welcome@123` (configurable)
+- The default password is sent to the user's email (or logged to console if email not configured)
+- Users must change this password on first login via the reset link
+- Configure via `DEFAULT_USER_PASSWORD` in `.env`
+
+To enable email functionality, add these variables to your `.env` files:
+
+**For auth-service** (`sales-gateway/auth-service/.env`):
+```bash
+# Email Configuration (Optional)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
+FROM_EMAIL=noreply@yourdomain.com
+APP_NAME=Sales Management System
+RESET_PASSWORD_URL=http://localhost:33117/reset-password
+RESET_TOKEN_TTL_HOURS=24
+
+# Default password for users created by manager
+DEFAULT_USER_PASSWORD=Welcome@123
+```
+
+**For invoices-service** (`sales-gateway/invoices-service/.env`):
+```bash
+# Email Configuration (Optional)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
+FROM_EMAIL=noreply@yourdomain.com
+APP_NAME=Sales Management System
+CUSTOMERS_SERVICE_URL=http://localhost:3019
+```
+
+**Note:** For Gmail, use an [App Password](https://support.google.com/accounts/answer/185833) instead of your regular password.
 
 ### PWA Features Removed (Nov 15, 2025)
 - ✅ **Removed PWA/Service Worker** - Disabled all Progressive Web App features

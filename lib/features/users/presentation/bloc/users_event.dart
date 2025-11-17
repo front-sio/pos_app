@@ -61,3 +61,26 @@ class UpdateUserRequested extends UsersEvent {
   @override
   List<Object?> get props => [userId, payload];
 }
+
+class AssignPermissionToRoleRequested extends UsersEvent {
+  final int roleId;
+  final int permissionId;
+  AssignPermissionToRoleRequested(this.roleId, this.permissionId);
+  @override
+  List<Object?> get props => [roleId, permissionId];
+}
+
+class RevokePermissionFromRoleRequested extends UsersEvent {
+  final int roleId;
+  final int permissionId;
+  RevokePermissionFromRoleRequested(this.roleId, this.permissionId);
+  @override
+  List<Object?> get props => [roleId, permissionId];
+}
+
+class LoadRolePermissions extends UsersEvent {
+  final int roleId;
+  LoadRolePermissions(this.roleId);
+  @override
+  List<Object?> get props => [roleId];
+}

@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:sales_app/features/auth/logic/auth_bloc.dart';
 import 'package:sales_app/features/auth/logic/auth_state.dart';
 import 'package:sales_app/features/auth/presentation/login_screen.dart';
+import 'package:sales_app/features/auth/presentation/reset_password_screen.dart';
 import 'package:sales_app/features/settings/presentation/currency_settings_screen.dart';
 import 'package:sales_app/theme/app_theme.dart';
 import 'package:sales_app/widgets/admin_scaffold.dart';
@@ -28,10 +29,32 @@ class PosBusinessApp extends StatefulWidget {
 
 class _PosBusinessAppState extends State<PosBusinessApp> {
   bool _showSplash = true;
+  String? _initialRoute;
+
+  @override
+  void initState() {
+    super.initState();
+    // Get initial route from browser URL
+    _initialRoute = _getInitialRoute();
+  }
+
+  String? _getInitialRoute() {
+    try {
+      // For web, get the current URL path and query
+      final uri = Uri.base;
+      if (uri.path.contains('reset-password') && uri.queryParameters.containsKey('token')) {
+        return '${uri.path}?token=${uri.queryParameters['token']}';
+      }
+    } catch (e) {
+      print('Error getting initial route: $e');
+    }
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (_showSplash) {
+    // Skip splash if we have a reset password link
+    if (_showSplash && _initialRoute == null) {
       return MaterialApp(
         debugShowCheckedModeBanner: false,
         home: SplashScreen(
@@ -46,21 +69,37 @@ class _PosBusinessAppState extends State<PosBusinessApp> {
       );
     }
 
-    return MaterialApp(
+    // Build main app
+    final mainApp = MaterialApp(
       title: "Business App",
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
+      initialRoute: _initialRoute,
       routes: {
         '/notifications': (_) => const NotificationsScreen(),
         '/settings': (_) => const CurrencySettingsScreen(),
         '/categories': (_) => const _ScopedCategoriesScreen(),
         '/units': (_) => const _ScopedUnitsScreen(),
       },
+      onGenerateRoute: (settings) {
+        // Handle reset-password route with query parameters
+        if (settings.name != null && settings.name!.startsWith('/reset-password')) {
+          final uri = Uri.parse(settings.name!);
+          final token = uri.queryParameters['token'];
+          if (token != null && token.isNotEmpty) {
+            return MaterialPageRoute(
+              builder: (_) => ResetPasswordScreen(token: token),
+              settings: settings,
+            );
+          }
+        }
+        return null;
+      },
       onUnknownRoute: (settings) => MaterialPageRoute(
         builder: (_) => const _UnknownRouteScreen(),
         settings: settings,
       ),
-      home: ConnectivityWrapper(
+      home: _initialRoute == null ? ConnectivityWrapper(
         child: BlocBuilder<AuthBloc, AuthState>(
           builder: (context, state) {
             if (state is AuthAuthenticated) {
@@ -68,18 +107,17 @@ class _PosBusinessAppState extends State<PosBusinessApp> {
                 child: AdminScaffold(),
               );
             } else if (state is AuthUnauthenticated || state is AuthLoading || state is AuthFailure) {
-              // Stay on login screen for unauthenticated, loading, and failure states
-              // Login screen handles its own loading UI and error messages
               return const LoginScreen();
             }
-            // Initial loading when app starts (AuthInitial)
             return const Scaffold(
               body: AppLoader.fullscreen(message: 'Preparing app...'),
             );
           },
         ),
-      ),
+      ) : null,
     );
+
+    return mainApp;
   }
 }
 

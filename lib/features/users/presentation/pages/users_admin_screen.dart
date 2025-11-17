@@ -21,9 +21,10 @@ class _UsersAdminScreenState extends State<UsersAdminScreen> {
   List<UserModel> _lastUsers = [];
   List<RoleModel> _lastRoles = [];
   List<PermissionModel> _lastPermissions = [];
+  Map<int, List<PermissionModel>> _rolePermissionsCache = {};
   bool _isSearching = false;
 
-  // 0 = Users, 1 = Permissions
+  // 0 = Users, 1 = Roles, 2 = Permissions
   int _viewIndex = 0;
 
   @override
@@ -251,7 +252,8 @@ class _UsersAdminScreenState extends State<UsersAdminScreen> {
                         'last_name': lastName.text.trim(),
                         'gender': gender,
                         'role_id': selectedRoleId,
-                        'send_reset': true
+                        'send_reset': true,
+                        'client_host': Uri.base.origin,
                       };
                       context.read<UsersBloc>().add(CreateUserWithRoleRequested(payload));
                       Navigator.pop(ctx, true);
@@ -370,6 +372,102 @@ class _UsersAdminScreenState extends State<UsersAdminScreen> {
     );
   }
 
+  Widget _buildRoleTile(RoleModel role, List<PermissionModel> allPermissions) {
+    return Card(
+      elevation: 1,
+      margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+      child: ExpansionTile(
+        title: Text(role.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+        subtitle: role.description != null ? Text(role.description!) : null,
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.add),
+              tooltip: 'Assign Permission',
+              onPressed: () => _showAssignPermissionDialog(role, allPermissions),
+            ),
+          ],
+        ),
+        children: [
+          FutureBuilder<List<PermissionModel>>(
+            future: context.read<UsersBloc>().repository.getRolePermissions(role.id),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+              if (snapshot.hasError) {
+                return Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Text('Error: ${snapshot.error}'),
+                );
+              }
+              final permissions = snapshot.data ?? [];
+              if (permissions.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Text('No permissions assigned to this role'),
+                );
+              }
+              return Column(
+                children: permissions.map((p) => ListTile(
+                  dense: true,
+                  title: Text(p.name),
+                  subtitle: p.description != null ? Text(p.description!) : null,
+                  trailing: IconButton(
+                    icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
+                    tooltip: 'Revoke Permission',
+                    onPressed: () {
+                      context.read<UsersBloc>().add(RevokePermissionFromRoleRequested(role.id, p.id));
+                    },
+                  ),
+                )).toList(),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showAssignPermissionDialog(RoleModel role, List<PermissionModel> allPermissions) async {
+    int? selectedPermissionId;
+    final result = await showDialog<int?>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: Text('Assign Permission to ${role.name}'),
+          content: StatefulBuilder(
+            builder: (context, setState) {
+              return DropdownButtonFormField<int>(
+                value: selectedPermissionId,
+                decoration: const InputDecoration(labelText: 'Permission'),
+                items: allPermissions.map((p) => DropdownMenuItem(value: p.id, child: Text(p.name))).toList(),
+                onChanged: (v) {
+                  selectedPermissionId = v;
+                  setState(() {});
+                },
+              );
+            },
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, null), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, selectedPermissionId),
+              child: const Text('Assign'),
+            ),
+          ],
+        );
+      },
+    );
+    if (result != null) {
+      context.read<UsersBloc>().add(AssignPermissionToRoleRequested(role.id, result));
+    }
+  }
+
   Widget _buildEmptyState() {
     return Center(
       child: Padding(
@@ -482,9 +580,15 @@ class _UsersAdminScreenState extends State<UsersAdminScreen> {
                 ),
                 const SizedBox(width: 8),
                 ChoiceChip(
-                  label: const Text('Permissions'),
+                  label: const Text('Roles'),
                   selected: _viewIndex == 1,
                   onSelected: (_) => setState(() => _viewIndex = 1),
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: const Text('Permissions'),
+                  selected: _viewIndex == 2,
+                  onSelected: (_) => setState(() => _viewIndex = 2),
                 ),
               ]),
             ]),
@@ -515,6 +619,45 @@ class _UsersAdminScreenState extends State<UsersAdminScreen> {
           }
 
           if (_viewIndex == 1) {
+            // Roles view
+            final roles = _lastRoles;
+            final permissions = _lastPermissions;
+            if (roles.isEmpty) {
+              return RefreshIndicator(
+                onRefresh: () async {
+                  context.read<UsersBloc>().add(LoadRolesAndPermissions());
+                },
+                child: ListView(physics: const AlwaysScrollableScrollPhysics(), children: [
+                  const SizedBox(height: 48),
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(Icons.security_outlined, size: 72, color: Theme.of(context).colorScheme.primary.withOpacity(0.8)),
+                        const SizedBox(height: 12),
+                        const Text('No roles', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 8),
+                        const Text('No roles created yet. Tap Create Role to add one.'),
+                      ]),
+                    ),
+                  ),
+                ]),
+              );
+            }
+
+            return RefreshIndicator(
+              onRefresh: () async {
+                context.read<UsersBloc>().add(LoadRolesAndPermissions());
+              },
+              child: ListView.builder(
+                padding: const EdgeInsets.all(12),
+                itemCount: roles.length,
+                itemBuilder: (ctx, idx) => _buildRoleTile(roles[idx], permissions),
+              ),
+            );
+          }
+
+          if (_viewIndex == 2) {
             // Permissions view
             final perms = _lastPermissions;
             if (perms.isEmpty) {

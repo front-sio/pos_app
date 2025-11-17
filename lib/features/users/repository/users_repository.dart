@@ -63,10 +63,10 @@ class UsersRepository {
     await api.assignRole(token, userId, roleId);
   }
 
-  Future<void> resendReset(int userId) async {
+  Future<Map<String, dynamic>> resendReset(int userId) async {
     final token = await auth.getToken();
     if (token == null) throw Exception('Not authenticated');
-    await api.resendReset(token, userId);
+    return await api.resendReset(token, userId);
   }
 
   Future<void> deleteUser(int userId) async {
@@ -79,5 +79,24 @@ class UsersRepository {
     final token = await auth.getToken();
     if (token == null) throw Exception('Not authenticated');
     return await api.updateUser(token, userId, payload);
+  }
+
+  Future<Map<String, dynamic>> assignPermissionToRole(int roleId, int permissionId) async {
+    final token = await auth.getToken();
+    if (token == null) throw Exception('Not authenticated');
+    return await api.assignPermissionToRole(token, roleId, permissionId);
+  }
+
+  Future<Map<String, dynamic>> revokePermissionFromRole(int roleId, int permissionId) async {
+    final token = await auth.getToken();
+    if (token == null) throw Exception('Not authenticated');
+    return await api.revokePermissionFromRole(token, roleId, permissionId);
+  }
+
+  Future<List<PermissionModel>> getRolePermissions(int roleId) async {
+    final token = await auth.getToken();
+    if (token == null) throw Exception('Not authenticated');
+    final list = await api.getRolePermissions(token, roleId);
+    return list.map((e) => PermissionModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 }

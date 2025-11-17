@@ -93,9 +93,7 @@ class _ProductCartScreenState extends State<ProductCartScreen> with TickerProvid
 
   void _loadProducts() {
     final bloc = context.read<ProductsBloc>();
-    if (bloc.state is! ProductsLoaded) {
-      bloc.add(FetchProducts());
-    }
+    bloc.add(FetchProducts());
   }
 
   @override

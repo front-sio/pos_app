@@ -124,6 +124,54 @@ class _InvoicesScreenState extends State<InvoicesScreen> with SingleTickerProvid
     );
   }
 
+  Future<void> _deleteInvoice(Invoice invoice) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Invoice?'),
+        content: Text(
+          'Are you sure you want to delete Invoice #${invoice.id}?\n\n'
+          'This will permanently remove the invoice and all associated payments.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await context.read<InvoiceService>().deleteInvoice(invoice.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Invoice #${invoice.id} deleted successfully'),
+            backgroundColor: AppColors.kSuccess,
+          ),
+        );
+        context.read<InvoiceBloc>().add(const LoadInvoices());
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete invoice: $e'),
+            backgroundColor: AppColors.kError,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isWide = MediaQuery.of(context).size.width >= 900;
@@ -465,6 +513,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> with SingleTickerProvid
                 statusColor: _statusColor(list[i].status),
                 statusIcon: _statusIcon(list[i].status),
                 onTap: () => onTap(list[i]),
+                onDelete: () => _deleteInvoice(list[i]),
               ),
             ),
         ],
@@ -480,6 +529,7 @@ class _InvoiceCard extends StatefulWidget {
   final Color statusColor;
   final IconData statusIcon;
   final VoidCallback onTap;
+  final VoidCallback onDelete;
 
   const _InvoiceCard({
     required this.invoice,
@@ -488,6 +538,7 @@ class _InvoiceCard extends StatefulWidget {
     required this.statusColor,
     required this.statusIcon,
     required this.onTap,
+    required this.onDelete,
   });
 
   @override
@@ -631,8 +682,17 @@ class _InvoiceCardState extends State<_InvoiceCard> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                if (_hovered)
+                if (_hovered) ...[
+                  IconButton(
+                    icon: Icon(Icons.delete_outline, color: Colors.red.shade400, size: 20),
+                    onPressed: widget.onDelete,
+                    tooltip: 'Delete Invoice',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                  const SizedBox(width: 8),
                   Icon(Icons.arrow_forward, color: Colors.grey.shade400, size: 20),
+                ],
               ],
             ),
           ),

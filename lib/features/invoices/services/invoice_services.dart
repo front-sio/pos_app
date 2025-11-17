@@ -63,6 +63,7 @@ class InvoiceService {
     required String status,
     required List<int> saleIds,
     double discountAmount = 0,
+    String? pdfAttachment, // Base64 encoded PDF
   }) async {
     final uri = Uri.parse('$baseUrl/invoices');
     final body = jsonEncode({
@@ -71,6 +72,7 @@ class InvoiceService {
       'status': status,
       'sales': saleIds,
       if (discountAmount > 0) 'discount_amount': double.parse(discountAmount.toStringAsFixed(2)),
+      if (pdfAttachment != null) 'pdf_attachment': pdfAttachment,
     });
     final res = await _client.post(uri, headers: _jsonHeaders, body: body);
     if (res.statusCode != 201 && res.statusCode != 200) throw _err('Failed to create invoice', res);
@@ -84,9 +86,16 @@ class InvoiceService {
     throw Exception('Create invoice succeeded but could not parse id');
   }
 
-  Future<void> addPayment({required int invoiceId, required double amount}) async {
+  Future<void> addPayment({
+    required int invoiceId, 
+    required double amount,
+    String? pdfAttachment, // Base64 encoded PDF
+  }) async {
     final uri = Uri.parse('$baseUrl/invoices/$invoiceId/payments');
-    final payload = jsonEncode({'amount': double.parse(amount.toStringAsFixed(2))});
+    final payload = jsonEncode({
+      'amount': double.parse(amount.toStringAsFixed(2)),
+      if (pdfAttachment != null) 'pdf_attachment': pdfAttachment,
+    });
     final res = await _client.post(uri, headers: _jsonHeaders, body: payload);
     if (res.statusCode != 201 && res.statusCode != 200) throw _err('Failed to add payment', res);
   }
@@ -128,5 +137,14 @@ class InvoiceService {
       return decoded.map((e) => e is int ? e : int.tryParse(e.toString()) ?? 0).where((e) => e > 0).toList();
     }
     return const <int>[];
+  }
+
+  // Delete invoice
+  Future<void> deleteInvoice(int invoiceId) async {
+    final uri = Uri.parse('$baseUrl/invoices/$invoiceId');
+    final res = await _client.delete(uri, headers: {'Accept': 'application/json'});
+    if (res.statusCode != 200 && res.statusCode != 204) {
+      throw _err('Failed to delete invoice', res);
+    }
   }
 }

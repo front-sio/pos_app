@@ -622,6 +622,194 @@ class ExportService {
     await _saveBytes(fileName, Uint8List.fromList(bytes), extOverride: 'pdf', mime: MimeType.pdf);
   }
 
+  /// Generate invoice PDF bytes without saving (for email attachment)
+  /// Simplified version for fast generation
+  static Future<Uint8List> generateInvoicePdfBytes({
+    required int invoiceId,
+    required String customerName,
+    required DateTime createdAt,
+    required String statusText,
+    required List<InvoiceSaleSection> sections,
+    required num amountPaid,
+    required num amountDue,
+    required String Function(num) fmtCurrency,
+    PartyInfo? seller,
+    PartyInfo? customer,
+    Uint8List? companyLogoBytes,
+    List<String>? paymentNotes,
+    String? termsAndConditions,
+    String? invoicePrefix,
+  }) async {
+    final doc = pw.Document();
+
+    num originalTotal = 0;
+    num returnedValue = 0;
+    for (final s in sections) {
+      for (final l in s.lines) {
+        final lineOriginal = l.unitPrice * l.soldQty;
+        final lineReturned = l.unitPrice * l.returnedQty;
+        originalTotal += lineOriginal;
+        returnedValue += lineReturned;
+      }
+    }
+    final adjustedTotal = originalTotal - returnedValue;
+
+    // Build simplified PDF for speed
+    doc.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        build: (context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            // Header
+            pw.Container(
+              padding: const pw.EdgeInsets.all(20),
+              color: PdfColors.green,
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    'INVOICE',
+                    style: pw.TextStyle(fontSize: 32, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+                  ),
+                  pw.Text(
+                    '#${invoicePrefix ?? ''}$invoiceId',
+                    style: pw.TextStyle(fontSize: 20, color: PdfColors.white),
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 20),
+            
+            // Customer & Date Info
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text('Bill To:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    pw.Text(customerName, style: const pw.TextStyle(fontSize: 16)),
+                    if (customer?.email != null) pw.Text(customer!.email!),
+                    if (customer?.phone != null) pw.Text(customer!.phone!),
+                  ],
+                ),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  children: [
+                    pw.Text('Date: ${createdAt.toString().split(' ')[0]}'),
+                    pw.Text('Status: $statusText', 
+                      style: pw.TextStyle(
+                        fontWeight: pw.FontWeight.bold,
+                        color: statusText.toLowerCase() == 'paid' ? PdfColors.green : PdfColors.orange,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 30),
+            
+            // Items Table
+            pw.Table(
+              border: pw.TableBorder.all(color: PdfColors.grey400),
+              children: [
+                // Header
+                pw.TableRow(
+                  decoration: const pw.BoxDecoration(color: PdfColors.grey300),
+                  children: [
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(8),
+                      child: pw.Text('Product', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    ),
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(8),
+                      child: pw.Text('Qty', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    ),
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(8),
+                      child: pw.Text('Price', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    ),
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(8),
+                      child: pw.Text('Total', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    ),
+                  ],
+                ),
+                // Items
+                ...sections.expand((section) => section.lines.map((line) => pw.TableRow(
+                  children: [
+                    pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text(line.product)),
+                    pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text(line.soldQty.toStringAsFixed(0))),
+                    pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text(fmtCurrency(line.unitPrice))),
+                    pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text(fmtCurrency(line.unitPrice * line.soldQty))),
+                  ],
+                ))).toList(),
+              ],
+            ),
+            pw.SizedBox(height: 20),
+            
+            // Totals
+            pw.Align(
+              alignment: pw.Alignment.centerRight,
+              child: pw.Container(
+                width: 250,
+                child: pw.Column(
+                  children: [
+                    pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      children: [
+                        pw.Text('Subtotal:'),
+                        pw.Text(fmtCurrency(adjustedTotal)),
+                      ],
+                    ),
+                    pw.Divider(),
+                    pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      children: [
+                        pw.Text('Total:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 18)),
+                        pw.Text(fmtCurrency(adjustedTotal), style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 18)),
+                      ],
+                    ),
+                    if (amountPaid > 0) ...[
+                      pw.SizedBox(height: 10),
+                      pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                        children: [
+                          pw.Text('Paid:'),
+                          pw.Text(fmtCurrency(amountPaid), style: const pw.TextStyle(color: PdfColors.green)),
+                        ],
+                      ),
+                    ],
+                    if (amountDue > 0) ...[
+                      pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                        children: [
+                          pw.Text('Due:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                          pw.Text(fmtCurrency(amountDue), style: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.red)),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            
+            // Footer
+            if (termsAndConditions != null) ...[
+              pw.SizedBox(height: 40),
+              pw.Text('Terms & Conditions:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+              pw.Text(termsAndConditions, style: const pw.TextStyle(fontSize: 10)),
+            ],
+          ],
+        ),
+      ),
+    );
+
+    final bytes = await doc.save();
+    return Uint8List.fromList(bytes);
+  }
+
   static List<String> _headersFromRows(List<Map<String, dynamic>> rows) {
     final set = <String>{};
     for (final r in rows) {

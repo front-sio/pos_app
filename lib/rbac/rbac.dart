@@ -34,14 +34,26 @@ class Rbac {
 
     final state = context.read<AuthBloc>().state;
 
-    if (state is! AuthAuthenticated) return false;
+    if (state is! AuthAuthenticated) {
+      print('[RBAC] Permission check failed: User not authenticated');
+      return false;
+    }
 
     // Superusers bypass all permission checks
-    if (state.isSuperuser) return true;
+    if (state.isSuperuser) {
+      print('[RBAC] Permission "$permission" granted (superuser)');
+      return true;
+    }
 
     // Normalize permissions to lowercase for case-insensitive checks
     final perms = state.permissions.map((p) => p.toLowerCase()).toSet();
-    return perms.contains(permission.toLowerCase());
+    final hasPermission = perms.contains(permission.toLowerCase());
+    
+    if (!hasPermission) {
+      print('[RBAC] Permission "$permission" denied. User has: ${perms.take(5).join(", ")}...');
+    }
+    
+    return hasPermission;
   }
 
   /// Shortcut for checking if a menu item should be shown.

@@ -30,6 +30,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       final permissions = (await repository.getPermissions()).map((p) => p.toLowerCase()).toList();
       final isSuperuser = await repository.getIsSuperuser();
 
+      // Debug logging for restored session
+      print('[AuthBloc] Session restored for user: $username');
+      print('[AuthBloc] Is superuser: $isSuperuser');
+      print('[AuthBloc] Roles (${roles.length}): ${roles.join(", ")}');
+      print('[AuthBloc] Permissions (${permissions.length}): ${permissions.take(5).join(", ")}...');
+
       emit(AuthAuthenticated(
         token: token,
         userId: userId,
@@ -74,6 +80,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       final isSuperuser = isSuperuserRaw == true ||
           (isSuperuserRaw is String && isSuperuserRaw.toLowerCase() == 'true') ||
           (isSuperuserRaw is num && isSuperuserRaw != 0);
+
+      // Debug logging for permissions
+      print('[AuthBloc] Login successful for user: $username');
+      print('[AuthBloc] Is superuser: $isSuperuser');
+      print('[AuthBloc] Roles (${roles.length}): ${roles.join(", ")}');
+      print('[AuthBloc] Permissions (${permissions.length}): ${permissions.take(5).join(", ")}...');
 
       emit(AuthAuthenticated(
         token: token,

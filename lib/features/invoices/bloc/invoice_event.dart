@@ -23,15 +23,23 @@ class CreateInvoiceEvent extends InvoiceEvent {
   final String status; // paid|unpaid
   final List<int> saleIds;
   final double discountAmount;
+  // Additional data for PDF generation
+  final String? customerName;
+  final String? customerEmail;
+  final List<Map<String, dynamic>>? salesData; // For PDF line items
+  
   const CreateInvoiceEvent({
     required this.customerId,
     required this.totalAmount,
     this.status = 'unpaid',
     this.saleIds = const [],
     this.discountAmount = 0,
+    this.customerName,
+    this.customerEmail,
+    this.salesData,
   });
   @override
-  List<Object?> get props => [customerId, totalAmount, status, saleIds, discountAmount];
+  List<Object?> get props => [customerId, totalAmount, status, saleIds, discountAmount, customerName, customerEmail, salesData];
 }
 
 class AddPaymentEvent extends InvoiceEvent {

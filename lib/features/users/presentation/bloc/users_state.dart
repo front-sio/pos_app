@@ -39,3 +39,11 @@ class UsersFailure extends UsersState {
   @override
   List<Object?> get props => [error];
 }
+
+class RolePermissionsLoaded extends UsersState {
+  final int roleId;
+  final List<PermissionModel> permissions;
+  RolePermissionsLoaded(this.roleId, this.permissions);
+  @override
+  List<Object?> get props => [roleId, permissions];
+}
