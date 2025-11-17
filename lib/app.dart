@@ -65,6 +65,12 @@ class _PosBusinessAppState extends State<PosBusinessApp> {
               setState(() {
                 _showSplash = false;
               });
+              // Force a rebuild after splash to ensure proper state handling
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  setState(() {}); // Trigger rebuild
+                }
+              });
             }
           },
         ),
@@ -96,8 +102,11 @@ class _PosBusinessAppState extends State<PosBusinessApp> {
                   // No navigation needed - we're already at '/'
                 },
                 builder: (context, state) {
+                  print('[App] Building with auth state: ${state.runtimeType}');
+                  
                   // Show authenticated scaffold
                   if (state is AuthAuthenticated) {
+                    print('[App] Showing AdminScaffold');
                     return const NetworkAwareWrapper(
                       child: AdminScaffold(),
                     );
@@ -105,6 +114,7 @@ class _PosBusinessAppState extends State<PosBusinessApp> {
                   
                   // Show loading during auth check
                   if (state is AuthInitial || state is AuthLoading) {
+                    print('[App] Showing loading screen');
                     return Scaffold(
                       backgroundColor: const Color.fromARGB(255, 5, 49, 107),
                       body: Center(
@@ -130,6 +140,7 @@ class _PosBusinessAppState extends State<PosBusinessApp> {
                   }
                   
                   // Show login screen for unauthenticated
+                  print('[App] Showing LoginScreen');
                   return const LoginScreen();
                 },
               ),
