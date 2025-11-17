@@ -230,27 +230,85 @@ class _AuthenticatedAppState extends State<_AuthenticatedApp> {
           listener: (context, state) {
             if (state is AuthAuthenticated) {
               // Start notifications with token
-              context.read<NotificationBloc>().add(StartNotifications(token: state.token));
+              try {
+                context.read<NotificationBloc>().add(StartNotifications(token: state.token));
+              } catch (e) {
+                print('Error starting notifications: $e');
+              }
               
               // Delay data loading to ensure AdminScaffold is ready
               Future.delayed(const Duration(milliseconds: 100), () {
-                if (context.mounted) {
+                if (!context.mounted) return;
+                
+                // Wrap all data loading in try-catch to prevent crashes
+                try {
                   context.read<ProductsBloc>().add(FetchProducts());
+                } catch (e) {
+                  print('Error loading products: $e');
+                }
+                
+                try {
                   context.read<StockBloc>().add(const LoadProducts(page: 1));
+                } catch (e) {
+                  print('Error loading stock: $e');
+                }
+                
+                try {
                   context.read<CustomerBloc>().add(FetchCustomersPage(1, 20));
+                } catch (e) {
+                  print('Error loading customers: $e');
+                }
+                
+                try {
                   context.read<SupplierBloc>().add(FetchSuppliersPage(1, 20));
+                } catch (e) {
+                  print('Error loading suppliers: $e');
+                }
+                
+                try {
                   context.read<InvoiceBloc>().add(const LoadInvoices());
+                } catch (e) {
+                  print('Error loading invoices: $e');
+                }
+                
+                try {
                   context.read<ProfitBloc>().add(LoadProfit(period: 'Today', view: 'Daily'));
+                } catch (e) {
+                  print('Error loading profits: $e');
+                }
+                
+                try {
                   context.read<ReportsBloc>().add(LoadDailyReport(DateTime.now()));
+                } catch (e) {
+                  print('Error loading reports: $e');
+                }
+                
+                try {
                   context.read<UsersBloc>().add(LoadUsers());
+                } catch (e) {
+                  print('Error loading users: $e');
+                }
+                
+                try {
                   context.read<SettingsBloc>().add(const LoadSettings());
                   context.read<SettingsBloc>().add(const LoadCurrencies());
+                } catch (e) {
+                  print('Error loading settings: $e');
+                }
+                
+                try {
                   context.read<ExpenseBloc>().add(const LoadExpenses());
+                } catch (e) {
+                  print('Error loading expenses: $e');
                 }
               });
             }
             if (state is AuthUnauthenticated) {
-              context.read<NotificationBloc>().add(const StopNotifications());
+              try {
+                context.read<NotificationBloc>().add(const StopNotifications());
+              } catch (e) {
+                print('Error stopping notifications: $e');
+              }
             }
           },
           child: const PosBusinessApp(),
