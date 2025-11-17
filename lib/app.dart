@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'dart:html' as html show window;
 import 'package:sales_app/features/auth/logic/auth_bloc.dart';
 import 'package:sales_app/features/auth/logic/auth_state.dart';
 import 'package:sales_app/features/auth/presentation/login_screen.dart';
@@ -13,6 +12,7 @@ import 'package:sales_app/widgets/app_loader.dart';
 import 'package:sales_app/widgets/network_aware_wrapper.dart';
 import 'package:sales_app/widgets/splash_screen.dart';
 import 'package:sales_app/widgets/connectivity_wrapper.dart';
+import 'package:sales_app/utils/url_helper.dart';
 
 // Existing routes
 import 'package:sales_app/features/notitications/presentation/notifications_screen.dart';
@@ -43,8 +43,8 @@ class _PosBusinessAppState extends State<PosBusinessApp> {
   String? _getInitialRoute() {
     try {
       // For web, get the current URL path and query
-      final uri = Uri.base;
-      if (uri.path.contains('reset-password') && uri.queryParameters.containsKey('token')) {
+      final uri = kIsWeb ? UrlHelper.getBrowserUri() : null;
+      if (uri != null && uri.path.contains('reset-password') && uri.queryParameters.containsKey('token')) {
         return '${uri.path}?token=${uri.queryParameters['token']}';
       }
     } catch (e) {
@@ -164,8 +164,10 @@ class _PosBusinessAppState extends State<PosBusinessApp> {
           // If no token found and we're on web, check browser URL
           if ((token == null || token.isEmpty) && kIsWeb) {
             try {
-              final browserUri = Uri.parse(html.window.location.href);
-              token = browserUri.queryParameters['token'];
+              final browserUri = UrlHelper.getBrowserUri();
+              if (browserUri != null) {
+                token = browserUri.queryParameters['token'];
+              }
             } catch (e) {
               // Ignore parsing errors
             }
