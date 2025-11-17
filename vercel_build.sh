@@ -14,7 +14,7 @@ export PATH="$PATH:$(pwd)/flutter/bin"
 # Disable analytics (optional)
 flutter config --no-analytics
 
-# Build Flutter Web (release mode)
+# Build Flutter Web (release mode) with PWA disabled to prevent service worker issues
 flutter config --enable-web
 flutter pub get
-flutter build web --release
+flutter build web --release --pwa-strategy=none

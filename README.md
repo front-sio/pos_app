@@ -4,6 +4,31 @@ A comprehensive Point of Sale (POS) and Sales Management System built with Flutt
 
 ## Recent Updates (Nov 17, 2025)
 
+### Web Connection Reset Fix (Nov 17, 2025)
+- ✅ **Fixed Connection Reset Error** - Web app no longer shows "connection was reset" errors
+- ✅ **PWA Build Flag Added** - Dockerfile and vercel_build.sh now use `--pwa-strategy=none`
+- ✅ **Service Worker Disabled** - Ensures service worker is not loaded, preventing conflicts
+- ✅ **Consistent Build Process** - All build scripts now properly disable PWA features
+
+**Problem Fixed:**
+Users visiting the web application were seeing "connection was reset" or "something went wrong while displaying this web page" errors. This was caused by a service worker being generated during the build process, even though PWA features were documented as removed on Nov 15, 2025.
+
+**Solution:**
+Added the `--pwa-strategy=none` flag to both the Dockerfile and vercel_build.sh build scripts. This ensures that:
+- No service worker is generated (flutter_service_worker.js will be empty)
+- No PWA features are included in the build
+- The web app runs as a standard web application without offline caching
+
+**Rebuild Required:**
+After pulling this fix, the application must be rebuilt using either:
+```bash
+# Using Docker
+docker build -t pos_app:latest .
+
+# Or using the Vercel build script
+./vercel_build.sh
+```
+
 ### Product Cart Refresh Fix (Nov 17, 2025)
 - ✅ **Fixed Product Visibility in Cart** - New products now appear immediately in cart selector
 - ✅ **Removed Conditional Loading** - Cart screen now always refreshes product list on entry
