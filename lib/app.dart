@@ -78,34 +78,41 @@ class _PosBusinessAppState extends State<PosBusinessApp> {
       theme: AppTheme.lightTheme,
       initialRoute: _initialRoute ?? '/',
       routes: {
-        '/': (_) => ConnectivityWrapper(
-          child: BlocConsumer<AuthBloc, AuthState>(
-            listenWhen: (previous, current) {
-              return previous is! AuthAuthenticated && current is AuthAuthenticated;
-            },
-            listener: (context, state) {
-              // No navigation needed - we're already at '/'
-            },
-            builder: (context, state) {
-              if (state is AuthAuthenticated) {
-                return const NetworkAwareWrapper(
-                  child: AdminScaffold(),
-                );
-              } else if (state is AuthUnauthenticated || state is AuthLoading || state is AuthFailure) {
-                return const LoginScreen();
-              }
-              return const Scaffold(
-                body: AppLoader.fullscreen(message: 'Preparing app...'),
-              );
-            },
-          ),
-        ),
         '/notifications': (_) => const NotificationsScreen(),
         '/settings': (_) => const CurrencySettingsScreen(),
         '/categories': (_) => const _ScopedCategoriesScreen(),
         '/units': (_) => const _ScopedUnitsScreen(),
       },
       onGenerateRoute: (settings) {
+        // Handle root route
+        if (settings.name == '/' || settings.name == null || settings.name!.isEmpty) {
+          return MaterialPageRoute(
+            builder: (_) => ConnectivityWrapper(
+              child: BlocConsumer<AuthBloc, AuthState>(
+                listenWhen: (previous, current) {
+                  return previous is! AuthAuthenticated && current is AuthAuthenticated;
+                },
+                listener: (context, state) {
+                  // No navigation needed - we're already at '/'
+                },
+                builder: (context, state) {
+                  if (state is AuthAuthenticated) {
+                    return const NetworkAwareWrapper(
+                      child: AdminScaffold(),
+                    );
+                  } else if (state is AuthUnauthenticated || state is AuthLoading || state is AuthFailure) {
+                    return const LoginScreen();
+                  }
+                  return const Scaffold(
+                    body: AppLoader.fullscreen(message: 'Preparing app...'),
+                  );
+                },
+              ),
+            ),
+            settings: settings,
+          );
+        }
+        
         // Handle reset-password route with query parameters
         if (settings.name != null && settings.name!.startsWith('/reset-password')) {
           String? token;
