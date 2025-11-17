@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 
 import 'package:sales_app/app.dart';
 import 'package:sales_app/config/config.dart';
@@ -101,6 +102,9 @@ import 'package:sales_app/widgets/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Use path-based URLs instead of hash (#) URLs for web
+  usePathUrlStrategy();
 
   final baseUrl = AppConfig.baseUrl;
   final httpClient = AuthHttpClient();
