@@ -5,13 +5,19 @@ import 'package:sales_app/config/config.dart';
 import 'package:sales_app/features/sales/data/new_sale_dto.dart';
 import 'package:sales_app/features/sales/data/sales_model.dart';
 import 'package:sales_app/features/sales/data/sale_return.dart';
+import 'package:sales_app/network/auth_http_client.dart';
 
 class SalesService {
-  final String baseUrl = AppConfig.baseUrl;
+  final String baseUrl;
+  final AuthHttpClient _client;
+
+  SalesService({String? baseUrl, AuthHttpClient? client})
+      : baseUrl = baseUrl ?? AppConfig.baseUrl,
+        _client = client ?? AuthHttpClient();
 
   Future<List<Sale>> getAllSales() async {
     final url = Uri.parse('$baseUrl/sales');
-    final res = await http.get(url, headers: {'Accept': 'application/json'});
+    final res = await _client.get(url, headers: {'Accept': 'application/json'});
     if (res.statusCode == 200) {
       final decoded = jsonDecode(res.body);
       if (decoded is List) {
@@ -26,7 +32,7 @@ class SalesService {
   Future<Sale> createSale(NewSaleDto saleDto) async {
     final createUrl = Uri.parse('$baseUrl/sales');
     final body = jsonEncode(saleDto.toJson());
-    final res = await http.post(
+    final res = await _client.post(
       createUrl,
       headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
       body: body,
@@ -56,7 +62,7 @@ class SalesService {
 
   Future<Sale?> getSaleById(int id) async {
     final url = Uri.parse('$baseUrl/sales/$id');
-    final res = await http.get(url, headers: {'Accept': 'application/json'});
+    final res = await _client.get(url, headers: {'Accept': 'application/json'});
     if (res.statusCode == 200) {
       final decoded = jsonDecode(res.body);
       if (decoded is Map<String, dynamic>) {
@@ -71,7 +77,7 @@ class SalesService {
 
   Future<InvoiceStatus?> getInvoiceBySaleId(int saleId) async {
     final url = Uri.parse('$baseUrl/invoices/by-sale/$saleId');
-    final res = await http.get(url, headers: {'Accept': 'application/json'});
+    final res = await _client.get(url, headers: {'Accept': 'application/json'});
     if (res.statusCode == 200) {
       final decoded = jsonDecode(res.body);
       if (decoded is Map<String, dynamic>) {
@@ -109,11 +115,11 @@ class SalesService {
     }
 
     try {
-      final res = await http.get(primary, headers: {'Accept': 'application/json'});
+      final res = await _client.get(primary, headers: {'Accept': 'application/json'});
       return _parse(res);
     } catch (e) {
       // try fallback route
-      final res = await http.get(fallback, headers: {'Accept': 'application/json'});
+      final res = await _client.get(fallback, headers: {'Accept': 'application/json'});
       return _parse(res);
     }
   }
@@ -130,7 +136,7 @@ class SalesService {
       if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
     });
 
-    final res = await http.post(
+    final res = await _client.post(
       url,
       headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
       body: payload,
@@ -164,7 +170,7 @@ class SalesService {
   // Delete sale
   Future<void> deleteSale(int saleId) async {
     final uri = Uri.parse('$baseUrl/sales/$saleId');
-    final res = await http.delete(uri, headers: {'Accept': 'application/json'});
+    final res = await _client.delete(uri, headers: {'Accept': 'application/json'});
     if (res.statusCode != 200 && res.statusCode != 204) {
       throw Exception('Failed to delete sale (${res.statusCode}): ${res.body}');
     }

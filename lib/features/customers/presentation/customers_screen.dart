@@ -4,6 +4,12 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:sales_app/utils/responsive.dart';
 import 'package:sales_app/widgets/error_placeholder.dart';
+import 'package:sales_app/widgets/advanced_feature_card.dart';
+import 'package:sales_app/widgets/universal_placeholder.dart';
+import 'package:sales_app/widgets/advanced_animations.dart';
+import 'package:sales_app/widgets/micro_interactions.dart';
+import 'package:sales_app/widgets/modern_button.dart';
+import 'package:sales_app/theme/theme_manager.dart';
 
 import 'package:sales_app/features/customers/bloc/customer_bloc.dart';
 import 'package:sales_app/features/customers/bloc/customer_event.dart';
@@ -213,33 +219,34 @@ class _CustomersScreenState extends State<CustomersScreen> with TickerProviderSt
           final customers = state.customers;
           if (customers.isEmpty) {
             return SliverFillRemaining(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.people_outline, size: 64, color: cs.onSurface.withOpacity(0.35)),
-                    const SizedBox(height: 12),
-                    Text(
-                      _isSearching ? 'No customers found' : 'No customers yet',
-                      style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _isSearching ? 'Try another search' : 'Add your first customer to get started',
-                      style: theme.textTheme.bodyMedium,
-                      textAlign: TextAlign.center,
-                    ),
-                    if (!_isSearching) ...[
-                      const SizedBox(height: 16),
-                      ElevatedButton.icon(
-                        onPressed: () => _openOverlay(null, CustomerOverlayMode.create),
-                        icon: const Icon(Icons.person_add_alt_1),
-                        label: const Text('Add Customer'),
+              child: _isSearching
+                  ? UniversalPlaceholder.noResults(
+                      searchTerm: _searchCtrl.text,
+                      onClearSearch: () {
+                        _searchCtrl.clear();
+                        setState(() => _isSearching = false);
+                        context.read<CustomerBloc>().add(FetchCustomersPage(1, _limit));
+                      },
+                    )
+                  : Padding(
+                      padding: EdgeInsets.symmetric(horizontal: _hp(context)),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          UniversalPlaceholder.empty(
+                            feature: 'customers',
+                            onCreate: () => _openOverlay(null, CustomerOverlayMode.create),
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            onPressed: () => _openOverlay(null, CustomerOverlayMode.create),
+                            icon: const Icon(Icons.person_add_alt_1),
+                            label: const Text('Add Customer'),
+                          ),
+                        ],
                       ),
-                    ]
-                  ],
-                ),
-              ),
+                    ),
             );
           }
 
@@ -252,19 +259,24 @@ class _CustomersScreenState extends State<CustomersScreen> with TickerProviderSt
   }
 
   Widget _mobileList(List<Customer> customers) {
-    return SliverPadding(
-      padding: EdgeInsets.symmetric(horizontal: _hp(context)),
-      sliver: SliverList(
-        delegate: SliverChildBuilderDelegate(
-          (ctx, i) {
-            final c = customers[i];
-            return AnimatedContainer(
-              duration: Duration(milliseconds: 120 + i * 30),
-              margin: const EdgeInsets.only(bottom: 10),
-              child: _card(c, true),
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: _hp(context)),
+        child: AdvancedStaggeredList(
+          children: customers.asMap().entries.map((entry) {
+            final index = entry.key;
+            final customer = entry.value;
+            return _ModernCustomerCard(
+              customer: customer,
+              animationDelay: index * 50,
+              onTap: () => _openOverlay(customer, CustomerOverlayMode.edit),
+              onEdit: () => _openOverlay(customer, CustomerOverlayMode.edit),
+              onDelete: () => _deleteCustomer(customer),
             );
-          },
-          childCount: customers.length,
+          }).toList(),
+          animationType: AnimationType.slideUp,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
         ),
       ),
     );
@@ -445,6 +457,114 @@ class _CustomersScreenState extends State<CustomersScreen> with TickerProviderSt
                 ),
         ),
       ),
+    );
+  }
+
+  void _deleteCustomer(Customer customer) {
+    HapticManager.trigger(HapticType.medium);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Customer'),
+        content: Text('Are you sure you want to delete ${customer.name}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ModernButton(
+            text: 'Delete',
+            type: ModernButtonType.primary,
+            backgroundColor: ThemeManager().currentBusinessColors.error,
+            size: ModernButtonSize.small,
+            onPressed: () {
+              Navigator.pop(context);
+              context.read<CustomerBloc>().add(DeleteCustomerEvent(customer.id));
+              HapticManager.trigger(HapticType.success);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ModernCustomerCard extends StatelessWidget {
+  final Customer customer;
+  final int animationDelay;
+  final VoidCallback onTap;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const _ModernCustomerCard({
+    required this.customer,
+    required this.animationDelay,
+    required this.onTap,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final businessColors = ThemeManager().currentBusinessColors;
+    
+    return AdvancedFeatureCard(
+      type: FeatureCardType.list,
+      title: customer.name,
+      subtitle: customer.email ?? customer.phone ?? 'No contact info',
+      leading: CircleAvatar(
+        backgroundColor: businessColors.primary.withOpacity(0.1),
+        child: Icon(
+          Icons.person,
+          color: businessColors.primary,
+        ),
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (customer.totalPurchases != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: businessColors.success.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '\$${customer.totalPurchases?.toStringAsFixed(0) ?? '0'}',
+                style: TextStyle(
+                  color: businessColors.success,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          const SizedBox(width: 8),
+          const Icon(Icons.arrow_forward_ios, size: 16),
+        ],
+      ),
+      actions: const [
+        FeatureCardAction.edit,
+        FeatureCardAction.delete,
+      ],
+      onTap: onTap,
+      onActionTap: (action) {
+        switch (action) {
+          case FeatureCardAction.edit:
+            onEdit();
+            break;
+          case FeatureCardAction.delete:
+            onDelete();
+            break;
+          default:
+            break;
+        }
+      },
+      animationDelay: animationDelay,
+      accentColor: businessColors.primary,
+      metadata: {
+        if (customer.phone != null) 'Phone': customer.phone!,
+        if (customer.address != null) 'Address': customer.address!,
+      },
     );
   }
 }

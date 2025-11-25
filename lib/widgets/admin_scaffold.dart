@@ -3,6 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+// Modern UI Components
+import 'package:sales_app/widgets/theme_switcher.dart';
+import 'package:sales_app/theme/theme_manager.dart';
+
 // Screens
 import 'package:sales_app/features/customers/presentation/customers_screen.dart';
 import 'package:sales_app/features/profile/presentation/pages/profile_screen.dart';
@@ -10,8 +14,8 @@ import 'package:sales_app/features/settings/presentation/currency_settings_scree
 import 'package:sales_app/features/suppliers/presentation/suppliers_screen.dart';
 import 'package:sales_app/features/products/presentation/products_screen.dart';
 import 'package:sales_app/features/purchases/presentation/purchases_screen.dart';
-import 'package:sales_app/features/sales/presentaion/product_cart_screen.dart' as cart;
-import 'package:sales_app/features/sales/presentaion/sales_screen.dart';
+import 'package:sales_app/features/sales/presentation/product_cart_screen.dart' as cart;
+import 'package:sales_app/features/sales/presentation/sales_screen.dart';
 import 'package:sales_app/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:sales_app/features/profits/presentation/profit_tracker_screen.dart';
 import 'package:sales_app/features/purchases/presentation/new_purchase_screen.dart';

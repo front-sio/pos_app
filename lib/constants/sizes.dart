@@ -1,3 +1,5 @@
+import 'package:flutter/animation.dart';
+
 class AppSizes {
   // Breakpoints
   static const double mobileBreakpoint = 600.0;
@@ -41,5 +43,14 @@ class AppSizes {
   static const double cardElevation = 2.0;
   static const double cardBorderRadius = 16.0;
 
-  static const Duration shortAnimation = Duration(milliseconds: 200); //shortAnimation
+  // Animation Durations
+  static const Duration shortAnimation = Duration(milliseconds: 200);
+  static const Duration mediumAnimation = Duration(milliseconds: 300);
+  static const Duration longAnimation = Duration(milliseconds: 500);
+  static const Duration pageTransition = Duration(milliseconds: 350);
+  
+  // Animation Curves
+  static const Curve defaultCurve = Curves.easeInOutCubic;
+  static const Curve bounceCurve = Curves.elasticOut;
+  static const Curve fastCurve = Curves.fastOutSlowIn;
 }

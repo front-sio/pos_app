@@ -34,6 +34,29 @@ class AppColors {
     Color(0xFF3B82F6),
   ];
   
+  static const List<Color> kSuccessGradient = [
+    Color(0xFF10B981),
+    Color(0xFF22C55E),
+  ];
+  
+  static const List<Color> kWarningGradient = [
+    Color(0xFFF59E0B),
+    Color(0xFFFBBF24),
+  ];
+  
+  static const List<Color> kErrorGradient = [
+    Color(0xFFDC2626),
+    Color(0xFFEF4444),
+  ];
+  
+  // Glass morphism colors
+  static const Color kGlassBackground = Color(0x1AFFFFFF);
+  static const Color kGlassBorder = Color(0x33FFFFFF);
+  
+  // Shimmer colors
+  static const Color kShimmerBase = Color(0xFFE2E8F0);
+  static const Color kShimmerHighlight = Color(0xFFF1F5F9);
+  
   // Shadow Colors
   static const Color kShadowColor = Color(0x1A000000);
 

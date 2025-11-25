@@ -1,14 +1,14 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:sales_app/config/config.dart';
+import 'package:sales_app/network/auth_http_client.dart';
 
 class UsersApiService {
   final String baseUrl;
-  final http.Client _http;
+  final AuthHttpClient _client;
 
-  UsersApiService({String? baseUrl, http.Client? httpClient})
+  UsersApiService({String? baseUrl, AuthHttpClient? client})
       : baseUrl = baseUrl ?? AppConfig.baseUrl,
-        _http = httpClient ?? http.Client();
+        _client = client ?? AuthHttpClient();
 
   Uri _uri(String path, [Map<String, String>? qp]) {
     final uri = Uri.parse(baseUrl + path);
@@ -17,7 +17,7 @@ class UsersApiService {
   }
 
   Future<List<dynamic>> fetchUsers(String token) async {
-    final res = await _http.get(_uri('/auth/users'),
+    final res = await _client.get(_uri('/auth/users'),
         headers: {'Accept': 'application/json'});
     if (res.statusCode != 200) throw Exception('Failed to fetch users: ${res.body}');
     final body = jsonDecode(res.body);
@@ -28,7 +28,7 @@ class UsersApiService {
   }
 
   Future<Map<String, dynamic>> fetchCurrentUser(String token) async {
-    final res = await _http.get(_uri('/auth/me'),
+    final res = await _client.get(_uri('/auth/me'),
         headers: {'Accept': 'application/json'});
     if (res.statusCode != 200) throw Exception('Failed to fetch current user: ${res.body}');
     final decoded = jsonDecode(res.body);
@@ -37,7 +37,7 @@ class UsersApiService {
   }
 
   Future<List<dynamic>> fetchRoles(String token) async {
-    final res = await _http.get(_uri('/auth/roles'),
+    final res = await _client.get(_uri('/auth/roles'),
         headers: {'Accept': 'application/json'});
     if (res.statusCode != 200) throw Exception('Failed to fetch roles: ${res.body}');
     final decoded = jsonDecode(res.body);
@@ -50,7 +50,7 @@ class UsersApiService {
   }
 
   Future<List<dynamic>> fetchPermissions(String token) async {
-    final res = await _http.get(_uri('/auth/permissions'),
+    final res = await _client.get(_uri('/auth/permissions'),
         headers: {'Accept': 'application/json'});
     if (res.statusCode != 200) throw Exception('Failed to fetch permissions: ${res.body}');
     final decoded = jsonDecode(res.body);
@@ -62,7 +62,7 @@ class UsersApiService {
   }
 
   Future<Map<String, dynamic>> createRole(String token, String name, {String description = ''}) async {
-    final res = await _http.post(_uri('/auth/roles'),
+    final res = await _client.post(_uri('/auth/roles'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'name': name, 'description': description}));
     if (res.statusCode != 201) throw Exception('Failed to create role: ${res.body}');
@@ -70,7 +70,7 @@ class UsersApiService {
   }
 
   Future<Map<String, dynamic>> createPermission(String token, String name, {String description = ''}) async {
-    final res = await _http.post(_uri('/auth/permissions'),
+    final res = await _client.post(_uri('/auth/permissions'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'name': name, 'description': description}));
     if (res.statusCode != 201) throw Exception('Failed to create permission: ${res.body}');
@@ -78,7 +78,7 @@ class UsersApiService {
   }
 
   Future<Map<String, dynamic>> createUserWithRole(String token, Map<String, dynamic> payload) async {
-    final res = await _http.post(_uri('/auth/users'),
+    final res = await _client.post(_uri('/auth/users'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(payload));
     if (res.statusCode != 201) throw Exception('Failed to create user: ${res.body}');
@@ -86,14 +86,14 @@ class UsersApiService {
   }
 
   Future<void> assignRole(String token, int userId, int roleId) async {
-    final res = await _http.post(_uri('/auth/users/$userId/assign-role'),
+    final res = await _client.post(_uri('/auth/users/$userId/assign-role'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'role_id': roleId}));
     if (res.statusCode != 200) throw Exception('Failed to assign role: ${res.body}');
   }
 
   Future<Map<String, dynamic>> resendReset(String token, int userId) async {
-    final res = await _http.post(_uri('/auth/users/$userId/resend-reset'),
+    final res = await _client.post(_uri('/auth/users/$userId/resend-reset'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'client_host': Uri.base.origin}));
     if (res.statusCode != 200) throw Exception('Failed to resend reset: ${res.body}');
@@ -101,13 +101,13 @@ class UsersApiService {
   }
 
   Future<void> deleteUser(String token, int userId) async {
-    final res = await _http.delete(_uri('/auth/users/$userId'),
+    final res = await _client.delete(_uri('/auth/users/$userId'),
         headers: {});
     if (res.statusCode != 200 && res.statusCode != 204) throw Exception('Failed to delete user: ${res.body}');
   }
 
   Future<Map<String, dynamic>> updateUser(String token, int userId, Map<String, dynamic> payload) async {
-    final res = await _http.put(_uri('/auth/users/$userId'),
+    final res = await _client.put(_uri('/auth/users/$userId'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(payload));
     if (res.statusCode != 200) throw Exception('Failed to update user: ${res.body}');
@@ -115,21 +115,21 @@ class UsersApiService {
   }
 
   Future<Map<String, dynamic>> assignPermissionToRole(String token, int roleId, int permissionId) async {
-    final res = await _http.post(_uri('/auth/roles/$roleId/permissions/$permissionId'),
+    final res = await _client.post(_uri('/auth/roles/$roleId/permissions/$permissionId'),
         headers: {});
     if (res.statusCode != 200) throw Exception('Failed to assign permission: ${res.body}');
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
   Future<Map<String, dynamic>> revokePermissionFromRole(String token, int roleId, int permissionId) async {
-    final res = await _http.delete(_uri('/auth/roles/$roleId/permissions/$permissionId'),
+    final res = await _client.delete(_uri('/auth/roles/$roleId/permissions/$permissionId'),
         headers: {});
     if (res.statusCode != 200) throw Exception('Failed to revoke permission: ${res.body}');
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
   Future<List<dynamic>> getRolePermissions(String token, int roleId) async {
-    final res = await _http.get(_uri('/auth/roles/$roleId/permissions'),
+    final res = await _client.get(_uri('/auth/roles/$roleId/permissions'),
         headers: {'Accept': 'application/json'});
     if (res.statusCode != 200) throw Exception('Failed to fetch role permissions: ${res.body}');
     final decoded = jsonDecode(res.body);
@@ -141,7 +141,7 @@ class UsersApiService {
 
   // Delete user (deactivate - soft delete)
   Future<void> deactivateUser(String token, int userId) async {
-    final res = await _http.delete(
+    final res = await _client.delete(
       _uri('/auth/users/$userId/deactivate'),
       headers: {'Accept': 'application/json'},
     );
@@ -152,7 +152,7 @@ class UsersApiService {
 
   // Delete role
   Future<void> deleteRole(String token, int roleId) async {
-    final res = await _http.delete(
+    final res = await _client.delete(
       _uri('/auth/roles/$roleId'),
       headers: {'Accept': 'application/json'},
     );
@@ -163,7 +163,7 @@ class UsersApiService {
 
   // Delete permission
   Future<void> deletePermission(String token, int permissionId) async {
-    final res = await _http.delete(
+    final res = await _client.delete(
       _uri('/auth/permissions/$permissionId'),
       headers: {'Accept': 'application/json'},
     );
@@ -174,7 +174,7 @@ class UsersApiService {
 
   // Update role
   Future<void> updateRole(String token, int roleId, String name, String? description) async {
-    final res = await _http.put(
+    final res = await _client.put(
       _uri('/auth/roles/$roleId'),
       headers: {
         'Content-Type': 'application/json',
@@ -192,7 +192,7 @@ class UsersApiService {
 
   // Update permission
   Future<void> updatePermission(String token, int permissionId, String name, String? description) async {
-    final res = await _http.put(
+    final res = await _client.put(
       _uri('/auth/permissions/$permissionId'),
       headers: {
         'Content-Type': 'application/json',
@@ -209,6 +209,6 @@ class UsersApiService {
   }
 
   void dispose() {
-    _http.close();
+    _client.close();
   }
 }

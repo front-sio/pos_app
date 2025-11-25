@@ -10,6 +10,13 @@ import 'package:sales_app/constants/colors.dart';
 import 'package:sales_app/constants/sizes.dart';
 import 'package:sales_app/utils/currency.dart';
 import 'package:sales_app/widgets/error_placeholder.dart';
+import 'package:sales_app/widgets/modern_card.dart';
+import 'package:sales_app/widgets/modern_button.dart';
+import 'package:sales_app/widgets/modern_loading.dart';
+import 'package:sales_app/widgets/modern_list_item.dart';
+import 'package:sales_app/widgets/staggered_list_view.dart';
+import 'package:sales_app/widgets/micro_interactions.dart';
+import 'package:sales_app/widgets/page_transitions.dart';
 
 // Services and blocs
 import 'package:sales_app/features/customers/services/customer_services.dart';

@@ -3,8 +3,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:sales_app/features/auth/logic/auth_bloc.dart';
 import 'package:sales_app/features/auth/logic/auth_state.dart';
 import 'package:sales_app/features/auth/presentation/login_screen.dart';
-import 'package:sales_app/features/settings/presentation/currency_settings_screen.dart';
-import 'package:sales_app/theme/app_theme.dart';
+import 'package:sales_app/features/settings/presentation/modern_settings_screen.dart';
+import 'package:sales_app/features/debug/auth_debug_screen.dart';
+import 'package:sales_app/theme/theme_manager.dart';
 import 'package:sales_app/widgets/admin_scaffold.dart';
 import 'package:sales_app/widgets/app_loader.dart';
 import 'package:sales_app/widgets/network_aware_wrapper.dart';
@@ -46,39 +47,53 @@ class _PosBusinessAppState extends State<PosBusinessApp> {
       );
     }
 
-    return MaterialApp(
-      title: "Business App",
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      routes: {
-        '/notifications': (_) => const NotificationsScreen(),
-        '/settings': (_) => const CurrencySettingsScreen(),
-        '/categories': (_) => const _ScopedCategoriesScreen(),
-        '/units': (_) => const _ScopedUnitsScreen(),
-      },
-      onUnknownRoute: (settings) => MaterialPageRoute(
-        builder: (_) => const _UnknownRouteScreen(),
-        settings: settings,
-      ),
-      home: ConnectivityWrapper(
-        child: BlocBuilder<AuthBloc, AuthState>(
-          builder: (context, state) {
-            if (state is AuthAuthenticated) {
-              return const NetworkAwareWrapper(
-                child: AdminScaffold(),
-              );
-            } else if (state is AuthUnauthenticated || state is AuthLoading || state is AuthFailure) {
-              // Stay on login screen for unauthenticated, loading, and failure states
-              // Login screen handles its own loading UI and error messages
-              return const LoginScreen();
-            }
-            // Initial loading when app starts (AuthInitial)
-            return const Scaffold(
-              body: AppLoader.fullscreen(message: 'Preparing app...'),
-            );
+    return AnimatedBuilder(
+      animation: ThemeManager(),
+      builder: (context, child) {
+        final businessColors = ThemeManager().currentBusinessColors;
+        
+        return MaterialApp(
+          title: "Modern Sales App",
+          debugShowCheckedModeBanner: false,
+          theme: ModernThemeData.lightTheme(businessColors),
+          darkTheme: ModernThemeData.darkTheme(businessColors),
+          themeMode: ThemeManager().themeMode == AppThemeMode.light
+              ? ThemeMode.light
+              : ThemeManager().themeMode == AppThemeMode.dark
+                  ? ThemeMode.dark
+                  : ThemeMode.system,
+          routes: {
+            '/notifications': (_) => const NotificationsScreen(),
+            '/settings': (_) => const ModernSettingsScreen(),
+            '/categories': (_) => const _ScopedCategoriesScreen(),
+            '/units': (_) => const _ScopedUnitsScreen(),
+            '/debug': (_) => const AuthDebugScreen(),
           },
-        ),
-      ),
+          onUnknownRoute: (settings) => MaterialPageRoute(
+            builder: (_) => const _UnknownRouteScreen(),
+            settings: settings,
+          ),
+          home: ConnectivityWrapper(
+            child: BlocBuilder<AuthBloc, AuthState>(
+              builder: (context, state) {
+                if (state is AuthAuthenticated) {
+                  return const NetworkAwareWrapper(
+                    child: AdminScaffold(),
+                  );
+                } else if (state is AuthUnauthenticated || state is AuthLoading || state is AuthFailure) {
+                  // Stay on login screen for unauthenticated, loading, and failure states
+                  // Login screen handles its own loading UI and error messages
+                  return const LoginScreen();
+                }
+                // Initial loading when app starts (AuthInitial)
+                return const Scaffold(
+                  body: AppLoader.fullscreen(message: 'Preparing app...'),
+                );
+              },
+            ),
+          ),
+        );
+      },
     );
   }
 }

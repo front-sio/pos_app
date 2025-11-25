@@ -20,11 +20,11 @@ import 'package:sales_app/features/sales/bloc/sales_event.dart';
 import 'package:sales_app/features/sales/bloc/sales_state.dart';
 import 'package:sales_app/features/sales/models/line_edit.dart';
 
-import 'package:sales_app/features/sales/presentaion/widgets/buttom_summary_overlay.dart';
-import 'package:sales_app/features/sales/presentaion/widgets/cart_item_card.dart';
-import 'package:sales_app/features/sales/presentaion/widgets/customer_seletor.dart';
-import 'package:sales_app/features/sales/presentaion/widgets/empty_cart_view.dart';
-import 'package:sales_app/features/sales/presentaion/widgets/product_selector_sheet.dart';
+import 'package:sales_app/features/sales/presentation/widgets/buttom_summary_overlay.dart';
+import 'package:sales_app/features/sales/presentation/widgets/cart_item_card.dart';
+import 'package:sales_app/features/sales/presentation/widgets/customer_seletor.dart';
+import 'package:sales_app/features/sales/presentation/widgets/empty_cart_view.dart';
+import 'package:sales_app/features/sales/presentation/widgets/product_selector_sheet.dart';
 
 import 'package:sales_app/utils/platform_helper.dart';
 import 'package:sales_app/config/config.dart';

@@ -6,6 +6,7 @@ import 'package:sales_app/features/auth/logic/auth_state.dart';
 import 'package:sales_app/features/notitications/bloc/notification_bloc.dart';
 import 'package:sales_app/features/notitications/bloc/notification_state.dart';
 import 'package:sales_app/utils/keyboard_shortcuts.dart';
+import 'package:sales_app/widgets/theme_switcher.dart';
 import '../constants/colors.dart';
 import '../utils/responsive.dart';
 
@@ -112,6 +113,9 @@ class AdminAppBar extends StatelessWidget implements PreferredSizeWidget {
     return Row(
       children: [
         _buildNotificationButton(context),
+        const SizedBox(width: 8),
+        // Theme Switcher
+        const ThemeSwitcher(),
         const SizedBox(width: 8),
         if (isDesktop) ...[
           IconButton(
