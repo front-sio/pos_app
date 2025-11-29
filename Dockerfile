@@ -19,8 +19,8 @@ RUN flutter pub get
 # Copy the rest of the code
 COPY --chown=ubuntu:ubuntu . .
 
-# Build Flutter web
-RUN flutter build web --release --no-tree-shake-icons
+# Build Flutter web with PWA disabled to prevent service worker issues
+RUN flutter build web --release --no-tree-shake-icons --pwa-strategy=none
 
 # Stage 2: Serve with Nginx
 FROM nginx:alpine
