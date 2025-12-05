@@ -223,7 +223,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
           child: ListTile(leading: Icon(Icons.picture_as_pdf), title: Text('Export to PDF (.pdf)')),
         ),
       ],
-      icon: const Icon(Icons.download_rounded),
+      icon: const Icon(Icons.download_rounded, color: Colors.blue),
       enabled: enabled,
     );
   }
