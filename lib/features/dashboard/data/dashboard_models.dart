@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 class DashboardSummary {
   final double todaySalesTotal;
   final int todayOrdersCount;
-  final double estimatedProfit; // sales(today) - purchases(today)
+  final double estimatedProfit; // revenue(today) - cost(buying price * quantity sold)
 
   const DashboardSummary({
     required this.todaySalesTotal,
