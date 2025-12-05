@@ -9,6 +9,8 @@ import 'package:sales_app/features/auth/presentation/login_background_painter.da
 import 'package:sales_app/widgets/custom_field.dart';
 
 import 'forgot_password_screen.dart';
+// ADD THIS IMPORT
+import 'register_screen.dart'; 
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -217,7 +219,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                   style: ElevatedButton.styleFrom(
                                     minimumSize: const Size.fromHeight(50),
                                     backgroundColor: AppColors.kPrimary,
-                                    disabledBackgroundColor: AppColors.kPrimary.withOpacity(0.7),
+                                    disabledBackgroundColor: AppColors.kPrimary.withValues(alpha: .7),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12),
                                     ),
@@ -250,6 +252,33 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                             ),
                           ),
                           const SizedBox(height: 16),
+
+                          // ADD THIS SECTION FOR THE REGISTER LINK
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Text(
+                                "Don't have an account? ",
+                                style: TextStyle(color: AppColors.kTextSecondary),
+                              ),
+                              TextButton(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(builder: (context) => const RegisterScreen()),
+                                  );
+                                },
+                                child:  Text(
+                                  "Register",
+                                  style: TextStyle(
+                                    color: AppColors.kPrimary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          // END OF NEW SECTION
                         ],
                       ),
                     ),

@@ -181,7 +181,7 @@ class _CustomersScreenState extends State<CustomersScreen> with TickerProviderSt
               hintText: 'Search customers...',
               // ignore: deprecated_member_use
               hintStyle: TextStyle(color: cs.onSurface.withOpacity(0.6)),
-              prefixIcon: Icon(Icons.search, color: _isSearching ? cs.primary : cs.onSurface.withOpacity(0.6)),
+              prefixIcon: Icon(Icons.search, color: _isSearching ? cs.primary : cs.onSurface.withValues(alpha: .6)),
               border: InputBorder.none,
             ),
             onChanged: (q) {
@@ -345,7 +345,7 @@ class _CustomersScreenState extends State<CustomersScreen> with TickerProviderSt
                   children: [
                     CircleAvatar(
                       radius: 24,
-                      backgroundColor: cs.primary.withOpacity(0.1),
+                      backgroundColor: cs.primary.withValues(alpha: 0.1),
                       child: Text(c.name.isNotEmpty ? c.name[0].toUpperCase() : '?',
                           style: TextStyle(color: cs.primary)),
                     ),
@@ -365,12 +365,12 @@ class _CustomersScreenState extends State<CustomersScreen> with TickerProviderSt
                             const SizedBox(height: 4),
                             Row(
                               children: [
-                                Icon(Icons.email_outlined, size: 14, color: cs.onSurface.withOpacity(0.6)),
+                                Icon(Icons.email_outlined, size: 14, color: cs.onSurface.withValues(alpha: 0.6)),
                                 const SizedBox(width: 4),
                                 Expanded(
                                   child: Text(
                                     c.email!,
-                                    style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurface.withOpacity(0.7)),
+                                    style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurface.withValues(alpha:  0.7)),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
