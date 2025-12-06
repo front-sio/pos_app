@@ -26,7 +26,17 @@ class Expense extends Equatable {
 
   static DateTime _asDate(dynamic v) {
     if (v is DateTime) return v;
-    return DateTime.tryParse(v.toString()) ?? DateTime.now();
+    if (v is String) {
+      // Handle date strings in various formats
+      if (v.length == 10) {
+        // Format: "2025-12-06"
+        return DateTime.parse('${v}T00:00:00.000');
+      }
+      // Try standard ISO format
+      final parsed = DateTime.tryParse(v);
+      if (parsed != null) return parsed;
+    }
+    return DateTime.now();
   }
 
   factory Expense.fromJson(Map<String, dynamic> json) {

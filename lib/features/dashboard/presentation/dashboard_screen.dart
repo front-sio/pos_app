@@ -412,8 +412,16 @@ class _ModernActivityTileState extends State<_ModernActivityTile>
 
   @override
   Widget build(BuildContext context) {
-    final color = widget.item.type == ActivityType.sale ? AppColors.kSuccess : AppColors.kPrimary;
-    final icon = widget.item.type == ActivityType.sale ? Icons.sell : Icons.receipt_long;
+    final color = widget.item.type == ActivityType.sale 
+        ? AppColors.kSuccess 
+        : widget.item.type == ActivityType.expense 
+            ? AppColors.kError 
+            : AppColors.kPrimary;
+    final icon = widget.item.type == ActivityType.sale 
+        ? Icons.sell 
+        : widget.item.type == ActivityType.expense 
+            ? Icons.money_off 
+            : Icons.receipt_long;
 
     return SlideTransition(
       position: _slideAnimation,

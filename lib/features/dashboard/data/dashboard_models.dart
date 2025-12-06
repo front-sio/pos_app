@@ -29,7 +29,7 @@ class DashboardSummary {
   }
 }
 
-enum ActivityType { sale, purchase }
+enum ActivityType { sale, purchase, expense }
 
 @immutable
 class ActivityItem {

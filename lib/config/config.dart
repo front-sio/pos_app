@@ -3,13 +3,13 @@ class AppConfig {
   // Base HTTP API URL (already used by your services)
   static const String baseUrl = String.fromEnvironment(
     'APP_BASE_URL',
-    defaultValue: 'https://app.stebofarm.co.tz',
+    defaultValue: 'https://magasin-api.iperfee.com',
   );
 
   // Socket.IO URL for real-time features
   static const String socketUrl = String.fromEnvironment(
     'SOCKET_URL',
-    defaultValue: 'ws://localhost:3001', // Change this to your Socket.IO server
+    defaultValue: 'ws://magasin-api.iperfee.com', // Change this to your Socket.IO server
   );
 }
 
