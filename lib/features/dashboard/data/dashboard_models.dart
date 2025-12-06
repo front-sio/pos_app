@@ -5,22 +5,26 @@ class DashboardSummary {
   final double todaySalesTotal;
   final int todayOrdersCount;
   final double estimatedProfit; // revenue(today) - cost(buying price * quantity sold)
+  final double todayExpensesTotal; // total expenses for today
 
   const DashboardSummary({
     required this.todaySalesTotal,
     required this.todayOrdersCount,
     required this.estimatedProfit,
+    required this.todayExpensesTotal,
   });
 
   DashboardSummary copyWith({
     double? todaySalesTotal,
     int? todayOrdersCount,
     double? estimatedProfit,
+    double? todayExpensesTotal,
   }) {
     return DashboardSummary(
       todaySalesTotal: todaySalesTotal ?? this.todaySalesTotal,
       todayOrdersCount: todayOrdersCount ?? this.todayOrdersCount,
       estimatedProfit: estimatedProfit ?? this.estimatedProfit,
+      todayExpensesTotal: todayExpensesTotal ?? this.todayExpensesTotal,
     );
   }
 }

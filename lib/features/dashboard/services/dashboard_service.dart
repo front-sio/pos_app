@@ -46,9 +46,11 @@ class DashboardService {
 
     // Filter for today
     final todaysSales = sales.where((s) => s.soldAt.isAfter(startOfToday)).toList();
+    final todaysPurchases = purchases.where((p) => p.date.isAfter(startOfToday)).toList();
 
     final todaySalesTotal = todaysSales.fold<double>(0.0, (sum, s) => sum + (s.totalAmount ?? 0.0));
     final todayOrdersCount = todaysSales.length;
+    final todayExpensesTotal = todaysPurchases.fold<double>(0.0, (sum, p) => sum + p.total);
 
     // Fetch sale details with items for today's sales to calculate cost
     double todayCost = 0.0;
@@ -96,6 +98,7 @@ class DashboardService {
         todaySalesTotal: todaySalesTotal,
         todayOrdersCount: todayOrdersCount,
         estimatedProfit: estimatedProfit,
+        todayExpensesTotal: todayExpensesTotal,
       ),
       recent: recent,
     );

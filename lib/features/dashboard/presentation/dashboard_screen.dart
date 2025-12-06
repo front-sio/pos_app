@@ -167,11 +167,18 @@ class _SummaryGrid extends StatelessWidget {
         animationDelay: 100,
       ),
       _ModernSummaryCard(
+        title: "Expenses",
+        value: CurrencyFmt.format(context, summary.todayExpensesTotal),
+        icon: Icons.money_off,
+        gradientColors: AppColors.kErrorGradient,
+        animationDelay: 200,
+      ),
+      _ModernSummaryCard(
         title: "Estimated Profit",
         value: CurrencyFmt.format(context, summary.estimatedProfit),
         icon: Icons.account_balance_wallet,
         gradientColors: AppColors.kWarningGradient,
-        animationDelay: 200,
+        animationDelay: 300,
       ),
     ];
 

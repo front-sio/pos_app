@@ -5,6 +5,12 @@ class AppConfig {
     'APP_BASE_URL',
     defaultValue: 'https://app.stebofarm.co.tz',
   );
+
+  // Socket.IO URL for real-time features
+  static const String socketUrl = String.fromEnvironment(
+    'SOCKET_URL',
+    defaultValue: 'ws://localhost:3001', // Change this to your Socket.IO server
+  );
 }
 
 
