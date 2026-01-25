@@ -1,0 +1,38 @@
+name: Build Flutter APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - last_working
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.19.6"
+          channel: stable
+
+      - name: Flutter doctor
+        run: flutter doctor
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build release APK
+        run: |
+          flutter build apk --release \
+            --dart-define=APP_BASE_URL=${{ secrets.APP_BASE_URL }}
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pos-app-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
