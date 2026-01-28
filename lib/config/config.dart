@@ -3,7 +3,7 @@ class AppConfig {
   // Base HTTP API URL (already used by your services)
   static const String baseUrl = String.fromEnvironment(
     'APP_BASE_URL',
-    defaultValue: 'https://app.stebofarm.co.tz',
+    defaultValue: 'http://138.68.41.254:3012',
   );
 }
 
