@@ -3,13 +3,13 @@ class AppConfig {
   // Base HTTP API URL (already used by your services)
   static const String baseUrl = String.fromEnvironment(
     'APP_BASE_URL',
-    defaultValue: 'https://api.stebofarm.co.tz',
+    defaultValue: 'http://pos-posapi-ef0xxp-f6dd3b-138-68-41-254.traefik.me',
   );
 
   // Socket.IO URL for real-time features
   static const String socketUrl = String.fromEnvironment(
     'SOCKET_URL',
-    defaultValue: 'ws://api.stebofarm.co.tz', // Change this to your Socket.IO server
+    defaultValue: 'ws://pos-posapi-ef0xxp-f6dd3b-138-68-41-254.traefik.me', // Change this to your Socket.IO server
   );
 }
 

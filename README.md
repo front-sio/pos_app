@@ -1076,8 +1076,11 @@ flutter run
 ## Build Production
 
 ```bash
-# Android
-flutter build apk --release
+# Android (lite APK per CPU architecture - smaller size)
+flutter build apk --release --split-per-abi
+
+# Android (recommended for Play Store, smallest download for users)
+flutter build appbundle --release
 
 # iOS  
 flutter build ios --release
@@ -1172,4 +1175,3 @@ The app now features a beautiful animated splash screen with:
 - **Location**: For detecting user's city and weather
   - Android: Automatically requested
   - iOS: Add to Info.plist (if testing on iOS)
-
