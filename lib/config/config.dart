@@ -2,12 +2,12 @@
 class AppConfig {
   static const String _baseUrlRaw = String.fromEnvironment(
     'APP_BASE_URL',
-    defaultValue: 'https://pos-posapi-ef0xxp-f6dd3b-138-68-41-254.traefik.me',
+    defaultValue: 'https://pos-api.stebofarm.co.tz',
   );
 
   static const String _socketUrlRaw = String.fromEnvironment(
     'SOCKET_URL',
-    defaultValue: 'wss://pos-posapi-ef0xxp-f6dd3b-138-68-41-254.traefik.me', // Change this to your Socket.IO server
+    defaultValue: 'wss://pos-api.stebofarm.co.tz', // Change this to your Socket.IO server
   );
 
   // Prevent mixed-content calls when the app is served over HTTPS.
